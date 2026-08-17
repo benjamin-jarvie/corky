@@ -8,6 +8,24 @@
 - Name: **Corky.** Tagline: *Core's keys, nothing kept.*
 - Shim built and passing all official vectors (`shim/test_shim.py`). Next gate: M0.
 
+## Amendments after review (Ben, 2026-08-17, second pass)
+
+- **A-10: dual transfer channels.** PSBT in/out via animated QR *and* via file
+  on a USB stick (OTG port). The boot microSD cannot be hot-swapped, so
+  file transfer is USB, Coldcard-style. QR remains the reference channel;
+  USB removes the size ceiling. Both are opaque-PSBT-only.
+- **A-11: language decision — Python, with a law.** Rust runs fine on the Pi
+  (aarch64 is first-class; no compile theater), but it hardens the wrong
+  layer: all crypto and all untrusted-input parsing live in Bitcoin Core
+  regardless. Rust would also force the shim onto crates.io dependencies,
+  destroying its stdlib-only claim, and the Pi camera/LCD ecosystem is
+  Python-mature (SeedSigner's own drivers). Decision: Python for v1, under
+  this frozen rule: **Corky's code never parses untrusted bytes. PSBTs pass
+  through as opaque strings; Bitcoin Core is the only parser.** The zbar QR
+  decoder (C, both languages) gets length caps and charset checks before its
+  output is used. A Rust front-end rewrite is noted as a legitimate v2
+  hardening step once v1 is a working reference.
+
 ## The idea in three sentences
 
 Take SeedSigner's hardware (camera, small screen, no persistent secrets) and replace its

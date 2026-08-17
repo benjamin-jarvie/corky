@@ -55,7 +55,11 @@ in `SHIM_HASH` at the repo root and updated only with a passing vector run.
 ## v1 scope (frozen)
 
 Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
-passphrase. SeedQR input. PSBT in/out via animated QR. A review screen showing
+passphrase. SeedQR input. PSBT in/out via **two channels**: animated QR, or a
+PSBT file on a USB stick in the OTG port (the boot microSD cannot be swapped
+while running, so file transfer uses USB). The QR channel is the tighter one
+(photons only); the USB channel has no size limit. Both carry only PSBTs, and
+only Bitcoin Core ever parses them. A review screen showing
 outputs, amounts and the fee as computed by Core from the coordinator-supplied
 input amounts (an air-gapped signer cannot independently verify input amounts;
 none can). Coordinator target: Sparrow.
