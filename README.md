@@ -55,11 +55,18 @@ in `SHIM_HASH` at the repo root and updated only with a passing vector run.
 ## v1 scope (frozen)
 
 Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
-passphrase. SeedQR input. PSBT in/out via **two channels**: animated QR, or a
-PSBT file on a USB stick in the OTG port (the boot microSD cannot be swapped
-while running, so file transfer uses USB). The QR channel is the tighter one
-(photons only); the USB channel has no size limit. Both carry only PSBTs, and
-only Bitcoin Core ever parses them. A review screen showing
+passphrase. SeedQR input. PSBT in/out via **three channels**: animated QR;
+a PSBT file on a USB stick in the OTG port; and — once the M3 RAM-resident
+image lands — the boot microSD itself, SeedSigner-OS style (the whole OS runs
+from RAM, so the card can be pulled and used as the PSBT sled). QR is the
+tightest channel (photons only); the file channels have no size limit. All
+three carry only PSBTs, and only Bitcoin Core ever parses them. If 512MB
+cannot hold the RAM-resident image, v1 ships QR + USB and the microSD channel
+waits for a bigger board (the fallback is written down in PLAN.md A-12).
+
+Display: 2.4" ILI9341 (320×240, SeedSigner-Plus class) as the primary build;
+the 1.3" ST7789 (240×240) remains supported. Both drivers are vendored from
+SeedSigner (MIT) in `hw/vendor/`. A review screen showing
 outputs, amounts and the fee as computed by Core from the coordinator-supplied
 input amounts (an air-gapped signer cannot independently verify input amounts;
 none can). Coordinator target: Sparrow.

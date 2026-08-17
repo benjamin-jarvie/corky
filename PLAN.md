@@ -25,6 +25,31 @@
   decoder (C, both languages) gets length caps and charset checks before its
   output is used. A Rust front-end rewrite is noted as a legitimate v2
   hardening step once v1 is a working reference.
+- **A-12: hot-swap microSD channel is now a v1 requirement (Ben, second pass).**
+  The mechanism is SeedSigner OS's trick: the operating system runs entirely
+  from RAM after boot, so the boot microSD can be removed and reused as the
+  PSBT sled (`/mnt/microsd` watcher). For Corky this means a minimal
+  RAM-resident image (buildroot-style) carrying bitcoind + Python + the UI.
+  *Devil's advocate, on the record:* this is now the riskiest item in the
+  project. The rootfs, bitcoind, the ramdisk datadir and the UI must all
+  share 512MB; a full Raspberry Pi OS cannot run from RAM at this size, so
+  M3 becomes a real OS-image engineering task, not a hardening pass.
+  Mitigations: M0 measures bitcoind's true footprint first; development
+  through M2 stays on stock Raspberry Pi OS with the USB-stick channel
+  (which remains in v1 as the fallback transfer path); the RAM-resident
+  image is developed as M3 with a defined fallback (v1 ships with USB-only
+  transfer if 512MB cannot hold the RAM image; microSD hot-swap then waits
+  for a 1GB-class board). Side benefit if it lands: statelessness becomes
+  structural — the OS itself is immutable and nothing can persist anywhere.
+- **A-13: bigger display in v1 (Ben, second pass).** Target is the
+  SeedSigner-Plus-class 2.4" ILI9341 at 320×240 (driver vendored from
+  SeedSigner at `hw/vendor/ili9341.py`; the 3.5" ILI9486 is named in
+  SeedSigner's settings but has no driver in their main repo yet). The UI
+  renders resolution-independent PIL frames and asks the driver for its
+  size, so the 1.3" ST7789 stays supported as the compact build. Open
+  hardware question for Ben: which physical 2.4" board/PCB he is buying —
+  button wiring on Plus-style PCBs must be confirmed against the
+  `hw/HARDWARE.md` pin map when it arrives.
 
 ## The idea in three sentences
 
