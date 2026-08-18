@@ -16,8 +16,8 @@ phase has its own threats, its own tools, and its own ways to fool
 yourself. A seed is **generated** once, **used** every time you sign, and
 **at rest** in your backups for decades. Most custody advice argues about
 one phase while silently assuming the other two are fine. This article
-walks all three, using what we learned building Corky, our signing device
-that runs Bitcoin Core itself, and it names the trade-offs the industry
+walks all three, using what we learned building and testing signing
+setups across every model below, and it names the trade-offs the industry
 prefers to round off.
 
 ## Phase 1: Seed generation, or the problem nobody can audit
@@ -98,10 +98,9 @@ least (one cross-checkable computation), dice next (the whole mapping,
 mitigated by test-roll verification), device RNG the most (the one step
 that can never be audited). Device generation remains a defensible
 convenience at small amounts; the Coldcard incident is the price sheet
-for that convenience at large ones.
-Corky's own scope excludes on-device generation entirely. We wrote "the
-device deliberately has no entropy story" into the spec before we could
-articulate why; this is why.
+for that convenience at large ones. It is also why some signing devices exclude
+on-device generation from their scope entirely: a signer with no entropy
+story has no entropy story to attack.
 
 ## Phase 2: Seed in use, or who signs and on what
 
@@ -111,9 +110,9 @@ device remember afterward.
 
 **Whose code.** Hardware wallets run their vendor's implementation.
 SeedSigner-class DIY devices run a small open reimplementation chosen for
-auditability. Corky runs the reference implementation, Bitcoin Core,
-wallet-only and offline, because Core's wallet logic is the most reviewed
-in existence. Yeti Cold, JW Weatherman's protocol, makes the same bet at
+auditability. A third model runs the reference implementation itself,
+Bitcoin Core, wallet-only and offline, on the argument that Core's wallet
+logic is the most reviewed in existence. Yeti Cold, JW Weatherman's protocol, makes the same bet at
 system scale: nearly everything it does is Core, on the argument that you
 depend on Core anyway, so depend on only that.
 
@@ -155,10 +154,9 @@ The honest ladder, weakest to strongest:
    leads. Ten minutes with a screwdriver converts "promised off" into
    "physically absent." If you keep a laptop signer, this is the step that
    makes the word air-gap true.
-4. Hardware manufactured without radios. This is why Corky moved from the
-   Pi Zero 2 W (radio on the die, disabled by configuration) to a compute
-   module sold without wireless silicon. "Cannot transmit" outranks every
-   promise on the list.
+4. Hardware manufactured without radios: a Pi Zero v1.3 or a no-wireless
+   Compute Module instead of a Zero 2 W with its radio on the die.
+   "Cannot transmit" outranks every promise on the list.
 
 Yeti, to its credit, is honest about its own gap: keys cross to the
 networked machine on USB sticks because Core has no offline QR signing,
@@ -168,7 +166,7 @@ Reasonable people accept it; nobody should accept it unknowingly.
 
 **What the device remembers.** A hardware wallet keeps your key inside it,
 guarded by a PIN and a secure element, from setup until loss. A stateless
-signer (SeedSigner, Corky) holds nothing: you bring the seed each session,
+signer (SeedSigner-class) holds nothing: you bring the seed each session,
 sign, power off, and the device forgets. Statelessness means a seized
 device is just electronics. Its price must be stated with the same
 honesty, and jimbocoin's premise above sets it: the seed is exposed in the
@@ -182,9 +180,10 @@ handling.
 One asymmetry to complete the picture: a malicious signer can leak key
 material through its signature nonces while producing normal-looking
 transactions. Some hardware wallets counter with anti-exfil protocols
-where the coordinator contributes randomness. Corky cannot, because Core
-generates its own nonces and offers no hook; our answer is that the
-signing binary is Core's reproducible, hash-verified build. Anti-exfil
+where the coordinator contributes randomness. A Core-based signer cannot
+run those protocols, because Core generates its own nonces and offers no
+hook; its answer is that the signing binary is Core's reproducible,
+hash-verified build. Anti-exfil
 defends against a compromised build, transparency defends against a
 compromised vendor, and neither defends against both.
 
@@ -314,7 +313,4 @@ Now you have the map.
 
 ---
 
-*Corky is our open build of the reference-implementation trust model:
-Bitcoin Core as an air-gapped, stateless signer on radio-free hardware.
-The build notes, including everything that went wrong, are public. Helping
-people choose among the models above is literally our job.*
+*Helping people weigh the models above is literally our job.*
