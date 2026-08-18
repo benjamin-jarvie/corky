@@ -1,221 +1,280 @@
-# The Two Backups: What Your Seed Words Actually Save, and What They Don't
+# Seed Generation, Seed In Use, Seed At Rest: An Honest Map of Bitcoin Self-Custody
 
-*Draft v1, 2026-08-18. For Bitcoin Butlers. ~2,400 words. Written from the
-Corky build notes; technical claims trace to Bitcoin Core's
-managing-wallets.md, BIP32/BIP39/BIP93, and the linked discussions.*
+*Draft v2, 2026-08-18. For Bitcoin Butlers. The framework of this article,
+one secret weighed across three phases of its life, comes from jimbocoin.
+Technical claims trace to Bitcoin Core's managing-wallets.md, BIP32/39/93,
+the SeedPicker Solitaire repo, the SeedSigner dice-generation analysis, the
+Yeti Cold protocol, and linked discussions with Ben Westgate.*
 
 ---
 
 Most Bitcoin users believe one sentence that is only half true: "my twelve
 words are my wallet."
 
-The words are one of two backup traditions that grew up side by side and got
-mixed together in most people's heads. Untangling them explains a Bitcoin
-Core doc that confuses newcomers, a ten-year-old argument among developers,
-and several decisions you should make on purpose instead of by default. We
-hit every one of these building Corky, our signing device that runs Bitcoin
-Core itself, so this article walks the same road we walked.
+The words are one piece of a system with three distinct phases, and each
+phase has its own threats, its own tools, and its own ways to fool
+yourself. A seed is **generated** once, **used** every time you sign, and
+**at rest** in your backups for decades. Most custody advice argues about
+one phase while silently assuming the other two are fine. This article
+walks all three, using what we learned building Corky, our signing device
+that runs Bitcoin Core itself, and it names the trade-offs the industry
+prefers to round off.
 
-## One key, two ways to write it down
+## Phase 1: Seed generation, or the problem nobody can audit
 
-Since 2013, almost every wallet derives all of its addresses from a single
-master key, through a standard called **BIP32** ("hierarchical deterministic
-wallets"). One secret at the root, a tree of keys below it. Back up the root
-once and every future address is recoverable. Before BIP32, wallets held a
-bag of unrelated keys, and a backup went stale the moment a new key was
-generated. Core's own documentation still carries the scars of that era.
+Every wallet begins with one gulp of randomness. Every property you will
+ever have flows from those 128 or 256 bits being genuinely unpredictable.
+And here is the uncomfortable fact this phase turns on: **a compromised
+random number generator is undetectable from its output.** A malicious or
+broken generator can emit seeds that pass every statistical test ever
+devised while being predictable to whoever planted the flaw. You cannot
+audit randomness by looking at it. Firmware review helps the one percent
+who read code; nobody reviews the silicon.
 
-The root secret can be written down two ways.
+This stopped being theoretical. In 2026, a Coldcard entropy failure
+demonstrated the exact scenario: seeds from the device's compromised RNG
+path were at risk, while seeds derived from user-supplied dice rolls
+remained secure. One sentence from the dice analysis deserves to be
+engraved somewhere: **"You have to trust a seed a device creates for you.
+You can verify a seed you rolled yourself."**
 
-**The BIP32 way: the raw key.** The master key serializes as a string
-starting with `xprv...`, 111 characters of base58. Modern practice wraps it
-in a **descriptor**: the key plus the derivation path, the script type, and
-a checksum, in one line of text. A descriptor is a complete recipe. Hand it
-to any modern wallet and it rebuilds exactly the right addresses, no
-guessing. This is the format Bitcoin Core speaks natively.
+The asymmetry that saves us: generation is unverifiable, but everything
+after generation is deterministic and therefore checkable. If the entropy
+comes from your own hands, the device's remaining work (checksum,
+derivation, addresses) can be cross-checked against independent software
+and a liar gets caught. Physical entropy converts the one untrustable step
+into the one step you performed yourself.
 
-**The BIP39 way: the words.** Your 12 or 24 words are not the key. They are
-a compressed encoding of random entropy, which is hashed (2,048 rounds of
-PBKDF2, for the curious) into a seed, which becomes the BIP32 master key.
-The words exist for one reason: humans cannot stamp `xprv9s21ZrQH...` into
-steel without errors, but they can stamp ABANDON. The wordlist has 2,048
-words, each identifiable by its first four letters, chosen so that a typo
-is caught rather than silently accepted.
+So: dice or cards?
 
-So BIP39 is a human-friendly front door to BIP32. Every hardware wallet
-uses it. Nearly every steel backup plate sold assumes it. And Bitcoin Core
-refuses to implement it. That refusal is not stubbornness, and understanding
-it is the most useful mental upgrade in this article.
+**Dice, examined honestly.** The instinctive worry about dice, biased
+faces, turns out to be the wrong worry. Measured real-world dice bias runs
+around 1.4 percent, which costs a 24-word seed roughly 2.9 bits out of
+256. Negligible. The real problems are human and structural. Human: the
+procedure is boring, and a bored human skips steps; twenty honest rolls
+followed by eighty impatient button-mashes is not entropy, and nothing in
+the procedure catches it. Structural, and this is the one that changed our
+recommendation: **the mapping from rolls to seed happens inside software.**
+A survey of seventeen implementations found five incompatible
+constructions: hash the digit string, remap sixes then hash, pack bits
+directly, treat the rolls as one base-6 number, or use a worksheet.
+Identical rolls produce different seeds on different devices. You cannot
+compute SHA-256 by hand, so you are back to trusting the device for the
+step the dice were meant to take away from it. The mitigation exists,
+verify with disposable test rolls against a second implementation, but the
+dependence never goes to zero.
 
-## Maxwell's objection: the words don't say enough
+**Cards, examined honestly.** SeedPicker Solitaire (jimbocoin's procedure)
+was designed against six criteria: easy to learn, hard to screw up, errors
+detectable, fast, enough entropy, resists bias. A standard 52-card deck,
+riffle-shuffled seven times (the count research says suffices), then 23
+pairs drawn without replacement. Each pair maps to a seed word through a
+**printed lookup table**, and a shortcut removes even the table-reading
+risk: pairs of different suits always land on a valid word. The 24th word
+is the checksum, so a transcription error announces itself instead of
+surfacing years later as a wallet that restores empty. The full-deck draw
+preserves slightly more than 205 bits, comfortably past the 128 bits that
+matter once a public key is exposed.
 
-When BIP39 was proposed, Bitcoin Core developer Gregory Maxwell wrote: "The
-lack of versioning is a serious design flaw in this proposal. On this basis
-alone I would recommend against use of this proposal."
+Why cards beat dice is now precise: **the deck maps to words on paper, in
+the open, by lookup; dice map to seeds inside arithmetic you cannot
+perform.** With cards, the offline device only computes the final checksum
+word, and that single computation is cross-checkable. With dice, the device
+performs the whole conversion, and five mutually incompatible conventions
+mean even honest devices disagree. Shuffling is also a skill humans
+practice for fun, which is not nothing: the procedure people enjoy is the
+procedure people complete.
 
-Here is the flaw in practical terms. Your words encode the root secret and
-nothing else. They do not say which derivation path to walk, which script
-type your addresses use, or when the wallet was born. Recovery therefore
-depends on convention: the recovering wallet guesses the standard paths,
-scans, and hopes. The conventions have shifted three times already (legacy,
-then segwit, then taproot each brought a new path). Everyone has heard a
-story of a recovery that showed a zero balance until the right derivation
-was found. The words survived; the instructions did not, because the words
-cannot carry instructions.
+The bias objection to human entropy deserves its steel-man, because the
+"do not roll your own randomness" advice came from somewhere real: humans
+inventing "random" values from their heads are catastrophically
+predictable, and humans get bored inside long procedures and start
+improvising. The cards answer both, not by asking the human to be random,
+but by making the physics short, pleasant, and checksummed. The human
+shuffles; the deck is random.
 
-A descriptor carries the instructions. That is the whole difference. The
-words are a backup of your *secret*. A descriptor is a backup of your
-*wallet*.
+**Phase 1 verdict: cards, then dice with test-roll verification, then
+device RNG.** If you do let a device generate (and for small amounts that
+is a defensible convenience), understand which trust you just accepted,
+because the Coldcard incident is what it looks like when it goes wrong.
+Corky's own scope excludes on-device generation entirely. We wrote "the
+device deliberately has no entropy story" into the spec before we could
+articulate why; this is why.
 
-Electrum rejected BIP39 for exactly this reason and built versioning into
-its own seed format. Core went further and made the complete recipe, the
-descriptor, its native object. The ecosystem shipped BIP39 anyway, because
-stampable words won the market, and honestly, steel in your hand beats
-elegance in a spec. Our own backups are BIP39 plates. Yours probably are
-too. The point is not to feel bad about the words. The point is to know
-what they leave out, and to write the missing part down.
+## Phase 2: Seed in use, or who signs and on what
 
-**The practical rule: back up your words AND your public descriptor.** The
-descriptor with public keys (it starts `wpkh(xpub...)` or similar) reveals
-addresses but cannot spend. Print it, save it with your estate documents,
-staple it to the inside of your safe. Words restore the secret; the
-descriptor restores the map. Together they are a complete recovery with no
-guessing, on any wallet software, decades from now.
+Signing is where the seed touches a computer. Three questions decide
+everything: whose wallet code runs, on what hardware, and what does the
+device remember afterward.
 
-## What Bitcoin Core's backup doc is really telling you
+**Whose code.** Hardware wallets run their vendor's implementation.
+SeedSigner-class DIY devices run a small open reimplementation chosen for
+auditability. Corky runs the reference implementation, Bitcoin Core,
+wallet-only and offline, because Core's wallet logic is the most reviewed
+in existence. Yeti Cold, JW Weatherman's protocol, makes the same bet at
+system scale: nearly everything it does is Core, on the argument that you
+depend on Core anyway, so depend on only that.
 
-Core's managing-wallets.md describes backing up `wallet.dat`, encrypting the
-wallet, and warns: "if the passphrase is lost, all the coins in the wallet
-will also be lost forever." Threads about this doc go in circles because
-readers assume it describes the same kind of backup as seed words. It does
-not. A wallet-file backup saves the keys AND the metadata: labels,
-transaction history, the exact descriptor set. Richer than words, and also
-heavier: it is a file, it must live on media, and the file format belongs
-to one program.
+State the counter-argument fairly, because it is strong. Jimbocoin's
+position: "Personally, I don't want to be beholden to Core for my
+security," and therefore multi-vendor multisig where no single vendor
+constitutes a quorum, ideally with coordination reproduced on two
+independent stacks and identical addresses confirmed before use. Core is
+simultaneously the most reviewed codebase in Bitcoin and its most valuable
+infiltration target. Which risk is larger, one infiltration of the
+best-reviewed honeypot or a coordinated simultaneous infiltration of
+several smaller vendors, is genuinely unresolved; we hold the Core side of
+that bet with our eyes open, and it is a bet.
 
-The doc is also honest about what wallet encryption is for: it protects the
-file at rest, against someone who copies wallet.dat or sits down at your
-unlocked computer. It does not protect against a keylogger, and it does not
-make the file safe to store carelessly. Encryption narrows the attack, it
-does not remove it.
+**On what hardware, and the question you asked us straight: the wiped
+laptop.** The standard air-gap recipe says factory-reset an old laptop and
+never connect it. Honesty requires saying what that does not achieve. A
+wipe replaces the software; it does not remove the WiFi and Bluetooth
+hardware, and every off-switch you can reach from the keyboard is a
+software claim about that hardware. The OS toggle, rfkill, even the BIOS
+setting are all promises made by code you cannot see, on radios that are
+still physically powered. For most threat models the promise is probably
+kept. "Probably kept" is not an air gap.
 
-Ben Westgate, who created the codex32 backup standard, put the resulting
-landscape well in a recent thread: encryption and secret-splitting are the
-tools for *backup privacy*, so that one compromised hiding place does not
-reveal the key. Multisig addresses *different threats*, and these are not
-either-or decisions. His example: if you want one stolen backup to reveal
-nothing, split the seed so any two shares recover it but one alone is
-useless. If you want theft of a whole signing device to be insufficient to
-spend, use multisig. If you want both properties, use both. A jab from the
-same thread is worth keeping: reinventing 2-of-2 by pairing an encrypted
-backup with its password stored elsewhere gives you the fragility of
-multisig with none of its guarantees. Decide which property you are buying
-before you pay complexity for it.
+The honest ladder, weakest to strongest:
 
-And on media: paper burns, ink fades, hard drives die quietly. Steel
-survives the house fire. Optical discs, unfashionable as they are, resist
-solar storms, EMPs and magnets, and industry archives use magnetic tape in
-salt mines. Redundancy across media types is cheap. The failure that
-actually takes people's coins is almost never an exotic attack. It is one
-backup, in one place, in one format, that stopped being readable.
+1. Software disable (settings, rfkill, BIOS): a claim, not a fact.
+2. Driver removal or an OS that never ships the drivers: a stronger claim,
+   still software.
+3. **Open the laptop and pull the radio card.** In most laptops WiFi and
+   Bluetooth live on one small M.2 or mini-PCIe card with two antenna
+   leads. Ten minutes with a screwdriver converts "promised off" into
+   "physically absent." If you keep a laptop signer, this is the step that
+   makes the word air-gap true.
+4. Hardware manufactured without radios. This is why Corky moved from the
+   Pi Zero 2 W (radio on the die, disabled by configuration) to a compute
+   module sold without wireless silicon. "Cannot transmit" outranks every
+   promise on the list.
 
-## The trust question nobody asks about their signer
+Yeti, to its credit, is honest about its own gap: keys cross to the
+networked machine on USB sticks because Core has no offline QR signing,
+and the protocol accepts that as a measured compromise. USB is a wider
+channel than photons through a camera, and a stick is writable both ways.
+Reasonable people accept it; nobody should accept it unknowingly.
 
-Here is the part of the story we only understood by building.
+**What the device remembers.** A hardware wallet keeps your key inside it,
+guarded by a PIN and a secure element, from setup until loss. A stateless
+signer (SeedSigner, Corky) holds nothing: you bring the seed each session,
+sign, power off, and the device forgets. Statelessness means a seized
+device is just electronics, at the price of the seed being exposed in the
+room at every use. Pick deliberately: state guarded by silicon, or no
+state and disciplined handling.
 
-Whatever writes your backup and signs your transactions is software, and
-you are trusting its authors. The question worth asking is: *whose
-implementation of Bitcoin's wallet logic does your device run?*
+One asymmetry to complete the picture: a malicious signer can leak key
+material through its signature nonces while producing normal-looking
+transactions. Some hardware wallets counter with anti-exfil protocols
+where the coordinator contributes randomness. Corky cannot, because Core
+generates its own nonces and offers no hook; our answer is that the
+signing binary is Core's reproducible, hash-verified build. Anti-exfil
+defends against a compromised build, transparency defends against a
+compromised vendor, and neither defends against both.
 
-Hardware wallets each run their vendor's own implementation. DIY signers
-like SeedSigner run a small open-source reimplementation (embit) chosen for
-auditability: few thousand lines, readable in an afternoon. These are
-legitimate choices with a real trade-off: small and reviewable, but a
-rewrite, maintained by a handful of people.
+## Phase 3: Seed at rest, or the two backups
 
-There is a third option almost nobody exercises: run the reference
-implementation itself. Bitcoin Core's wallet code is the most reviewed
-wallet code in existence. It is also enormous, and was never packaged as a
-signing device. Corky is our attempt at exactly that: SeedSigner's hardware
-(a radio-free Raspberry Pi, a camera, a small screen), but the wallet brain
-is bitcoind, wallet-only, offline, with the wallet living in RAM and dying
-at power-off. Every derivation, every fee calculation, every signature is
-Core's code. The one exception is printed on the box: Core will never read
-BIP39 words, so a 92-line translator, standard-library hashing only,
-verified against the official test vectors, turns your words into the xprv
-format Core imports. If you enter a descriptor instead, even that
-disappears, and the device is Core from the first byte. Maxwell's position,
-made physical.
+Now the phase where most coins are actually lost, and the distinction the
+whole article hangs on.
 
-Neither philosophy wins outright. Minimal code you can audit yourself,
-versus maximal review by the most eyes in the industry. What matters is
-that you know which one you picked.
+**Your words back up a secret. A descriptor backs up a wallet.** BIP39
+words encode entropy and nothing else: no derivation path, no script type,
+no birth date. Recovery from words alone is a guessing game played against
+shifting conventions, which is why Core developer Gregory Maxwell opposed
+the standard from the start ("The lack of versioning is a serious design
+flaw... On this basis alone I would recommend against use") and why
+Bitcoin Core never implemented it. Core's native object, the descriptor,
+is the complete recipe: key, path, script type, checksum, one line of
+text. The ecosystem shipped BIP39 anyway because words stamp into steel
+and elegance does not.
 
-## Air-gapped computers versus hardware wallets
+The resolution costs one sheet of paper. **Back up the words on steel, and
+back up the public descriptor on paper beside your documents.** The
+descriptor cannot spend; it turns recovery from archaeology into a lookup.
+The moment you use multisig this stops being advice and becomes a
+requirement, because recovering a multisig needs every cosigner's public
+key, and words alone will never reconstruct them.
 
-The same honesty applies to the device question, and the industry sells
-more certainty here than it owns.
+**What Core's own backup doc is telling you.** managing-wallets.md
+describes wallet-file backups (keys plus labels, history, and the
+descriptor set, richer than words and heavier: a file, on media, in one
+program's format) and is refreshingly blunt about encryption: it protects
+the file at rest, a keylogger defeats it, and "if the passphrase is lost,
+all the coins in the wallet will also be lost forever." Encryption narrows
+an attack; it does not remove one.
 
-**A hardware wallet** (Coldcard, Jade, Trezor and kin) is a purpose-built
-computer with a secure element, a PIN, and keys stored inside the device.
-Its strengths: nothing to assemble, keys survive between sessions,
-tamper-resistant storage, a vendor doing security work for you. Its trusts:
-the vendor's supply chain, the vendor's firmware, and the fact that the
-device *contains your key* from setup day until the day you lose it, so a
-seized or stolen device is a live problem the PIN must hold against.
+**Backup privacy, from the person who built the standard.** Ben Westgate,
+codex32's author: encryption and secret-splitting are the tools for backup
+privacy, so a single compromised hiding place reveals nothing; multisig
+addresses different threats; and these are not either-or decisions. Want
+one stolen backup to disclose nothing? Split the seed codex32-style,
+k-of-n, checksums verifiable by hand on paper. Want theft of a whole
+signer to be insufficient to spend? Multisig. Want both properties? Use
+both. And the companion warning from the same thread: pairing an encrypted
+backup with a separately-stored password hand-builds a fragile 2-of-2; if
+you want 2-of-2, the protocol sells the real thing.
 
-**An air-gapped computer** (SeedSigner-style, and Corky) inverts the model.
-The device stores nothing. You bring the seed to each session, on paper or
-steel or a SeedQR; sign; power off; the device forgets. Its strengths:
-statelessness means a confiscated device holds nothing, generic parts mean
-no wallet-shaped purchase trail, and the whole stack is inspectable. Its
-trusts: whoever assembled it (you), the general-purpose OS underneath, and
-the seed's exposure in the room during entry. The radios deserve plain
-words too: a Pi Zero 2 W has WiFi on the board, disabled by configuration,
-and configuration is a claim, not physics. We moved Corky to a compute
-module manufactured without radios because "cannot transmit" beats
-"promised not to."
+**Media and transcription.** Paper burns and fades; steel survives the
+house fire; optical discs shrug at EMP and magnets; the archival industry
+keeps tape in salt mines. Redundancy across media types is nearly free.
+And borrow Yeti's transcription discipline even if you borrow nothing
+else: keys written in NATO phonetic alphabet with periodic checksums,
+because the failure that actually takes coins is one backup, in one place,
+in one format, that quietly stopped being readable, and handwriting
+ambiguity is part of that failure.
 
-One more asymmetry worth naming: signature exfiltration. A malicious signer
-can leak your key through its choice of signature nonces while producing
-transactions that look perfectly normal. Some hardware wallets counter this
-with anti-exfil protocols, where the coordinator contributes randomness.
-Corky cannot run those protocols, because Core generates its own nonces and
-exposes no hook. Our answer is different: the signing binary is Core's
-reproducible build, hash-verified, so you are trusting published code
-rather than a protocol. Anti-exfil defends against a compromised build;
-transparency defends against a compromised vendor. Know which defence you
-hold, because neither covers both.
+## Putting it together: four systems, weighed
 
-## What we'd actually tell you to do
+**Bitcoin Core on a desktop, single-sig with encryption.** Right engine,
+wrong vessel. The keys live full-time on an online, general-purpose
+machine, the doc's own keylogger caveat applies, and the passphrase adds a
+loss mode faster than it removes a theft mode. Core is the average
+person's node and watch layer, not their key layer.
 
-For most people holding meaningful savings:
+**Hardware wallet plus card-generated seed.** Our recommendation for most
+people. Card entropy closes the RNG hole with the checksum computed on the
+offline device; the HWW gives screen-verified signing and key isolation;
+steel words plus a printed descriptor complete the rest. The BIP39
+passphrase is optional and double-edged: it defends the steel if the steel
+is found, and it is the component most often lost. Use it only if it is
+written down and stored as seriously as the seed itself, in a separate
+place, with a small decoy balance on the no-passphrase wallet so a
+mistake fails loudly.
 
-1. **Words on steel, two locations.** BIP39 remains the right secret backup
-   for humans. Buy plates or stamp washers; paper is a fire away from gone.
-2. **Public descriptor on paper, with your documents.** This is the missing
-   half. Export it from Sparrow or Core (or your device). It cannot spend;
-   it can only make recovery exact instead of a guessing game.
-3. **Decide what one stolen backup should reveal.** If the answer is
-   "nothing," look at codex32 (BIP93): seed shares with hand-checkable
-   checksums, k-of-n recovery, made for steel and paper. Splitting beats
-   clever hiding.
-4. **Multisig when a single device or person must not be enough.** It is a
-   spending policy, complementary to all of the above, and it raises the
-   metadata stakes: multisig recovery needs every cosigner's public key, so
-   the descriptor backup stops being optional and becomes mandatory.
-5. **Pick your signer's trust model on purpose.** Vendor implementation in
-   tamper-resistant hardware, small reimplementation you can read, or the
-   reference implementation on hardware you assembled. All three are
-   defensible. Choosing by default is not.
+**Yeti Cold.** Core-only 3-of-7 multisig across cheap laptops and
+geography: survives four lost keys, requires three compromised locations
+to steal, trusts Core and nothing else. Its honest costs: USB crossings
+instead of QR, radios handled by procedure rather than by absence (pull
+the cards), an on-chain fingerprint from the unusual quorum, and hours of
+setup. For deep cold storage by someone who accepts the Core bet, it
+remains a serious, published, criticizable protocol, which is more than
+most vendors offer.
 
-The words are a fine backup of a secret. They were never a backup of a
-wallet. Write down both halves, know what your signer runs, and most of the
-disaster stories in this space stop being possible.
+**Multi-vendor multisig, no vendor a quorum.** The strongest answer to
+"what if the implementation itself is the flaw," and the most demanding:
+its security comes precisely from the heterogeneity that makes it hard, as
+its own advocates concede. For large holdings with a professional or a
+patient operator, it is the ceiling. Sold to an average person as a
+starting point, it mostly manufactures stuck funds.
+
+## The through-line
+
+One principle survives all three phases: **push trust toward things you
+can physically verify or independently cross-check, and know the name of
+every trust you keep.** Entropy from your own shuffle. Signing code you
+chose on purpose, on hardware whose radios are absent rather than
+promised off. Words on steel for the secret, a descriptor on paper for
+the map, splitting when privacy of the backup itself matters. None of
+this removes trust; it relocates trust to places where lying is hard.
+
+The words were never your wallet. They were one third of one phase of it.
+Now you have the map.
 
 ---
 
-*Corky is our open build of the third trust model: Bitcoin Core as an
-air-gapped, stateless signer. The build notes, including everything that
-went wrong, are public. If you want help setting up any of the models
-above, that is literally our job.*
+*Corky is our open build of the reference-implementation trust model:
+Bitcoin Core as an air-gapped, stateless signer on radio-free hardware.
+The build notes, including everything that went wrong, are public. Helping
+people choose among the models above is literally our job.*
