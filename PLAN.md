@@ -110,7 +110,11 @@
   patterns (Bitcoin Design Guide lineage, MIT) when refining Corky's review
   screens, so Corky's UI reads like the Core family. Watch item: if it grows
   PSBT-by-QR/file coordinator flows, the full stack becomes Core node +
-  Core App coordinator + Corky signer.
+  Core App coordinator + Corky signer. Context (2026-08-18): Ava Chow put
+  HWI into minimal maintenance (bitcoin-core/HWI#850, successor: BHWI by
+  Wizardsardine) — Corky has no HWI dependency (PSBT-native by design),
+  and any future Core App hardware-wallet story runs through BHWI while
+  its Corky story would be plain PSBT.
 
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 

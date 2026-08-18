@@ -285,10 +285,14 @@ ambiguity is part of that failure.
 **Bitcoin Core on a desktop, single-sig with encryption.** Right engine,
 wrong vessel. The keys live full-time on an online, general-purpose
 machine, the doc's own keylogger caveat applies, and the passphrase adds a
-loss mode faster than it removes a theft mode. To be plain about what is
-and is not being dismissed: run Core, run your own node, verify your own
-chain; just do not make that online machine the holder of your keys. Core
-is the average person's node and watch layer, not their key layer.
+loss mode faster than it removes a theft mode. The project's own signals
+point the same way: Core's bridge for pairing with hardware wallets, HWI,
+[entered minimal maintenance in August 2026](https://github.com/bitcoin-core/HWI/issues/850)
+by its maintainer's announcement, pending a third-party successor. To be
+plain about what is and is not being dismissed: run Core, run your own
+node, verify your own chain; just do not make that online machine the
+holder of your keys. Core is the average person's node and watch layer,
+not their key layer.
 
 **Hardware wallet plus card-generated seed.** The lowest total
 unverifiable trust available at ordinary effort: card entropy closes the
