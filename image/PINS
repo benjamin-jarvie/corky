@@ -1,0 +1,9 @@
+# Corky pinned build tuple — dev image v0.1 (2026-08-18)
+# Every release changes this file and nothing else about the build process.
+OS_IMAGE_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-05-13/2026-05-13-raspios-bookworm-arm64-lite.img.xz"
+OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"   # record from the Imager download on first use
+CORE_VERSION="31.1"
+CORE_TARBALL="bitcoin-31.1-aarch64-linux-gnu.tar.gz"
+CORE_URL="https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-aarch64-linux-gnu.tar.gz"
+CORE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"       # verify against SHA256SUMS + GPG, then pin
+CORKY_COMMIT="HEAD"                             # pin to a tag for release images
