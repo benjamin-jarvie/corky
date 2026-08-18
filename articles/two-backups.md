@@ -224,10 +224,14 @@ which is why Core developer Gregory Maxwell
 [opposed the standard from the start](https://github.com/bitcoin/bips/pull/17)
 ("The lack of versioning is a serious design flaw... On this basis alone
 I would recommend against use") and why Bitcoin Core
-[never implemented it](https://github.com/bitcoin/bitcoin/issues/17748). Core's native object, the
+[never implemented it](https://github.com/bitcoin/bitcoin/issues/17748). Underneath both formats sits the same machinery:
+[BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
+hierarchical deterministic wallets, one master key deriving every address.
+The words are one human-friendly door to that master key. Core's native
+object, the
 [descriptor](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md),
-is the complete recipe: key, path, script type, checksum, one line of
-text. Electrum
+is the complete recipe around it: key, path, script type, checksum, one
+line of text. Electrum
 [rejected BIP39 for the same reason](https://electrum.readthedocs.io/en/latest/seedphrase.html)
 and built version numbers into its own seed format. The wider ecosystem
 shipped BIP39 anyway because words stamp into steel and elegance does
