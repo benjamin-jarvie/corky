@@ -52,6 +52,36 @@ The wordlist must hash to the canonical BIP39 value
 (the shim refuses to run otherwise). The shim's own current hash is recorded
 in `SHIM_HASH` at the repo root and updated only with a passing vector run.
 
+
+## The trade-offs, before critics find them
+
+**Corky's trusted computing base is large, on purpose.** SeedSigner and Krux
+minimize total code: a tiny OS and a small reimplemented wallet library.
+Corky maximizes review instead: a full Linux and a 500,000-line node binary,
+because the wallet logic inside that binary is the most scrutinized wallet
+code in existence. These are opposite philosophies and neither wins outright.
+If "least code" is your definition of a signer, use SeedSigner; it is a good
+one. Corky exists for people whose definition is "Core's code".
+
+**The radios are still on the board.** The Pi Zero 2 W physically contains
+WiFi and Bluetooth. Corky disables them in firmware and blacklists the
+drivers, and the build docs describe removing the wireless front-end
+component for hardware-level assurance. Until you do that step, call this
+device radio-disabled, not air-gapped-by-physics. The Zero 1.3 has no radio
+at all but cannot run Core's published binaries.
+
+**No secure element, no PIN.** Same position as SeedSigner: statelessness is
+the substitute. The device holds nothing worth extracting; the seed lives on
+metal and in the room, not in the hardware.
+
+**Fee display trusts the coordinator.** Core computes the fee from input
+amounts the PSBT supplies. A malicious coordinator can misstate them. Every
+air-gapped signer shares this limit; Corky prints it on the review screen.
+
+**One maintainer, pinned versions.** Each release is a pinned tuple
+(OS image, Core version, front-end commit) that updates only by reflash.
+That is the mitigation, not a cure, for a small project's maintenance risk.
+
 ## v1 scope (frozen)
 
 Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
