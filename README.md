@@ -107,9 +107,14 @@ it deliberately has no entropy story of its own.
 
 ## Status
 
-Planning complete (see [PLAN.md](PLAN.md), including two devil's-advocate
-rounds). Shim written and passing all vectors. Next gate: **M0** — measured
-proof that wallet-only bitcoind fits and signs on the Zero 2 W's 512MB.
+Planning complete (see [PLAN.md](PLAN.md), two devil's-advocate rounds).
+Everything provable without hardware is proven on a dev machine against
+Core v31.1: the shim (all official vectors), the full signing pipeline on
+regtest (QR-channel equivalent and both file formats of the file channel),
+address derivation against the published BIP84/BIP86 vectors, and the screen
+set rendered at both display resolutions. Next gate: **M0** — measured proof
+that wallet-only bitcoind fits and signs on the Zero 2 W's 512MB
+(`m0/FLASH.md`).
 
 ## Build gates
 
