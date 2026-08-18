@@ -93,10 +93,12 @@ improvising. The cards answer both, not by asking the human to be random,
 but by making the physics short, pleasant, and checksummed. The human
 shuffles; the deck is random.
 
-**Phase 1 verdict: cards, then dice with test-roll verification, then
-device RNG.** If you do let a device generate (and for small amounts that
-is a defensible convenience), understand which trust you just accepted,
-because the Coldcard incident is what it looks like when it goes wrong.
+**Ranked by how much unverifiable trust each method requires:** cards the
+least (one cross-checkable computation), dice next (the whole mapping,
+mitigated by test-roll verification), device RNG the most (the one step
+that can never be audited). Device generation remains a defensible
+convenience at small amounts; the Coldcard incident is the price sheet
+for that convenience at large ones.
 Corky's own scope excludes on-device generation entirely. We wrote "the
 device deliberately has no entropy story" into the spec before we could
 articulate why; this is why.
@@ -202,9 +204,11 @@ is the complete recipe: key, path, script type, checksum, one line of
 text. The ecosystem shipped BIP39 anyway because words stamp into steel
 and elegance does not.
 
-The resolution costs one sheet of paper. **Back up the words on steel, and
-back up the public descriptor on paper beside your documents.** The
-descriptor cannot spend; it turns recovery from archaeology into a lookup.
+The gap closes for the cost of one sheet of paper. Words on steel hold
+the secret; a printed public descriptor beside your documents holds the
+map. The descriptor cannot spend; its only effect is turning recovery
+from archaeology into a lookup, so the tradeoff runs one way: a page of
+non-spending paper against a guessing game decades from now.
 With multisig the rule sharpens, with one exception worth knowing
 (FractalEncrypt's point): in a 2-of-2, the two seeds alone can both
 reconstruct the wallet and spend, and with only four script policies in
@@ -235,8 +239,8 @@ you want 2-of-2, the protocol sells the real thing.
 **Media and transcription.** Paper burns and fades; steel survives the
 house fire; optical discs shrug at EMP and magnets; the archival industry
 keeps tape in salt mines. Redundancy across media types is nearly free.
-And borrow Yeti's transcription discipline even if you borrow nothing
-else: keys written in NATO phonetic alphabet with periodic checksums,
+Yeti's transcription discipline (keys written in NATO phonetic alphabet
+with periodic checksums) addresses the quietest failure of all,
 because the failure that actually takes coins is one backup, in one place,
 in one format, that quietly stopped being readable, and handwriting
 ambiguity is part of that failure.
@@ -251,15 +255,18 @@ and is not being dismissed: run Core, run your own node, verify your own
 chain; just do not make that online machine the holder of your keys. Core
 is the average person's node and watch layer, not their key layer.
 
-**Hardware wallet plus card-generated seed.** Our recommendation for most
-people. Card entropy closes the RNG hole with the checksum computed on the
-offline device; the HWW gives screen-verified signing and key isolation;
-steel words plus a printed descriptor complete the rest. The BIP39
-passphrase is optional and double-edged: it defends the steel if the steel
-is found, and it is the component most often lost. Use it only if it is
-written down and stored as seriously as the seed itself, in a separate
-place, with a small decoy balance on the no-passphrase wallet so a
-mistake fails loudly.
+**Hardware wallet plus card-generated seed.** The lowest total
+unverifiable trust available at ordinary effort: card entropy closes the
+RNG hole with only the checksum computed on the offline device, the HWW
+gives screen-verified signing and key isolation, and steel words plus a
+printed descriptor cover both halves of the backup. Its remaining trusts
+are the vendor's firmware and supply chain, and its remaining loss modes
+are the human ones. The BIP39 passphrase sits on a knife edge here: it
+defends the steel if the steel is found, and it is the component most
+often lost forever, so it trades a theft mode for a loss mode; written
+and stored as seriously as the seed itself, with a small decoy balance on
+the no-passphrase wallet, the trade tilts one way, and held only in a
+skull it tilts the other.
 
 **Yeti Cold.** Core-only 3-of-7 multisig across cheap laptops and
 geography: survives four lost keys, requires three compromised locations
