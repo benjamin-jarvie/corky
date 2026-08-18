@@ -50,6 +50,18 @@
   hardware question for Ben: which physical 2.4" board/PCB he is buying —
   button wiring on Plus-style PCBs must be confirmed against the
   `hw/HARDWARE.md` pin map when it arrives.
+- **A-14: Core-native seed entry (Ben, 2026-08-17, third pass).** Three input
+  modes, in order of purity: (1) **private descriptor via static QR** — pure
+  Core, self-describing (path + script type + checksum), no shim, no
+  hardcoded derivation; (2) **xprv via static QR or text** — pure Core,
+  Corky applies BIP84/86; (3) **BIP39 words / SeedQR** — the shim path,
+  default, because the world's backups (including Ben's) are steel word
+  plates. Both new formats fit a single static QR (~112 / ~150 chars) and
+  base58check makes a bad scan fail loudly. Stated trade-offs: descriptor
+  backups are print/engrave media, not stampable words; no BIP39-style
+  passphrase layer on a raw xprv (the QR IS the wallet — say so on screen).
+  Strategic note: mode 1 makes Corky the first signer with a shim-free,
+  fully Core-native path; candidate default for onboarding fresh wallets.
 
 ## The idea in three sentences
 

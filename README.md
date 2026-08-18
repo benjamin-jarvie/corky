@@ -85,7 +85,13 @@ That is the mitigation, not a cure, for a small project's maintenance risk.
 ## v1 scope (frozen)
 
 Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
-passphrase. SeedQR input. PSBT in/out via **three channels**: animated QR;
+passphrase. Seed entry in three modes: BIP39 words / SeedQR (default; uses
+the shim), a raw **xprv**, or a **Core-native private descriptor** — the last
+two arrive as a single static QR or typed text and never touch the shim at
+all: pure Core from the first byte. (Descriptor mode is the answer to
+Maxwell's BIP39 critique: the backup carries its own derivation path, script
+type and checksum. Its trade-off: it is a printed/engraved QR, not stampable
+steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out via **three channels**: animated QR;
 a PSBT file on a USB stick in the OTG port; and — once the M3 RAM-resident
 image lands — the boot microSD itself, SeedSigner-OS style (the whole OS runs
 from RAM, so the card can be pulled and used as the PSBT sled). QR is the
