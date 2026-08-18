@@ -115,11 +115,18 @@ in existence. Yeti Cold, JW Weatherman's protocol, makes the same bet at
 system scale: nearly everything it does is Core, on the argument that you
 depend on Core anyway, so depend on only that.
 
-State the counter-argument fairly, because it is strong. Jimbocoin's
-position: "Personally, I don't want to be beholden to Core for my
-security," and therefore multi-vendor multisig where no single vendor
-constitutes a quorum, ideally with coordination reproduced on two
-independent stacks and identical addresses confirmed before use. Core is
+State the counter-argument fairly, because it is strong, and it rests on
+one epistemic premise jimbocoin states better than anyone: "The only time
+you know for sure your seed hasn't leaked is before it has been entered
+into any device. At any other time you can't be sure." No audit disproves
+a leak you cannot see, so his answer is structural: multi-vendor multisig
+where no single vendor ever sees a quorum of your seed material, because
+it is vanishingly unlikely that two independent vendors carry an
+exfiltration bug at the same time, exploitable by the same parties.
+Ideally you even reproduce the coordination (the coordinator: the online
+watch-only wallet app, such as Sparrow, that builds transactions for your
+signer to approve) on two independent stacks and confirm both derive
+identical addresses before funding. Core is
 simultaneously the most reviewed codebase in Bitcoin and its most valuable
 infiltration target. Which risk is larger, one infiltration of the
 best-reviewed honeypot or a coordinated simultaneous infiltration of
@@ -161,9 +168,14 @@ Reasonable people accept it; nobody should accept it unknowingly.
 guarded by a PIN and a secure element, from setup until loss. A stateless
 signer (SeedSigner, Corky) holds nothing: you bring the seed each session,
 sign, power off, and the device forgets. Statelessness means a seized
-device is just electronics, at the price of the seed being exposed in the
-room at every use. Pick deliberately: state guarded by silicon, or no
-state and disciplined handling.
+device is just electronics. Its price must be stated with the same
+honesty, and jimbocoin's premise above sets it: the seed is exposed in the
+room at every use, and every entry into a device is another moment after
+which "it has never leaked" can no longer be known for certain. The
+stateless answer (the same audited device each time, nothing persisted,
+a reproducible binary) is a real answer, not a complete one. Pick
+deliberately: state guarded by silicon, or no state and disciplined
+handling.
 
 One asymmetry to complete the picture: a malicious signer can leak key
 material through its signature nonces while producing normal-looking
@@ -193,9 +205,13 @@ and elegance does not.
 The resolution costs one sheet of paper. **Back up the words on steel, and
 back up the public descriptor on paper beside your documents.** The
 descriptor cannot spend; it turns recovery from archaeology into a lookup.
-The moment you use multisig this stops being advice and becomes a
-requirement, because recovering a multisig needs every cosigner's public
-key, and words alone will never reconstruct them.
+With multisig the rule sharpens, with one exception worth knowing
+(FractalEncrypt's point): in a 2-of-2, the two seeds alone can both
+reconstruct the wallet and spend, and with only four script policies in
+existence, brute-checking them is trivial, so the descriptor backup is
+optional there. Anything above 2-of-2 flips it to mandatory: a 2-of-3
+can spend with two seeds but cannot rebuild the wallet without the third
+cosigner's public key, and only the descriptor carries it.
 
 **What Core's own backup doc is telling you.** managing-wallets.md
 describes wallet-file backups (keys plus labels, history, and the
@@ -230,8 +246,10 @@ ambiguity is part of that failure.
 **Bitcoin Core on a desktop, single-sig with encryption.** Right engine,
 wrong vessel. The keys live full-time on an online, general-purpose
 machine, the doc's own keylogger caveat applies, and the passphrase adds a
-loss mode faster than it removes a theft mode. Core is the average
-person's node and watch layer, not their key layer.
+loss mode faster than it removes a theft mode. To be plain about what is
+and is not being dismissed: run Core, run your own node, verify your own
+chain; just do not make that online machine the holder of your keys. Core
+is the average person's node and watch layer, not their key layer.
 
 **Hardware wallet plus card-generated seed.** Our recommendation for most
 people. Card entropy closes the RNG hole with the checksum computed on the
@@ -248,16 +266,31 @@ geography: survives four lost keys, requires three compromised locations
 to steal, trusts Core and nothing else. Its honest costs: USB crossings
 instead of QR, radios handled by procedure rather than by absence (pull
 the cards), an on-chain fingerprint from the unusual quorum, and hours of
-setup. For deep cold storage by someone who accepts the Core bet, it
+setup. And one charge this article's own first section requires us to
+file: Yeti generates its seeds with Core's random number generator.
+Jimbocoin's assessment is exactly right: arguably the best available
+software generator, and epistemologically the same risk as letting a
+Coldcard or any other manufacturer perform your seed genesis, because no
+RNG's output can be verified. "If you're determined to trust a
+counterparty, Core is the best counterparty to trust" is both Yeti's best
+defense and its honest indictment, and card-generated seeds would close
+the gap in Yeti just as they close it everywhere else. For deep cold
+storage by someone who accepts the Core bet with that caveat attached, it
 remains a serious, published, criticizable protocol, which is more than
 most vendors offer.
 
 **Multi-vendor multisig, no vendor a quorum.** The strongest answer to
-"what if the implementation itself is the flaw," and the most demanding:
-its security comes precisely from the heterogeneity that makes it hard, as
-its own advocates concede. For large holdings with a professional or a
-patient operator, it is the ceiling. Sold to an average person as a
-starting point, it mostly manufactures stuck funds.
+"what if the implementation itself is the flaw": if no vendor ever sees
+enough of your seed material to spend, no single vendor bug, however
+invisible, can drain you. Judge it by the same six criteria the card
+procedure was designed against: easy to learn, hard to screw up, errors
+detectable, fast, enough entropy, resists bias. The cards pass because
+they were engineered to pass. Multi-vendor multisig, today, fails the
+first two for most people, and its own advocates concede the bind: making
+it simpler means making the vendors more alike, and their unlikeness is
+the security. For large holdings with a professional or a patient
+operator, it is the ceiling. Sold to an average person as a starting
+point, it mostly manufactures stuck funds.
 
 ## The through-line
 
