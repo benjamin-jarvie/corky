@@ -1,6 +1,6 @@
 # Seed Generation, Seed In Use, Seed At Rest: An Honest Map of Bitcoin Self-Custody
 
-*Draft v2, 2026-08-18. For Bitcoin Butlers. The framework of this article,
+*Draft v3, 2026-08-18. For Bitcoin Butlers. The framework of this article,
 one secret weighed across three phases of its life, comes from jimbocoin.
 Technical claims trace to Bitcoin Core's managing-wallets.md, BIP32/39/93,
 the SeedPicker Solitaire repo, the SeedSigner dice-generation analysis, the
@@ -131,8 +131,9 @@ identical addresses before funding. Core is
 simultaneously the most reviewed codebase in Bitcoin and its most valuable
 infiltration target. Which risk is larger, one infiltration of the
 best-reviewed honeypot or a coordinated simultaneous infiltration of
-several smaller vendors, is genuinely unresolved; we hold the Core side of
-that bet with our eyes open, and it is a bet.
+several smaller vendors, is genuinely unresolved; whichever side of that
+bet a setup takes, it is a bet, and it deserves to be held with open
+eyes.
 
 **On what hardware, and the question you asked us straight: the wiped
 laptop.** The standard air-gap recipe says factory-reset an old laptop and
