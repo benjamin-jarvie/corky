@@ -78,6 +78,19 @@ metal and in the room, not in the hardware.
 amounts the PSBT supplies. A malicious coordinator can misstate them. Every
 air-gapped signer shares this limit; Corky prints it on the review screen.
 
+**No anti-exfiltration protocol.** A malicious signing device can leak key
+material through its signature nonces while producing valid-looking
+transactions. Anti-exfil ceremonies (coordinator contributes randomness to
+the nonce) defeat this, and Corky cannot implement one: Bitcoin Core
+generates its own deterministic nonces (RFC6979) and exposes no hook for
+coordinator randomness. Corky's answer to the same attack is transparency
+instead of protocol: the signing code is Bitcoin Core's published,
+reproducibly built binary, hash-verified at image build, not a black box
+whose nonces you must distrust. These are different mitigations with
+different failure modes; anti-exfil protects against a compromised *build*,
+transparency protects against a compromised *vendor*. If anti-exfil is your
+requirement, Corky cannot meet it today.
+
 **One maintainer, pinned versions.** Each release is a pinned tuple
 (OS image, Core version, front-end commit) that updates only by reflash.
 That is the mitigation, not a cure, for a small project's maintenance risk.

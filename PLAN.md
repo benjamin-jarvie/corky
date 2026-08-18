@@ -63,6 +63,19 @@
   Strategic note: mode 1 makes Corky the first signer with a shim-free,
   fully Core-native path; candidate default for onboarding fresh wallets.
 
+## Post-v1 todo
+
+- **Codex32 (BIP93) seed entry** as a fourth input mode: bech32 seed shares,
+  k-of-n recovery, hand-verifiable checksums; authored by Wuille/O'Connor.
+  FractalEncrypt has a full SeedSigner implementation in progress
+  (FractalEncrypt/FractalEncrypt_seedsigner, Codex32_Implementation branch).
+  **Deliberately deferred until Fractal publishes — do not front-run his
+  work (Ben, 2026-08-17).** Revisit after his release; his QR share specs
+  would be the compatibility target.
+- Anti-exfil: not implementable via Core's RPC today (no nonce hook in
+  walletprocesspsbt); documented as a stated trade-off in the README. Watch
+  upstream Core for any sign-to-contract / anti-exfil RPC support.
+
 ## The idea in three sentences
 
 Take SeedSigner's hardware (camera, small screen, no persistent secrets) and replace its
