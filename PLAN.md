@@ -89,6 +89,24 @@
   Zero-shaped; pending Ben identifying the exact PCB. UI must support
   4-button (no joystick) navigation as the primary scheme.
 
+- **A-16: dev image vs release image (2026-08-18).** Two distinct images per
+  release, both hashed in the pinned tuple. DEV: SSH enabled over the
+  carrier's wired Ethernet (no radio involved; the cable is the visible,
+  removable dev channel), HDMI console. RELEASE: no SSH server, network
+  services masked, Ethernet driver blacklisted (stack removed entirely once
+  M3's RAM-resident image lands). The air-gap claim attaches to the release
+  image only. Desoldering the RJ45 remains a documented option for a
+  paranoid build (through-hole part; far easier than radio rework).
+- **A-17: UI design reference — Bitcoin Core App (2026-08-18).** The QML
+  interface at bitcoincore.app (repo: bitcoin-core/gui-qml, qt6 branch) is a
+  COMMUNITY project with the Bitcoin Design community — it sits in the
+  bitcoin-core GitHub org but is NOT an official Bitcoin Core team product;
+  record it accurately. Use: mine its transaction-review and send-flow
+  patterns (Bitcoin Design Guide lineage, MIT) when refining Corky's review
+  screens, so Corky's UI reads like the Core family. Watch item: if it grows
+  PSBT-by-QR/file coordinator flows, the full stack becomes Core node +
+  Core App coordinator + Corky signer.
+
 ## Post-v1 todo
 
 - **Codex32 (BIP93) seed entry** as a fourth input mode: bech32 seed shares,
