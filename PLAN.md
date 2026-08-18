@@ -46,10 +46,22 @@
   SeedSigner at `hw/vendor/ili9341.py`; the 3.5" ILI9486 is named in
   SeedSigner's settings but has no driver in their main repo yet). The UI
   renders resolution-independent PIL frames and asks the driver for its
-  size, so the 1.3" ST7789 stays supported as the compact build. Open
-  hardware question for Ben: which physical 2.4" board/PCB he is buying —
-  button wiring on Plus-style PCBs must be confirmed against the
-  `hw/HARDWARE.md` pin map when it arrives.
+  size, so the 1.3" ST7789 stays supported as the compact build.
+  **SUPERSEDED by the A-13b finding below.**
+- **A-13b: the display is Ben's own SeedSigner+ hat (resolved 2026-08-17).**
+  Ben stocks the SeedSigner+ (Bitcoin Butlers shop product `seedsigner-plus`)
+  and holds its PCBs: **2.8" IPS, 320x240, ST7789**, a standard 40-pin GPIO
+  HAT with on-board d-pad/buttons, USB-C power input and microSD extender.
+  It runs stock SeedSigner firmware with only the `st7789_320x240` display
+  setting — which proves the buttons use the same GPIO map as the 1.3" hat
+  and the controller is the ST7789 already vendored. Driver work = the
+  320x240 init variant (width/height swap + 90-degree rotation, per
+  SeedSigner's display factory). Nothing to buy for the display; the
+  Pimoroni Display HAT Mini is off the list. Verify on arrival of the CM4:
+  (1) power from ONE USB-C only (hat back-feeds 5V via GPIO; the carrier has
+  its own input); (2) camera uses a STANDARD-width CSI ribbon on the carrier,
+  not the Plus kit's Zero-width ribbon; (3) enclosure fit of the metal Plus
+  case over the carrier stack.
 - **A-14: Core-native seed entry (Ben, 2026-08-17, third pass).** Three input
   modes, in order of purity: (1) **private descriptor via static QR** — pure
   Core, self-describing (path + script type + checksum), no shim, no
