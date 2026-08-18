@@ -2,9 +2,8 @@
 
 *Draft v3, 2026-08-18. For Bitcoin Butlers. The framework of this article,
 one secret weighed across three phases of its life, comes from jimbocoin.
-Technical claims trace to Bitcoin Core's managing-wallets.md, BIP32/39/93,
-the SeedPicker Solitaire repo, the SeedSigner dice-generation analysis, the
-Yeti Cold protocol, and linked discussions with Ben Westgate.*
+Every checkable claim carries a link; quotations from jimbocoin, Ben
+Westgate and FractalEncrypt come from public posts and correspondence.*
 
 ---
 
@@ -27,16 +26,20 @@ ever have flows from those 128 or 256 bits being genuinely unpredictable.
 And here is the uncomfortable fact this phase turns on: **a compromised
 random number generator is undetectable from its output.** A malicious or
 broken generator can emit seeds that pass every statistical test ever
-devised while being predictable to whoever planted the flaw. You cannot
-audit randomness by looking at it. Firmware review helps the one percent
-who read code; nobody reviews the silicon.
+devised while being predictable to whoever planted the flaw. This is not
+a hypothetical class: the [Dual_EC_DRBG backdoor](https://en.wikipedia.org/wiki/Dual_EC_DRBG)
+was a standardized, NIST-blessed generator with exactly this property. You
+cannot audit randomness by looking at it. Firmware review helps the one
+percent who read code; nobody reviews the silicon.
 
 This stopped being theoretical. In 2026, a Coldcard entropy failure
 demonstrated the exact scenario: seeds from the device's compromised RNG
 path were at risk, while seeds derived from user-supplied dice rolls
-remained secure. One sentence from the dice analysis deserves to be
-engraved somewhere: **"You have to trust a seed a device creates for you.
-You can verify a seed you rolled yourself."**
+remained secure (documented in the
+[SeedSigner dice-generation analysis](https://kdmukai-bot.github.io/seedsigner-ai-analysis/dice/standard.html)).
+One sentence from that analysis deserves to be engraved somewhere:
+**"You have to trust a seed a device creates for you. You can verify a
+seed you rolled yourself."**
 
 The asymmetry that saves us: generation is unverifiable, but everything
 after generation is deterministic and therefore checkable. If the entropy
@@ -48,33 +51,47 @@ into the one step you performed yourself.
 So: dice or cards?
 
 **Dice, examined honestly.** The instinctive worry about dice, biased
-faces, turns out to be the wrong worry. Measured real-world dice bias runs
-around 1.4 percent, which costs a 24-word seed roughly 2.9 bits out of
-256. Negligible. The real problems are human and structural. Human: the
+faces, turns out to be the wrong worry.
+[Measured real-world dice bias](https://kdmukai-bot.github.io/seedsigner-ai-analysis/dice/standard.html)
+runs around 1.4 percent, which costs a 24-word seed roughly 2.9 bits out
+of 256. Negligible. The real problems are human and structural. Human: the
 procedure is boring, and a bored human skips steps; twenty honest rolls
 followed by eighty impatient button-mashes is not entropy, and nothing in
-the procedure catches it. Structural, and this is the decisive one: **the mapping from rolls to
-seed happens inside software.**
-A survey of seventeen implementations found five incompatible
-constructions: hash the digit string, remap sixes then hash, pack bits
-directly, treat the rolls as one base-6 number, or use a worksheet.
-Identical rolls produce different seeds on different devices. You cannot
-compute SHA-256 by hand, so you are back to trusting the device for the
-step the dice were meant to take away from it. The mitigation exists,
-verify with disposable test rolls against a second implementation, but the
-dependence never goes to zero.
+the procedure catches it. Structural, and this is the decisive one: **the
+mapping from rolls to seed happens inside software.** A
+[survey of seventeen implementations](https://kdmukai-bot.github.io/seedsigner-ai-analysis/dice/standard.html)
+found five incompatible constructions: hash the digit string, remap sixes
+then hash, pack bits directly, treat the rolls as one base-6 number, or
+use a worksheet. Identical rolls produce different seeds on different
+devices.
 
-**Cards, examined honestly.** SeedPicker Solitaire (jimbocoin's procedure)
-was designed against six criteria: easy to learn, hard to screw up, errors
-detectable, fast, enough entropy, resists bias. A standard 52-card deck,
-riffle-shuffled seven times (the count research says suffices), then 23
-pairs drawn without replacement. Each pair maps to a seed word through a
-**printed lookup table**, and a shortcut removes even the table-reading
-risk: pairs of different suits always land on a valid word. The 24th word
-is the checksum, so a transcription error announces itself instead of
-surfacing years later as a wallet that restores empty. The full-deck draw
-preserves slightly more than 205 bits, comfortably past the 128 bits that
-matter once a public key is exposed.
+How far can a determined human push the mapping out of software? Arman
+The Parman's guides
+([site](https://armantheparman.com/dicev1/),
+[worksheets](https://github.com/ArmanTheParman/PrivateKeyWithDice))
+mark the exact boundary: dice to binary, binary to words, all of it by
+hand on paper, except one step. The checksum is a SHA-256 hash, and his
+own instructions reach for an offline computer for that single command
+before returning to hand conversion. No human computes SHA-256 on paper,
+so every dice construction keeps at least that one foot in software, and
+most keep the whole mapping there. The mitigation exists, verify with
+disposable test rolls against a second implementation, but the dependence
+never goes to zero.
+
+**Cards, examined honestly.**
+[SeedPicker Solitaire](https://github.com/jimbojw/seed-picker-solitaire)
+(jimbocoin's procedure) was designed against six criteria: easy to learn,
+hard to screw up, errors detectable, fast, enough entropy, resists bias.
+A standard 52-card deck, riffle-shuffled seven times
+([the count research says suffices](https://en.wikipedia.org/wiki/Shuffling)),
+then 23 pairs drawn without replacement. Each pair maps to a seed word
+through a **printed lookup table**, and a shortcut removes even the
+table-reading risk: pairs of different suits always land on a valid word.
+The 24th word is the checksum, so a transcription error announces itself
+instead of surfacing years later as a wallet that restores empty. The
+full-deck draw preserves
+[slightly more than 205 bits](https://github.com/jimbojw/seed-picker-solitaire),
+comfortably past the 128 bits that matter once a public key is exposed.
 
 Why cards beat dice is now precise: **the deck maps to words on paper, in
 the open, by lookup; dice map to seeds inside arithmetic you cannot
@@ -112,9 +129,10 @@ device remember afterward.
 SeedSigner-class DIY devices run a small open reimplementation chosen for
 auditability. A third model runs the reference implementation itself,
 Bitcoin Core, wallet-only and offline, on the argument that Core's wallet
-logic is the most reviewed in existence. Yeti Cold, JW Weatherman's protocol, makes the same bet at
-system scale: nearly everything it does is Core, on the argument that you
-depend on Core anyway, so depend on only that.
+logic is the most reviewed in existence. [Yeti Cold](https://yeticold.com/), JW Weatherman's protocol
+([source](https://github.com/JWWeatherman/yeticold)), makes the same bet
+at system scale: nearly everything it does is Core, on the argument that
+you depend on Core anyway, so depend on only that.
 
 State the counter-argument fairly, because it is strong, and it rests on
 one epistemic premise jimbocoin states better than anyone: "The only time
@@ -180,7 +198,8 @@ handling.
 
 One asymmetry to complete the picture: a malicious signer can leak key
 material through its signature nonces while producing normal-looking
-transactions. Some hardware wallets counter with anti-exfil protocols
+transactions. Some hardware wallets counter with
+[anti-exfil protocols](https://blog.blockstream.com/anti-exfil-stopping-key-exfiltration/)
 where the coordinator contributes randomness. A Core-based signer cannot
 run those protocols, because Core generates its own nonces and offers no
 hook; its answer is that the signing binary is Core's reproducible,
@@ -193,16 +212,26 @@ compromised vendor, and neither defends against both.
 Now the phase where most coins are actually lost, and the distinction the
 whole article hangs on.
 
-**Your words back up a secret. A descriptor backs up a wallet.** BIP39
+**Your words back up a secret. A descriptor backs up a wallet.**
+[BIP39](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)
 words encode entropy and nothing else: no derivation path, no script type,
-no birth date. Recovery from words alone is a guessing game played against
-shifting conventions, which is why Core developer Gregory Maxwell opposed
-the standard from the start ("The lack of versioning is a serious design
-flaw... On this basis alone I would recommend against use") and why
-Bitcoin Core never implemented it. Core's native object, the descriptor,
+no birth date. Recovery from words alone is a guessing game played against shifting
+conventions (the standard derivation path has moved three times:
+[BIP44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki),
+[BIP84](https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki),
+[BIP86](https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki)),
+which is why Core developer Gregory Maxwell
+[opposed the standard from the start](https://github.com/bitcoin/bips/pull/17)
+("The lack of versioning is a serious design flaw... On this basis alone
+I would recommend against use") and why Bitcoin Core
+[never implemented it](https://github.com/bitcoin/bitcoin/issues/17748). Core's native object, the
+[descriptor](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md),
 is the complete recipe: key, path, script type, checksum, one line of
-text. The ecosystem shipped BIP39 anyway because words stamp into steel
-and elegance does not.
+text. Electrum
+[rejected BIP39 for the same reason](https://electrum.readthedocs.io/en/latest/seedphrase.html)
+and built version numbers into its own seed format. The wider ecosystem
+shipped BIP39 anyway because words stamp into steel and elegance does
+not.
 
 The gap closes for the cost of one sheet of paper. Words on steel hold
 the secret; a printed public descriptor beside your documents holds the
@@ -217,7 +246,8 @@ optional there. Anything above 2-of-2 flips it to mandatory: a 2-of-3
 can spend with two seeds but cannot rebuild the wallet without the third
 cosigner's public key, and only the descriptor carries it.
 
-**What Core's own backup doc is telling you.** managing-wallets.md
+**What Core's own backup doc is telling you.**
+[managing-wallets.md](https://github.com/bitcoin/bitcoin/blob/master/doc/managing-wallets.md)
 describes wallet-file backups (keys plus labels, history, and the
 descriptor set, richer than words and heavier: a file, on media, in one
 program's format) and is refreshingly blunt about encryption: it protects
@@ -226,11 +256,12 @@ all the coins in the wallet will also be lost forever." Encryption narrows
 an attack; it does not remove one.
 
 **Backup privacy, from the person who built the standard.** Ben Westgate,
-codex32's author: encryption and secret-splitting are the tools for backup
+author of [codex32 (BIP93)](https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki): encryption and secret-splitting are the tools for backup
 privacy, so a single compromised hiding place reveals nothing; multisig
 addresses different threats; and these are not either-or decisions. Want
 one stolen backup to disclose nothing? Split the seed codex32-style,
-k-of-n, checksums verifiable by hand on paper. Want theft of a whole
+k-of-n, checksums verifiable by hand on paper (that hand-verifiability is
+[designed into the standard](https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki)). Want theft of a whole
 signer to be insufficient to spend? Multisig. Want both properties? Use
 both. And the companion warning from the same thread: pairing an encrypted
 backup with a separately-stored password hand-builds a fragile 2-of-2; if
