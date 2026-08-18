@@ -13,6 +13,7 @@ The front end (screen/camera) calls exactly four things per session:
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,9 @@ class Rpc:
                 "signet": ["-signet"]}[chain]
         self.base = [cli, f"-datadir={datadir}", *flag]
         self.chain = chain
+        subdir = {"main": "", "test": "testnet3", "regtest": "regtest",
+                  "signet": "signet"}[chain]
+        self.wallet_dir = Path(datadir) / subdir / "wallets"
 
     def call(self, method, *params, wallet=None):
         cmd = list(self.base)
@@ -73,14 +77,45 @@ def build_descriptors(rpc, xprv):
     return descs
 
 
-def open_session(rpc, mnemonic, passphrase=""):
-    xprv = mnemonic_to_xprv(mnemonic, passphrase, mainnet=(rpc.chain == "main"))
+def _import(rpc, descriptors):
     rpc.call("createwallet", WALLET, False, True, "", False, True)
-    result = rpc.call("importdescriptors", build_descriptors(rpc, xprv),
-                      wallet=WALLET)
+    result = rpc.call("importdescriptors", descriptors, wallet=WALLET)
     failures = [r for r in result if not r.get("success")]
     if failures:
         raise RuntimeError(f"importdescriptors failed: {failures}")
+
+
+def open_session(rpc, mnemonic, passphrase=""):
+    """Input mode 3 (default): BIP39 words. The only path that uses the shim."""
+    xprv = mnemonic_to_xprv(mnemonic, passphrase, mainnet=(rpc.chain == "main"))
+    _import(rpc, build_descriptors(rpc, xprv))
+
+
+def open_session_xprv(rpc, xprv):
+    """Input mode 2: a raw BIP32 xprv (typed or from a static QR).
+    Pure Core from the first byte; Corky applies the BIP84/86 paths."""
+    _import(rpc, build_descriptors(rpc, xprv.strip()))
+
+
+def open_session_descriptors(rpc, descriptors):
+    """Input mode 1: Core-native private descriptors (from a static QR).
+    Fully self-describing; no shim, no assumed derivation paths.
+    Accepts one or more descriptor strings; each becomes an active
+    receive/change pair according to its own content."""
+    imports = []
+    for desc in descriptors:
+        desc = desc.strip()
+        # Re-checksum via Core (accepts descriptors with or without one).
+        info = rpc.call("getdescriptorinfo", desc)
+        bare = desc.split("#")[0]
+        imports.append({
+            "desc": f"{bare}#{info['checksum']}",
+            "active": True,
+            "internal": "/1/*" in bare,
+            "timestamp": "now",
+            "range": [0, 200],
+        })
+    _import(rpc, imports)
 
 
 def public_descriptors(rpc):
@@ -118,4 +153,8 @@ def sign_psbt(rpc, psbt_b64):
 
 
 def close_session(rpc):
+    """Unload AND delete the session wallet. On the device the datadir is a
+    ramdisk and power-off is the real teardown; deleting here keeps every
+    environment (and every test) as stateless as the hardware."""
     rpc.call("unloadwallet", WALLET)
+    shutil.rmtree(rpc.wallet_dir / WALLET, ignore_errors=True)

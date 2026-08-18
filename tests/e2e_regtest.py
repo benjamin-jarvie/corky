@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 import signer  # noqa: E402
 
 MNEMONIC = "abandon " * 11 + "about"
@@ -95,8 +96,30 @@ def main():
         assert signer.WALLET not in rpc.call("listwallets")
         print("ok   session closed; signer wallet unloaded")
 
+        # A-14: re-open the same wallet via the two Core-native modes and
+        # confirm all three inputs produce identical wallets (same first
+        # descriptors), i.e. the shim-free paths are equivalent.
+        import bip39_shim  # noqa: E402  (test-only, to produce the xprv)
+        xprv = bip39_shim.mnemonic_to_xprv(MNEMONIC, mainnet=False)
+        signer.open_session_xprv(rpc, xprv)
+        pubs_xprv = signer.public_descriptors(rpc)
+        signer.close_session(rpc)
+        assert pubs_xprv == pubs, "xprv mode derived a different wallet"
+        print("ok   xprv entry mode: identical wallet, shim not used")
+
+        raw84 = f"wpkh({xprv}/84h/1h/0h/0/*)"
+        raw84c = f"wpkh({xprv}/84h/1h/0h/1/*)"
+        signer.open_session_descriptors(rpc, [raw84, raw84c])
+        pubs_desc = signer.public_descriptors(rpc)
+        signer.close_session(rpc)
+        assert [d for d in pubs if "wpkh" in d] == pubs_desc, \
+            "descriptor mode derived a different wallet"
+        print("ok   descriptor entry mode: identical wallet, no shim, "
+              "no assumed paths")
+
         print("\nE2E PASS: words -> shim -> Core descriptors -> PSBT review -> "
-              "sign -> broadcast, with the coordinator holding xpubs only")
+              "sign -> broadcast, with the coordinator holding xpubs only; "
+              "xprv and descriptor entry modes verified equivalent")
     finally:
         try:
             rpc.call("stop")
