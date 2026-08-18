@@ -44,12 +44,36 @@ def read_psbt(path: Path) -> str:
         raise FileChannelError(f"{path.name}: {size} bytes, refusing")
     raw = path.read_bytes()
     try:
-        text = raw.decode("ascii").strip()
-        # Round-trip check: is it valid base64 text?
+        # Text export: strip ALL whitespace first — Sparrow/mail-style
+        # exports wrap base64 at 64/76 columns and a stray newline must not
+        # shunt a valid text PSBT into the binary branch (double-encoding).
+        text = "".join(raw.decode("ascii").split())
         base64.b64decode(text, validate=True)
         return text
     except (UnicodeDecodeError, binascii.Error, ValueError):
         return base64.b64encode(raw).decode("ascii")
+
+
+def wait_stable(path: Path, checks=3, interval=0.2) -> bool:
+    """True once the file size stops changing (guards against reading a
+    file mid-copy from the coordinator — the stick is a shared medium)."""
+    import time
+    last = -1
+    stable = 0
+    for _ in range(50):
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return False
+        if size == last and size > 0:
+            stable += 1
+            if stable >= checks:
+                return True
+        else:
+            stable = 0
+        last = size
+        time.sleep(interval)
+    return False
 
 
 def write_signed(source: Path, signed_psbt_b64: str) -> Path:

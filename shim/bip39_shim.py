@@ -8,7 +8,7 @@ outside Bitcoin Core, so it is held to three rules:
   2. No elliptic-curve math. Hashing and encoding only. Every key
      operation (derivation, signing) happens inside Bitcoin Core.
   3. Frozen. Changes require re-running test_shim.py against the
-     official BIP32/BIP39 vectors and updating the hash in README.md.
+     official BIP32/BIP39 vectors and updating the hash in SHIM_HASH.
 
 The two transformations, per the standards:
   BIP39: seed = PBKDF2-HMAC-SHA512(words, "mnemonic"+passphrase, 2048 rounds)

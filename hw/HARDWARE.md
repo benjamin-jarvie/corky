@@ -18,10 +18,10 @@ Ben's exact kit with zero guesswork.*
 - Rendering: PIL `Image` (exactly 240×240) → RGB565 → full-frame SPI write.
   No partial updates; SeedSigner redraws whole frames and it is fast enough
   for menus and animated QRs at a few FPS.
-- SeedSigner's display factory also supports ili9341/ili9486 (the larger
-  2.4"/3.5" community builds, e.g. "SeedSigner Plus" style screens). Corky v1
-  targets ST7789 240×240 only; the factory pattern is there if a bigger
-  screen ever matters.
+- SeedSigner's display factory also supports st7789 320×240, ili9341 and
+  ili9486. **Corky v1's primary display is Ben's SeedSigner+ hat: 2.8" ST7789
+  at 320×240 (A-13b/A-15)**; the 1.3" 240×240 remains the pocket build. The
+  ili9341 driver stays vendored for Plus-class 2.4" boards.
 
 ## Buttons (from `hardware/buttons.py`, BOARD numbering, 40-pin header)
 

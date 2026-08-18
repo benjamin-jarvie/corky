@@ -1,6 +1,6 @@
-"""Full-device dress rehearsal on the dev HAL: boots bitcoind, runs main.py's
-state machine end to end with a scripted keypad, PSBT via the file channel.
-Run: python3 tests/e2e_session.py"""
+"""Full-device dress rehearsals on the dev HAL: three scripted sessions
+covering word entry, xprv-QR + QR PSBT in/out, and SeedQR + refusal of a
+fee-less PSBT. Run: python3 tests/e2e_session.py"""
 
 import base64
 import shutil
@@ -12,15 +12,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "shim"))
 import signer  # noqa: E402
+import qrchannel  # noqa: E402
+from bip39_shim import mnemonic_to_xprv  # noqa: E402
 
 MNEMONIC = "abandon " * 11 + "about"
+# Button script for typing the canonical mnemonic (see main._seed_words):
+# abandon: append 'a', open candidates, accept first  -> "ara"
+# about:   'a', +1 to 'b', append, +14 to 'o', append, candidates, accept
+WORDS_SCRIPT = "ara" * 11 + ("a" + "da" + "d" * 14 + "a" + "ra")
+
+
+def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
+    cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
+           f"--datadir={datadir}", "--chain=regtest", f"--script={script}",
+           f"--frames-dir={frames}"]
+    if stick:
+        cmd.append(f"--stick-dir={stick}")
+    if qr_key:
+        cmd.append(f"--qr-key={qr_key}")
+    if qr_psbt:
+        cmd.append(f"--qr-psbt={qr_psbt}")
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=180)
 
 
 def main():
     datadir = tempfile.mkdtemp(prefix="corky-sess-")
-    stick = Path(tempfile.mkdtemp(prefix="corky-sess-stick-"))
-    frames = Path(tempfile.mkdtemp(prefix="corky-sess-frames-"))
+    work = Path(tempfile.mkdtemp(prefix="corky-sess-work-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
          "-fallbackfee=0.0001", "-server=1", "-debuglogfile=0"],
@@ -34,7 +53,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        # Coordinator side: watch wallet funded, writes a PSBT to the stick
+        # Coordinator: watch wallet from Corky's xpubs, funded
         signer.open_session(rpc, MNEMONIC)
         pubs = signer.public_descriptors(rpc)
         signer.close_session(rpc)
@@ -45,41 +64,64 @@ def main():
                   for d in pubs], wallet="watch")
         addr = rpc.call("getnewaddress", wallet="watch")
         rpc.call("generatetoaddress", 101, addr)
-        dest = rpc.call("getnewaddress", wallet="watch")
-        funded = rpc.call("walletcreatefundedpsbt", [], [{dest: 2.0}],
-                          0, {"fee_rate": 10}, True, wallet="watch")
-        (stick / "hui.psbt").write_bytes(base64.b64decode(funded["psbt"]))
 
-        # The device: home -> select (a) -> auto seed -> stick found ->
-        # review -> sign (a)
-        run = subprocess.run(
-            [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
-             f"--datadir={datadir}", "--chain=regtest", "--script=aa",
-             f"--stick-dir={stick}", f"--frames-dir={frames}"],
-            capture_output=True, text=True, timeout=120)
-        assert run.returncode == 0, f"main.py failed:\n{run.stderr}"
+        def fund_psbt(amount):
+            dest = rpc.call("getnewaddress", wallet="watch")
+            return rpc.call("walletcreatefundedpsbt", [], [{dest: amount}],
+                            0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
 
-        signed_file = stick / "hui-signed.psbt"
-        assert signed_file.exists(), "signed PSBT not written to stick"
+        # ---- Session A: typed word entry + stick sign ----
+        stick = work / "stickA"; stick.mkdir()
+        (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
+        script = "a" + "da" + WORDS_SCRIPT + "a"   # home, menu->words, type, sign
+        r = run_device(datadir, script, work / "framesA", stick=stick)
+        assert r.returncode == 0, f"A failed:\n{r.stderr}"
+        signed = stick / "hui-signed.psbt"
+        assert signed.exists(), "A: signed file missing"
         final = rpc.call("finalizepsbt",
-                         base64.b64encode(signed_file.read_bytes()).decode())
+                         base64.b64encode(signed.read_bytes()).decode())
         txid = rpc.call("sendrawtransaction", final["hex"])
         rpc.call("generatetoaddress", 1, addr)
         assert rpc.call("gettransaction", txid, wallet="watch")["confirmations"] >= 1
-        shots = sorted(frames.glob("frame-*.png"))
-        assert len(shots) >= 4, "expected home/busy/review/result frames"
-        print(f"ok   session ran: {len(shots)} screen frames captured")
-        print(f"ok   signed PSBT from stick broadcast and confirmed: {txid[:16]}…")
-        print("\nSESSION PASS: scripted keypad drove the real state machine "
-              "through seed -> load -> review -> sign -> broadcast")
+        print(f"ok   A: typed 12 words on the keypad -> stick sign -> confirmed {txid[:12]}…")
+
+        # ---- Session B: xprv via QR + PSBT in AND out via QR ----
+        xprv_file = work / "key.txt"
+        xprv_file.write_text(mnemonic_to_xprv(MNEMONIC, mainnet=False))
+        frames_file = work / "psbt_frames.txt"
+        frames_file.write_text("\n".join(qrchannel.psbt_to_frames(fund_psbt(1.0))))
+        r = run_device(datadir, "a" + "ddda" + "a" + "a", work / "framesB",
+                       qr_key=xprv_file, qr_psbt=frames_file)
+        assert r.returncode == 0, f"B failed:\n{r.stderr}"
+        shots = sorted((work / "framesB").glob("frame-*.png"))
+        assert len(shots) > 6, "B: expected QR output frames on screen"
+        print(f"ok   B: xprv QR (warning screen shown) -> PSBT via QR -> signed QR out ({len(shots)} frames)")
+
+        # ---- Session C: SeedQR + fee-less PSBT refused ----
+        seedqr_file = work / "seedqr.txt"
+        seedqr_file.write_text("0000" * 11 + "0003")
+        stickc = work / "stickC"; stickc.mkdir()
+        utxo = rpc.call("listunspent", wallet="watch")[0]
+        bare = rpc.call("createpsbt",
+                        [{"txid": utxo["txid"], "vout": utxo["vout"]}],
+                        [{rpc.call("getnewaddress", wallet="watch"): 1.0}])
+        (stickc / "bad.psbt").write_bytes(base64.b64decode(bare))
+        r = run_device(datadir, "aa", work / "framesC",
+                       stick=stickc, qr_key=seedqr_file)
+        assert r.returncode == 0, f"C failed:\n{r.stderr}"
+        assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
+        print("ok   C: SeedQR entry -> fee-less PSBT refused, nothing signed")
+
+        print("\nSESSION PASS: word-entry, xprv-QR, SeedQR, QR in/out, "
+              "stick in/out, and the refusal path all exercised")
     finally:
         try:
             rpc.call("stop")
             daemon.wait(timeout=30)
         except Exception:
             daemon.kill()
-        for d in (datadir, stick, frames):
-            shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(datadir, ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == "__main__":

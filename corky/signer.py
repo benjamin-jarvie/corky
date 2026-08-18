@@ -14,12 +14,19 @@ The front end (screen/camera) calls exactly four things per session:
 
 import json
 import shutil
+from decimal import Decimal
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 from bip39_shim import mnemonic_to_xprv  # noqa: E402  (the one non-Core step)
+
+def _json_decimal(obj):
+    if isinstance(obj, Decimal):
+        return float(obj)  # only used for outbound test/tool params
+    raise TypeError
+
 
 WALLET = "corky"
 
@@ -45,13 +52,16 @@ class Rpc:
         if wallet:
             cmd.append(f"-rpcwallet={wallet}")
         cmd += [method,
-                *[p if isinstance(p, str) else json.dumps(p) for p in params]]
+                *[p if isinstance(p, str) else json.dumps(p, default=_json_decimal)
+                  for p in params]]
         out = subprocess.run(cmd, capture_output=True, text=True)
         if out.returncode != 0:
             raise RuntimeError(f"{method}: {out.stderr.strip()}")
         text = out.stdout.strip()
         try:
-            return json.loads(text)
+            # parse_float=Decimal: BTC amounts must never pass through binary
+            # floats — the review screen is the device's security boundary.
+            return json.loads(text, parse_float=Decimal)
         except json.JSONDecodeError:
             return text
 
@@ -67,14 +77,13 @@ def build_descriptors(rpc, xprv):
             # getdescriptorinfo's "checksum" field covers the descriptor as
             # given (private form); its "descriptor" field is the public form.
             checksum = rpc.call("getdescriptorinfo", raw)["checksum"]
-            descs.append({
-                "desc": f"{raw}#{checksum}",
-                "active": True,
-                "internal": bool(change),
-                "timestamp": "now",
-                "range": [0, 200],
-            })
+            descs.append(_desc_entry(f"{raw}#{checksum}", internal=bool(change)))
     return descs
+
+
+def _desc_entry(desc, internal):
+    return {"desc": desc, "active": True, "internal": internal,
+            "timestamp": "now", "range": [0, 200]}
 
 
 def _import(rpc, descriptors):
@@ -108,13 +117,11 @@ def open_session_descriptors(rpc, descriptors):
         # Re-checksum via Core (accepts descriptors with or without one).
         info = rpc.call("getdescriptorinfo", desc)
         bare = desc.split("#")[0]
-        imports.append({
-            "desc": f"{bare}#{info['checksum']}",
-            "active": True,
-            "internal": "/1/*" in bare,
-            "timestamp": "now",
-            "range": [0, 200],
-        })
+        # Heuristic: a trailing /1/* branch is the change chain. Documented
+        # limitation: multipath/nonstandard descriptors may need explicit
+        # marking; Core accepts either labeling for signing purposes.
+        imports.append(_desc_entry(f"{bare}#{info['checksum']}",
+                                   internal=bare.endswith("/1/*)")))
     _import(rpc, imports)
 
 
@@ -138,9 +145,21 @@ def describe_psbt(rpc, psbt_b64):
          "amount_btc": vout["value"]}
         for vout in decoded["tx"]["vout"]
     ]
+    # Total input value, from the coordinator-supplied UTXO data that Core
+    # parsed out of the PSBT (A-5: show fee AND total input sum).
+    input_total = Decimal(0)
+    complete_inputs = True
+    for txin in decoded["inputs"]:
+        utxo = txin.get("witness_utxo") or txin.get("non_witness_utxo")
+        amount = utxo.get("amount") if utxo else None
+        if amount is None:
+            complete_inputs = False
+        else:
+            input_total += Decimal(str(amount))
     return {
         "outputs": outputs,
-        "fee_btc": decoded.get("fee"),
+        "fee_btc": decoded.get("fee"),          # None if inputs incomplete
+        "input_total_btc": input_total if complete_inputs else None,
         "input_count": len(decoded["inputs"]),
         "next_role": analysis.get("next"),
         "fee_note": "fee computed from coordinator-supplied input amounts",

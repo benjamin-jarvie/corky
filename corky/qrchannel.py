@@ -4,10 +4,12 @@ This is the format Sparrow, SeedSigner and Foundation devices speak
 (ur:crypto-psbt fountain codes). Encoding/decoding of the UR container uses
 SeedSigner's vendored BC-UR module (hw/vendor/ur2, BSD-2-Clause-Patent).
 
-Obeys the opaque-bytes law: the PSBT payload is never parsed here. It is
-CBOR-wrapped as a plain byte string (that is all a crypto-psbt is) and
-unwrapped the same way; Bitcoin Core remains the only parser. Incoming
-frames get a length cap and charset check before the decoder sees them.
+Opaque-bytes law (PLAN A-11), with its ONE documented exception: the UR
+container itself (bytewords + a single CBOR byte-string header) must be
+removed here to get at the payload — that unwrapping is transport framing,
+not PSBT parsing, and it is bounded (length cap + charset check first,
+errors contained to QrChannelError). The PSBT inside stays opaque; Bitcoin
+Core remains the only parser of PSBT bytes.
 """
 
 import base64
@@ -65,11 +67,16 @@ class FrameAssembler:
             raise QrChannelError("frame contains invalid characters")
         self._decoder.receive_part(frame)
         if self._decoder.is_complete():
-            ur = self._decoder.result_message()
-            if ur.type != "crypto-psbt":
-                raise QrChannelError(f"unexpected UR type {ur.type}")
-            dec = CBORDecoder(ur.cbor)
-            raw, _ = dec.decodeBytes()
+            try:
+                ur = self._decoder.result_message()
+                if ur.type != "crypto-psbt":
+                    raise QrChannelError(f"unexpected UR type {ur.type}")
+                dec = CBORDecoder(ur.cbor)
+                raw, _ = dec.decodeBytes()
+            except QrChannelError:
+                raise
+            except Exception as exc:  # malformed container must not crash UI
+                raise QrChannelError(f"malformed UR container: {exc}") from None
             self.psbt_b64 = base64.b64encode(raw).decode("ascii")
             return True
         return False

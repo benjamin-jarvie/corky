@@ -19,15 +19,22 @@ class DevDisplay:
         image.save(self.outdir / f"frame-{self._n:03d}.png")
 
 
-class DevButtons:
-    """Reads single-letter commands from an iterator (stdin or a script).
-    Keys: u/d/l/r = d-pad, a = KEY1/select, b = KEY2, c = KEY3/back."""
+class ScriptExhausted(Exception):
+    """The dev keypad script ran out — the session script was too short."""
 
-    def __init__(self, feed):
-        self._feed = iter(feed)
+
+class DevButtons:
+    """Reads single-letter commands from a script string (or any iterable).
+    Keys: u/d/l/r = d-pad, a = select/KEY1, b = back/KEY2, c = reject/KEY3."""
+
+    def __init__(self, script):
+        self._script = iter(script)
 
     def read(self):
-        return next(self._feed)
+        try:
+            return next(self._script)
+        except StopIteration:
+            raise ScriptExhausted("dev keypad script exhausted") from None
 
 
 class DeviceDisplay:
@@ -45,7 +52,10 @@ class DeviceDisplay:
 
 
 class DeviceButtons:
-    """GPIO buttons per hw/HARDWARE.md pin map (BOARD numbering)."""
+    """GPIO buttons per hw/HARDWARE.md pin map (BOARD numbering).
+    The SeedSigner+ hat (A-13b) keeps the same GPIO map as the 1.3" hat —
+    proven by stock SeedSigner firmware driving both; d-pad up/down plus
+    A/B cover the whole four-button navigation scheme (A-15)."""
 
     PINS = {"u": 31, "d": 35, "l": 29, "r": 37, "press": 33,
             "a": 40, "b": 38, "c": 36}
