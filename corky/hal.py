@@ -14,8 +14,13 @@ class DevDisplay:
         self.outdir.mkdir(parents=True, exist_ok=True)
         self._n = 0
 
-    def show(self, image):
+    def show(self, image, sensitive=False):
         self._n += 1
+        if sensitive:
+            # Never persist seed-bearing screens, even in dev (repo
+            # standard 5: no silent persistence of key material).
+            from PIL import Image
+            image = Image.new("RGB", (self.width, self.height), "#1A1714")
         image.save(self.outdir / f"frame-{self._n:03d}.png")
 
 
@@ -47,15 +52,16 @@ class DeviceDisplay:
         self._lcd = ST7789(width=width, height=height)
         self.width, self.height = width, height
 
-    def show(self, image):
+    def show(self, image, sensitive=False):
         self._lcd.show_image(image, 0, 0)
 
 
 class DeviceButtons:
     """GPIO buttons per hw/HARDWARE.md pin map (BOARD numbering).
     The SeedSigner+ hat (A-13b) keeps the same GPIO map as the 1.3" hat —
-    proven by stock SeedSigner firmware driving both; d-pad up/down plus
-    A/B cover the whole four-button navigation scheme (A-15)."""
+    proven by stock SeedSigner firmware driving both. Navigation scheme is
+    d-pad + A/B/C keys (A-15 as amended: the four-button requirement died
+    with the Display HAT Mini when the Plus hat took its place)."""
 
     PINS = {"u": 31, "d": 35, "l": 29, "r": 37, "press": 33,
             "a": 40, "b": 38, "c": 36}

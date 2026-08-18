@@ -24,7 +24,7 @@ from bip39_shim import mnemonic_to_xprv  # noqa: E402  (the one non-Core step)
 
 def _json_decimal(obj):
     if isinstance(obj, Decimal):
-        return float(obj)  # only used for outbound test/tool params
+        return str(obj)  # Core accepts string amounts; never re-floated
     raise TypeError
 
 
@@ -114,6 +114,10 @@ def open_session_descriptors(rpc, descriptors):
     imports = []
     for desc in descriptors:
         desc = desc.strip()
+        if "multi" in desc:
+            # v1 scope is frozen to single-sig (README); multisig descriptors
+            # are refused here rather than silently imported.
+            raise RuntimeError("multisig descriptors are out of v1 scope")
         # Re-checksum via Core (accepts descriptors with or without one).
         info = rpc.call("getdescriptorinfo", desc)
         bare = desc.split("#")[0]

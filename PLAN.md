@@ -107,6 +107,17 @@
   PSBT-by-QR/file coordinator flows, the full stack becomes Core node +
   Core App coordinator + Corky signer.
 
+## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
+
+- **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,
+  visible in process listings during the seconds of import. Single-user
+  device, but move secret-bearing calls to `bitcoin-cli -stdin` at M2.
+- Passphrase and typed xprv/descriptor entry have no on-device UI yet
+  (dev-mode args only); build both text-entry screens at M2 alongside the
+  camera. Testnet subdir map assumes testnet3; revisit if Core defaults to
+  testnet4. README still names the 2.4" ILI9341 as primary — supersede with
+  A-13b wording at next README pass.
+
 ## Post-v1 todo
 
 - **Codex32 (BIP93) seed entry** as a fourth input mode: bech32 seed shares,

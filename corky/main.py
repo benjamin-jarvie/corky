@@ -39,6 +39,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 from bip39_shim import load_wordlist  # noqa: E402  (word entry candidates)
 
 
+MAX_KEY_PAYLOAD = 4096          # a descriptor set is a few hundred chars
+_KEY_CHARSET = set(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    "()[]{}#*'/,:;h<>@?!&+=-_.\n\r ")
+
+
 class DevQrSource:
     """Dev stand-in for the camera: returns file contents as scan payloads."""
 
@@ -60,8 +66,6 @@ class DevQrSource:
 
 
 class Session:
-    WORDS_TOTAL = 12
-
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
                  passphrase=""):
         self.display = display
@@ -91,8 +95,9 @@ class Session:
             if key == "a":
                 if self.state_seed_menu():
                     self.state_load()
-                return
-            if key == "c":
+                    return
+                self.display.show(screens.home(self.w, self.h))
+            elif key == "c":
                 return
 
     # -- seed entry: the three A-14 modes plus SeedQR ---------------------
@@ -130,15 +135,19 @@ class Session:
     def _seed_words(self):
         """Button-driven word entry. Per letter: u/d cycles a-z, a appends.
         r opens the candidate list (u/d select, a accept word), b backspaces."""
+        total = self._pick_seed_length()
+        if total is None:
+            return False
         words = []
-        while len(words) < self.WORDS_TOTAL:
+        while len(words) < total:
             prefix, cursor = "", 0
             while True:
                 candidates = [w for w in self.wordlist
                               if w.startswith(prefix)][:4]
                 self.display.show(screens.seed_entry(
-                    self.w, self.h, len(words) + 1, self.WORDS_TOTAL,
-                    prefix + string.ascii_lowercase[cursor], tuple(candidates)))
+                    self.w, self.h, len(words) + 1, total,
+                    prefix + string.ascii_lowercase[cursor],
+                    tuple(candidates)), sensitive=True)
                 key = self.buttons.read()
                 if key == "u":
                     cursor = (cursor - 1) % 26
@@ -150,19 +159,32 @@ class Session:
                 elif key == "b":
                     prefix = prefix[:-1]
                 elif key == "r" and candidates:
-                    word = self._pick_candidate(candidates, len(words) + 1)
+                    word = self._pick_candidate(candidates, len(words) + 1,
+                                                total)
                     if word:
                         words.append(word)
                         break
         return self._open_words(" ".join(words))
 
-    def _pick_candidate(self, candidates, word_index):
+    def _pick_seed_length(self):
+        selected = 0
+        while True:
+            self.display.show(screens.seed_length(self.w, self.h, selected))
+            key = self.buttons.read()
+            if key in ("u", "d"):
+                selected = 1 - selected
+            elif key == "a":
+                return 12 if selected == 0 else 24
+            elif key == "b":
+                return None
+
+    def _pick_candidate(self, candidates, word_index, total):
         selected = 0
         while True:
             marked = tuple(candidates[selected:] + candidates[:selected])
             self.display.show(screens.seed_entry(
-                self.w, self.h, word_index, self.WORDS_TOTAL,
-                candidates[selected], marked))
+                self.w, self.h, word_index, total,
+                candidates[selected], marked), sensitive=True)
             key = self.buttons.read()
             if key == "u":
                 selected = (selected - 1) % len(candidates)
@@ -179,7 +201,12 @@ class Session:
         while True:
             key = self.buttons.read()
             if key == "a":
-                payload = self.qr.scan_key().decode("ascii").strip()
+                raw = self.qr.scan_key()
+                if len(raw) > MAX_KEY_PAYLOAD:
+                    raise RuntimeError("key payload too large, refusing")
+                payload = raw.decode("ascii").strip()
+                if not set(payload) <= _KEY_CHARSET:
+                    raise RuntimeError("key payload has invalid characters")
                 self.display.show(screens.busy(self.w, self.h,
                                                "importing into Core…"))
                 return payload
@@ -206,7 +233,7 @@ class Session:
         self.display.show(screens.busy(self.w, self.h,
                                        "insert stick or show QR…"))
         psbt, source = None, None
-        qr_frames = self.qr.scan_psbt_frames()
+        qr_frames = None
         assembler = qrchannel.FrameAssembler()
         while psbt is None:
             if self.stick_dir:
@@ -214,6 +241,11 @@ class Session:
                 if found and filechannel.wait_stable(found[0]):
                     psbt, source = filechannel.read_psbt(found[0]), found[0]
                     break
+            # The QR source must be re-obtainable: a camera is a continuous
+            # stream, and the dev file source is re-read after exhaustion so
+            # an incomplete UR assembly can complete on a later pass.
+            if qr_frames is None:
+                qr_frames = self.qr.scan_psbt_frames()
             advanced = False
             for frame in qr_frames:
                 advanced = True
@@ -223,6 +255,8 @@ class Session:
                         break
                 except qrchannel.QrChannelError:
                     continue
+            else:
+                qr_frames = None
             if psbt is not None:
                 break
             if not advanced:
@@ -243,15 +277,29 @@ class Session:
             return
         outs = [(o["address"], Decimal(str(o["amount_btc"])))
                 for o in info["outputs"]]
-        self.display.show(screens.review(
-            self.w, self.h, outs, Decimal(str(info["fee_btc"])),
-            info["input_count"], input_total_btc=info["input_total_btc"]))
+        pages = max(1, (len(outs) + 2) // 3)
+        page, seen = 0, {0}
         while True:
+            self.display.show(screens.review(
+                self.w, self.h, outs, Decimal(str(info["fee_btc"])),
+                info["input_count"], input_total_btc=info["input_total_btc"],
+                page=page))
             key = self.buttons.read()
-            if key == "a":
+            if key == "d":
+                page = (page + 1) % pages
+                seen.add(page)
+            elif key == "u":
+                page = (page - 1) % pages
+                seen.add(page)
+            elif key == "a":
+                if len(seen) < pages:
+                    # Every output must have been on screen before signing.
+                    page = (page + 1) % pages
+                    seen.add(page)
+                    continue
                 self.state_sign(psbt, source)
                 return
-            if key == "c":
+            elif key == "c":
                 self.display.show(screens.result(
                     self.w, self.h, ok=False, detail="rejected by user"))
                 return

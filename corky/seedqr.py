@@ -50,6 +50,11 @@ def decode_compact(entropy: bytes) -> str:
 def decode(payload) -> str:
     """Accept either a scanned digit string or raw bytes; return words."""
     if isinstance(payload, bytes):
+        # Entropy-sized byte payloads are compact FIRST: 16/32 bytes of
+        # entropy that happen to be all ASCII digits must not be misread
+        # as a (wrong-length) digit stream.
+        if len(payload) in (16, 20, 24, 28, 32):
+            return decode_compact(payload)
         try:
             text = payload.decode("ascii")
         except UnicodeDecodeError:

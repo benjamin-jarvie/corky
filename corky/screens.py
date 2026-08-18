@@ -54,20 +54,23 @@ def home(w, h, version="v0"):
     return img
 
 
-def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True):
+def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True, page=0):
     """The screen that matters. outputs: [(address, amount_btc), ...]"""
-    img, d = _frame(w, h, "REVIEW  TRANSACTION")
+    pages = max(1, (len(outputs) + 2) // 3)
+    title = ("REVIEW  TRANSACTION" if pages == 1
+             else f"REVIEW  ·  OUTPUTS {page + 1}/{pages}")
+    img, d = _frame(w, h, title)
     y = int(h * 0.18)
-    for addr, amt in outputs[:3]:
+    for addr, amt in outputs[page * 3:page * 3 + 3]:
         short = addr[:14] + "…" + addr[-6:] if len(addr) > 24 else addr
         d.text((int(w * 0.06), y), short, font=_font(int(h * 0.058)),
                fill=CREAM, anchor="lm")
         d.text((int(w * 0.94), y + int(h * 0.065)), f"{amt:.8f} BTC",
                font=_font(int(h * 0.065)), fill=CREAM, anchor="rm")
         y += int(h * 0.155)
-    if len(outputs) > 3:
-        d.text((int(w * 0.06), y), f"+ {len(outputs) - 3} more outputs…",
-               font=_font(int(h * 0.055)), fill=GREY, anchor="lm")
+    if pages > 1:
+        d.text((int(w * 0.06), y), "UP/DOWN · more outputs",
+               font=_font(int(h * 0.05)), fill=OCHRE, anchor="lm")
         y += int(h * 0.09)
     d.line([(int(w * 0.06), y), (int(w * 0.94), y)], fill=GREY, width=1)
     total = (f"in {input_total_btc:.8f}" if input_total_btc is not None
@@ -165,5 +168,19 @@ def keymaterial_warning(w, h, kind="descriptor"):
         d.text((w // 2, int(h * (0.46 + i * 0.09))), line,
                font=_font(int(h * 0.05)), fill=CREAM, anchor="mm")
     d.text((w // 2, int(h * 0.95)), "A · I understand, scan    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def seed_length(w, h, selected=0):
+    img, d = _frame(w, h, "SEED  LENGTH")
+    for i, label in enumerate(["12 words", "24 words"]):
+        y = int(h * (0.35 + i * 0.18))
+        if i == selected:
+            d.rectangle([int(w * 0.30), y - int(h * 0.07),
+                         int(w * 0.70), y + int(h * 0.07)], outline=OCHRE)
+        d.text((w // 2, y), label, font=_font(int(h * 0.08)),
+               fill=CREAM if i == selected else GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img

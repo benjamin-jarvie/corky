@@ -73,7 +73,7 @@ def main():
         # ---- Session A: typed word entry + stick sign ----
         stick = work / "stickA"; stick.mkdir()
         (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
-        script = "a" + "da" + WORDS_SCRIPT + "a"   # home, menu->words, type, sign
+        script = "a" + "da" + "a" + WORDS_SCRIPT + "a"   # home, menu->words, length=12, type, sign
         r = run_device(datadir, script, work / "framesA", stick=stick)
         assert r.returncode == 0, f"A failed:\n{r.stderr}"
         signed = stick / "hui-signed.psbt"
@@ -112,8 +112,25 @@ def main():
         assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
         print("ok   C: SeedQR entry -> fee-less PSBT refused, nothing signed")
 
-        print("\nSESSION PASS: word-entry, xprv-QR, SeedQR, QR in/out, "
-              "stick in/out, and the refusal path all exercised")
+        # ---- Session D: many-output PSBT forces paged review ----
+        stickd = work / "stickD"; stickd.mkdir()
+        dests = {rpc.call("getnewaddress", wallet="watch"): 0.2
+                 for _ in range(4)}
+        many = rpc.call("walletcreatefundedpsbt", [],
+                        [{a: v} for a, v in dests.items()],
+                        0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickd / "many.psbt").write_bytes(base64.b64decode(many))
+        seedqr_file2 = work / "seedqr2.txt"
+        seedqr_file2.write_text("0000" * 11 + "0003")
+        # 5 outputs = 2 pages: first 'a' advances to unseen page 2, second signs
+        r = run_device(datadir, "aaaa", work / "framesD",
+                       stick=stickd, qr_key=seedqr_file2)
+        assert r.returncode == 0, f"D failed:\n{r.stderr}"
+        assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
+        print("ok   D: 5-output PSBT paged; sign gated until all pages seen")
+
+        print("\nSESSION PASS: word-entry(12/24 picker), xprv-QR, SeedQR, "
+              "QR in/out, stick in/out, refusal, and paged review exercised")
     finally:
         try:
             rpc.call("stop")

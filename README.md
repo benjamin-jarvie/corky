@@ -113,9 +113,10 @@ three carry only PSBTs, and only Bitcoin Core ever parses them. If 512MB
 cannot hold the RAM-resident image, v1 ships QR + USB and the microSD channel
 waits for a bigger board (the fallback is written down in PLAN.md A-12).
 
-Display: 2.4" ILI9341 (320×240, SeedSigner-Plus class) as the primary build;
-the 1.3" ST7789 (240×240) remains supported. Both drivers are vendored from
-SeedSigner (MIT) in `hw/vendor/`. A review screen showing
+Display: the SeedSigner+ hat — 2.8" ST7789 at 320×240 with d-pad and keys —
+is the primary build (PLAN A-13b); the 1.3" ST7789 (240×240) remains the
+pocket build. ST7789 and ILI9341 drivers are vendored from SeedSigner (MIT)
+in `hw/vendor/`. A review screen showing
 outputs, amounts and the fee as computed by Core from the coordinator-supplied
 input amounts (an air-gapped signer cannot independently verify input amounts;
 none can). Coordinator target: Sparrow.
