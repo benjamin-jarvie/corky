@@ -24,7 +24,6 @@ import argparse
 import string
 import sys
 import time
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,6 +42,17 @@ MAX_KEY_PAYLOAD = 4096          # a descriptor set is a few hundred chars
 _KEY_CHARSET = set(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     "()[]{}#*'/,:;h<>@?!&+=-_.\n\r ")
+
+
+class CameraQrSource:
+    """Device QR source. Camera capture is the M1 deliverable; until it
+    lands, QR entry paths report their absence instead of dead-ending."""
+
+    def scan_key(self):
+        raise RuntimeError("camera not yet wired (M1); use the USB stick")
+
+    def scan_psbt_frames(self):
+        return iter(())
 
 
 class DevQrSource:
@@ -158,6 +168,8 @@ class Session:
                     cursor = 0
                 elif key == "b":
                     prefix = prefix[:-1]
+                elif key == "c":
+                    return False          # abort word entry entirely
                 elif key == "r" and candidates:
                     word = self._pick_candidate(candidates, len(words) + 1,
                                                 total)
@@ -247,8 +259,8 @@ class Session:
             if qr_frames is None:
                 qr_frames = self.qr.scan_psbt_frames()
             advanced = False
+            progress_before = assembler.progress
             for frame in qr_frames:
-                advanced = True
                 try:
                     if assembler.feed(frame):
                         psbt = assembler.psbt_b64
@@ -257,6 +269,10 @@ class Session:
                     continue
             else:
                 qr_frames = None
+            # Progress, not mere frame consumption, counts as advancing —
+            # otherwise an incomplete dev file spins at 50Hz and the
+            # back/reject buttons are never polled.
+            advanced = psbt is not None or assembler.progress > progress_before
             if psbt is not None:
                 break
             if not advanced:
@@ -275,13 +291,12 @@ class Session:
                 self.w, self.h, ok=False,
                 detail="PSBT lacks input data; fee unknown — refused"))
             return
-        outs = [(o["address"], Decimal(str(o["amount_btc"])))
-                for o in info["outputs"]]
+        outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
         pages = max(1, (len(outs) + 2) // 3)
         page, seen = 0, {0}
         while True:
             self.display.show(screens.review(
-                self.w, self.h, outs, Decimal(str(info["fee_btc"])),
+                self.w, self.h, outs, info["fee_btc"],
                 info["input_count"], input_total_btc=info["input_total_btc"],
                 page=page))
             key = self.buttons.read()
@@ -341,10 +356,11 @@ def main():
     if args.dev:
         display = hal.DevDisplay(args.frames_dir)
         buttons = hal.DevButtons(args.script)
+        qr = DevQrSource(key_path=args.qr_key, psbt_path=args.qr_psbt)
     else:
         display = hal.DeviceDisplay()
         buttons = hal.DeviceButtons()
-    qr = DevQrSource(key_path=args.qr_key, psbt_path=args.qr_psbt)
+        qr = CameraQrSource()
 
     Session(display, buttons, rpc, stick_dir=args.stick_dir, qr_source=qr,
             passphrase=args.passphrase).run()

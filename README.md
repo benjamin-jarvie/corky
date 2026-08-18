@@ -3,7 +3,8 @@
 **Core's keys, nothing kept.**
 
 Corky is a stateless, air-gapped Bitcoin signing device built from SeedSigner
-hardware (Raspberry Pi Zero 2 W, camera, small LCD) with one difference that is
+hardware (a radio-free Raspberry Pi CM4, camera, and the SeedSigner+ display
+hat; a Pi Zero 2 W pocket build exists too) with one difference that is
 the whole point: the wallet brain is **Bitcoin Core itself**, running wallet-only
 and offline. Key derivation, PSBT parsing, fee computation and transaction
 signing are done by the same reviewed C++ code that runs the Bitcoin network's
@@ -140,7 +141,7 @@ that wallet-only bitcoind fits and signs on the Zero 2 W's 512MB
 
 | Gate | Deliverable | Pass condition |
 |---|---|---|
-| M0 | bitcoind wallet-only on Zero 2 W, headless | signs stress PSBT; peak RSS recorded; ≥100MB headroom |
+| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | signs stress PSBT; peak RSS recorded; ≥100MB headroom |
 | M1 | QR round trip vs Sparrow watch-only, testnet | fee/outputs match Sparrow; signed PSBT broadcasts |
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |

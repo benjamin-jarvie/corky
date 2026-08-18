@@ -89,6 +89,11 @@
   Zero-shaped; pending Ben identifying the exact PCB. UI must support
   4-button (no joystick) navigation as the primary scheme.
 
+- **A-15b (2026-08-18): A-15's display and button scheme are superseded.**
+  The Display HAT Mini and its "4-button primary scheme" died with A-13b:
+  the SeedSigner+ hat (d-pad + three keys, same GPIO map as the 1.3" hat)
+  is the primary control surface, on the CM4 carrier per A-15's board
+  decision, which stands. Navigation is d-pad + A/B/C.
 - **A-16: dev image vs release image (2026-08-18).** Two distinct images per
   release, both hashed in the pinned tuple. DEV: SSH enabled over the
   carrier's wired Ethernet (no radio involved; the cable is the visible,
@@ -161,7 +166,9 @@ trusts the most reviewed Bitcoin code that exists, on hardware you assemble your
 1. Raspberry Pi OS Lite **64-bit** (needed for the official `aarch64-linux-gnu` Core binary).
 2. Official Bitcoin Core release binary, signatures verified during image build.
 3. `bitcoind` config: `-networkactive=0 -listen=0 -dbcache=4 -maxmempool=5
-   -rpcthreads=1 -blocksonly=1`, datadir on a **tmpfs ramdisk**.
+   -rpcthreads=1`, datadir on a **tmpfs ramdisk**. (`blocksonly` was in v1 of
+   this plan and removed: it rejects the node's own wallet txs in the M0
+   harness and buys nothing offline — see m0/bitcoin.conf.)
 4. A thin Python front end (~300–500 lines): screen menus, camera QR scan (zbar),
    QR display (animated for large PSBTs), and RPC calls to localhost. It performs
    **no cryptography**.

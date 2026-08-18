@@ -16,3 +16,15 @@ deliberately not produced by these scripts.
 `PINS` is the whole release: OS image, Core version, and Corky commit,
 each with hashes. The two `UNPINNED_UNTIL_FIRST_FLASH` values get recorded
 on the first real flash and pinned thereafter.
+
+## Security posture of the DEV image (plainly)
+
+- `provision.sh` sources `corky-PINS` from the FAT32 boot partition as
+  root: **anyone with physical access to the SD card before provisioning
+  can run code as root.** That is acceptable for the dev image (which also
+  has SSH on and holds no keys), and unacceptable for release — the M3
+  release image has no provisioning step at all.
+- Core binary installs are refused until `CORE_SHA256` is pinned; verify
+  the hash out-of-band (SHA256SUMS + Guix attestation keys on a trusted
+  machine), then pin. A checksum fetched from the same server as the
+  binary proves nothing and is not used as a gate.

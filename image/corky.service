@@ -1,14 +1,14 @@
 [Unit]
 Description=Corky signing session
-After=local-fs.target
+Requires=corky-bitcoind.service
+After=corky-bitcoind.service
+RequiresMountsFor=/run/corky
 
 [Service]
 Type=simple
-# bitcoind lives and dies with the session; datadir is the ramdisk.
-ExecStartPre=/usr/local/bin/bitcoind -daemonwait -datadir=/run/corky -conf=/etc/corky-bitcoin.conf
 ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --datadir=/run/corky
-ExecStopPost=/usr/local/bin/bitcoin-cli -datadir=/run/corky stop
 Restart=on-failure
+RestartSec=2
 User=root
 
 [Install]

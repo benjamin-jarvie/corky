@@ -40,15 +40,15 @@ def home(w, h, version="v0"):
            fill=CREAM, anchor="mm")
     d.text((w // 2, int(h * 0.34)), "Core's keys, nothing kept",
            font=_font(int(h * 0.06)), fill=GREY, anchor="mm")
-    for i, (label, hint) in enumerate(
-            [("Scan PSBT  (camera)", "QR"),
-             ("Load PSBT  (USB / card)", "FILE"),
-             ("Enter seed", "WORDS or SEEDQR")]):
-        y = int(h * (0.50 + i * 0.14))
-        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.07)),
+    for i, line in enumerate(
+            ["1 · open a wallet (words, SeedQR, xprv, descriptor)",
+             "2 · load a PSBT (QR or USB stick)",
+             "3 · review, sign, hand it back"]):
+        y = int(h * (0.50 + i * 0.12))
+        d.text((int(w * 0.08), y), line, font=_font(int(h * 0.055)),
                fill=CREAM, anchor="lm")
-        d.text((int(w * 0.92), y), hint, font=_font(int(h * 0.05)),
-               fill=OCHRE, anchor="rm")
+    d.text((w // 2, int(h * 0.88)), "A · begin        C · nothing to do",
+           font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
     d.text((w // 2, int(h * 0.95)), f"bitcoind ready · session RAM-only · {version}",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
@@ -118,7 +118,7 @@ def seed_entry(w, h, word_index, total_words, partial, candidates):
                          int(w * 0.72), y + int(h * 0.048)], outline=OCHRE)
         d.text((w // 2, y), c, font=_font(int(h * 0.065)),
                fill=CREAM if sel else GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · accept    B · back",
+    d.text((w // 2, int(h * 0.95)), "U/D · letter   A · add   R · words   B · del   C · quit",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 

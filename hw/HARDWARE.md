@@ -53,8 +53,10 @@ it), where the legacy stack is gone. Corky uses **picamera2/libcamera**
 - `pyzbar` (SeedSigner maintains its own fork pinned by commit) for decode —
   wraps the C zbar library. Corky rule: length-cap and charset-check zbar
   output before use; the string then goes to Core opaque.
-- `qrcode` for encode, `urtypes` for UR (`crypto-psbt`) animated QR framing —
-  UR is what Sparrow speaks for animated PSBTs.
+- `qrcode` for encode; UR (`crypto-psbt`) framing via SeedSigner's `ur2`
+  module, vendored at `hw/vendor/ur2` — UR is what Sparrow speaks for
+  animated PSBTs. (SeedSigner also uses `urtypes` for richer UR types;
+  Corky needs only crypto-psbt and does it with ur2's CBOR alone.)
 - Plus `Pillow` for all rendering. Total third-party surface for the UI:
   Pillow, pyzbar, qrcode, urtypes, picamera2, RPi.GPIO, spidev — none of
   which ever see key material (keys exist only inside bitcoind and, for

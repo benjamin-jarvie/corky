@@ -18,12 +18,16 @@ if ! command -v bitcoind >/dev/null || ! bitcoind --version | grep -q "v$CORE_VE
     cd /tmp
     curl -fSLO "$CORE_URL"
     curl -fSLO "$(dirname "$CORE_URL")/SHA256SUMS"
-    if [ "$CORE_SHA256" != "UNPINNED_UNTIL_FIRST_FLASH" ]; then
-        echo "$CORE_SHA256  $CORE_TARBALL" | sha256sum -c -
-    else
-        sha256sum --ignore-missing -c SHA256SUMS
-        echo "!! CORE_SHA256 unpinned — record $(sha256sum "$CORE_TARBALL" | cut -d' ' -f1) into image/PINS"
+    if [ "$CORE_SHA256" = "UNPINNED_UNTIL_FIRST_FLASH" ]; then
+        # SHA256SUMS from the same server proves nothing (checksum theater).
+        # Refuse to install: verify out-of-band, pin, re-run.
+        echo "!! CORE_SHA256 is unpinned. Tarball hash is:"
+        sha256sum "$CORE_TARBALL"
+        echo "!! Verify it against SHA256SUMS + the Guix attestation GPG keys"
+        echo "!! on a trusted machine, record it in image/PINS, re-run."
+        exit 1
     fi
+    echo "$CORE_SHA256  $CORE_TARBALL" | sha256sum -c -
     tar xzf "$CORE_TARBALL"
     install -m 755 "bitcoin-$CORE_VERSION/bin/bitcoind" "bitcoin-$CORE_VERSION/bin/bitcoin-cli" /usr/local/bin/
 fi
@@ -34,9 +38,11 @@ apt-get update -qq
 apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev \
     python3-picamera2 python3-zbar python3-pip 2>/dev/null \
   || apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev python3-pip
-python3 -m pip install --quiet --break-system-packages qrcode pyzbar || true
+# shellcheck disable=SC2086
+python3 -m pip install --quiet --break-system-packages $PIP_PINS
 
 echo "== 3/5 corky -> /opt/corky"
+rm -rf /opt/corky      # stale files from a prior provision must not survive
 mkdir -p /opt/corky
 tar xzf "$BOOT/corky.tar.gz" -C /opt/corky
 cp "$BOOT/corky-PINS" /opt/corky/PINS.installed
@@ -50,6 +56,7 @@ install -m 644 /opt/corky/m0/bitcoin.conf /etc/corky-bitcoin.conf
 
 echo "== 5/5 systemd units (installed, NOT enabled on the dev image)"
 install -m 644 "$BOOT/corky.service" /etc/systemd/system/corky.service
+install -m 644 "$BOOT/corky-bitcoind.service" /etc/systemd/system/corky-bitcoind.service
 systemctl daemon-reload
 echo "   enable boot-to-corky with: sudo systemctl enable --now corky"
 

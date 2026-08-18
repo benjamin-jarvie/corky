@@ -1,0 +1,14 @@
+[Unit]
+Description=Corky wallet-only bitcoind (ramdisk datadir)
+RequiresMountsFor=/run/corky
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/bitcoind -datadir=/run/corky -conf=/etc/corky-bitcoin.conf
+ExecStop=/usr/local/bin/bitcoin-cli -datadir=/run/corky -conf=/etc/corky-bitcoin.conf stop
+TimeoutStopSec=30
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target

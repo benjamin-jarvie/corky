@@ -7,3 +7,5 @@ CORE_TARBALL="bitcoin-31.1-aarch64-linux-gnu.tar.gz"
 CORE_URL="https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-aarch64-linux-gnu.tar.gz"
 CORE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"       # verify against SHA256SUMS + GPG, then pin
 CORKY_COMMIT="HEAD"                             # pin to a tag for release images
+PIP_PINS="qrcode==7.4.2 pyzbar==0.1.9"          # everything pip installs, pinned
+DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"     # sha256 of the provisioned SD image (A-16)

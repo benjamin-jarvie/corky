@@ -153,9 +153,21 @@ def describe_psbt(rpc, psbt_b64):
     # parsed out of the PSBT (A-5: show fee AND total input sum).
     input_total = Decimal(0)
     complete_inputs = True
-    for txin in decoded["inputs"]:
-        utxo = txin.get("witness_utxo") or txin.get("non_witness_utxo")
-        amount = utxo.get("amount") if utxo else None
+    for i, txin in enumerate(decoded["inputs"]):
+        amount = None
+        witness = txin.get("witness_utxo")
+        if witness is not None:
+            amount = witness.get("amount")
+        else:
+            # Legacy input: non_witness_utxo is the whole previous tx as
+            # decoded by Core; the spent output's value sits at the vout
+            # index named by this input in the unsigned tx.
+            prev = txin.get("non_witness_utxo")
+            if prev is not None:
+                vout_n = decoded["tx"]["vin"][i]["vout"]
+                outs = prev.get("vout", [])
+                if vout_n < len(outs):
+                    amount = outs[vout_n].get("value")
         if amount is None:
             complete_inputs = False
         else:

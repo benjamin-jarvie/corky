@@ -21,6 +21,7 @@ git -C "$REPO" archive --format=tar.gz -o "$BOOT/corky.tar.gz" HEAD
 cp "$REPO/image/PINS" "$BOOT/corky-PINS"
 cp "$REPO/image/provision.sh" "$BOOT/corky-provision.sh"
 cp "$REPO/image/corky.service" "$BOOT/corky.service"
+cp "$REPO/image/corky-bitcoind.service" "$BOOT/corky-bitcoind.service"
 
 echo "-- done. Next:"
 echo "   1. Eject, insert into the Pi, connect Ethernet, power on."
