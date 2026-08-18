@@ -63,6 +63,20 @@
   Strategic note: mode 1 makes Corky the first signer with a shim-free,
   fully Core-native path; candidate default for onboarding fresh wallets.
 
+- **A-15: primary board is now the CM4 (Ben, 2026-08-17, fourth pass).**
+  **Raspberry Pi CM4 Lite, no-wireless, 2GB** (CM4002000; 4GB CM4004000 an
+  acceptable substitute) on a **Waveshare CM4-IO-BASE-B** carrier. Rationale:
+  no radio by manufacture (kills the air-gap critique with physics, no
+  rework) and 2GB removes the A-12 RAM-resident-OS risk entirely. Display:
+  **Pimoroni Display HAT Mini** (2.0" ST7789 320x240, 4 buttons, HAT form) on
+  the carrier's standard 40-pin header — pin remap vs the vendored driver to
+  be prepped before it arrives. The Zero 2 W becomes the dev mule and the
+  pocket build in the existing SeedSigner case; M0's 512MB question now only
+  gates the pocket build, not v1. Existing Zero-format spine PCBs are
+  electrically compatible with the carrier's header but mechanically
+  Zero-shaped; pending Ben identifying the exact PCB. UI must support
+  4-button (no joystick) navigation as the primary scheme.
+
 ## Post-v1 todo
 
 - **Codex32 (BIP93) seed entry** as a fourth input mode: bech32 seed shares,
