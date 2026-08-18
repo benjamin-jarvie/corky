@@ -53,8 +53,8 @@ around 1.4 percent, which costs a 24-word seed roughly 2.9 bits out of
 256. Negligible. The real problems are human and structural. Human: the
 procedure is boring, and a bored human skips steps; twenty honest rolls
 followed by eighty impatient button-mashes is not entropy, and nothing in
-the procedure catches it. Structural, and this is the one that changed our
-recommendation: **the mapping from rolls to seed happens inside software.**
+the procedure catches it. Structural, and this is the decisive one: **the mapping from rolls to
+seed happens inside software.**
 A survey of seventeen implementations found five incompatible
 constructions: hash the digit string, remap sixes then hash, pack bits
 directly, treat the rolls as one base-6 number, or use a worksheet.
