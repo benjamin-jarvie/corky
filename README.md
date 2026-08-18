@@ -13,6 +13,40 @@ reference node. No reimplementation of wallet logic.
 The device holds nothing. The wallet lives on a ramdisk, the seed is entered
 each session (words or SeedQR), and power-off wipes everything.
 
+## What Corky aims to achieve
+
+A seed lives in three phases: it is **generated** once, **used** every time
+you sign, and **at rest** in backups for decades (framing from jimbocoin;
+the long version is [articles/two-backups.md](articles/two-backups.md)).
+Corky is a position taken in each phase, and the guiding principle across
+all three: **relocate trust to places where lying is hard.**
+
+- **Generation: not our job, by design.** A compromised random number
+  generator is undetectable from its output, so Corky has no entropy story
+  at all — no on-device seed generation, ever. Seeds are born in the
+  physical world (SeedPicker-style cards, or dice with cross-checked
+  mapping) where the one unauditable step is performed by your own hands.
+  Everything downstream is deterministic, so a lying device gets caught.
+- **Use: the reference implementation, on radio-free silicon.** Signing
+  runs Bitcoin Core's own wallet code, and v1 hardware is a compute module
+  manufactured without wireless: "cannot transmit" outranks every
+  software-disabled radio, including the wiped-laptop air gap that is only
+  ever a promise. Statelessness replaces the secure element: a seized
+  Corky is just electronics.
+- **At rest: words are half a backup.** BIP39 words back up a *secret*; a
+  descriptor backs up a *wallet* (path, script type, checksum). Corky
+  exports public descriptors precisely so the paper half of your backup
+  can exist, and its descriptor entry mode means a Core-native backup
+  restores with zero guessing and zero shim.
+
+The Core bet is stated as a bet: Core is at once the most reviewed wallet
+code in existence and Bitcoin's most valuable infiltration target. Whether
+one infiltration of the best-reviewed honeypot is likelier than a
+coordinated compromise of several smaller vendors is genuinely unresolved;
+multi-vendor multisig where no vendor is a quorum is the strongest
+alternative answer, and it costs the complexity that its own advocates
+concede. Corky holds the Core side with its eyes open.
+
 ## What you are trusting — stated plainly, not in fine print
 
 **One thing in Corky is not Bitcoin Core, and it sees your seed words.**
@@ -125,6 +159,32 @@ none can). Coordinator target: Sparrow.
 Out of scope for v1: multisig, message signing, address explorer, dice entropy,
 and on-device seed generation. Corky signs for seeds that already live on metal;
 it deliberately has no entropy story of its own.
+
+## Audit record
+
+The codebase has passed four independent review lenses with converging
+results (2026-08-18):
+
+1. **Standards review** (Fowler smell baseline + the repo's own documented
+   laws), three rounds — each round's findings strictly shallower and
+   confined to strictly newer code; core verified clean in round 3.
+2. **Spec review** against PLAN.md and the frozen v1 scope, three rounds —
+   zero scope creep in all three.
+3. **loupe** (benthecarman's security-scanning harness: LLM discovery
+   agents that must self-validate findings with a PoC before submitting) —
+   full clean sweep, 10/10 files, zero findings, including the shim.
+4. **Cross-model verification** (codex) via loupe's verifier — nothing to
+   verify, nothing dismissed.
+
+Fixes driven by the first two lenses are in the git history (satoshi-level
+Decimal handling on the review screen, paged output review gated on every
+page being seen, dev-mode seed-frame redaction, fee-unknown refusal, and
+more — see commits e23982a, c3b9fdf, 30b3164). Running loupe also
+surfaced two bugs in loupe itself; proven patches are staged at
+../loupe-contrib pending a decision to send upstream. An empty findings
+table from a scanner we watched work is evidence; an empty table from a
+scanner that never ran is not — we hit both and learned to tell them
+apart.
 
 ## Status
 
