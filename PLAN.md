@@ -142,10 +142,15 @@
   and hand-verifiable shares allow decades of backup integrity checks
   with zero re-exposure to hardware. Constraint (Westgate): Core does not
   export seeds, so codex32 backup applies to externally-born seeds
-  (cards), which is Corky's model anyway. Momentum: Westgate building a
-  CLI/GUI, commissioned by Blockstream for Jade. The Fractal deferral is
-  about his SeedSigner UI; supporting the published BIP itself is a
-  separable later decision (Ben's call).
+  (cards), which is Corky's model anyway. Momentum, evidence-graded (2026-08-18): Westgate says he is building a
+  CLI/GUI and was commissioned by Blockstream for Jade — but Jade firmware
+  at master contains ZERO codex32 code; the only repo trace is open issue
+  Blockstream/Jade#129 ("Wen codex32?", Apr 2024, Blockstream planning a
+  manual-entropy seed product) with Westgate's own Sep 2024 comment asking
+  why no PR exists. Treat as intention, not commitment; no urgency for
+  Corky's timing. The Fractal deferral is about his SeedSigner UI;
+  supporting the published BIP itself is a separable later decision
+  (Ben's call).
 - Anti-exfil: not implementable via Core's RPC today (no nonce hook in
   walletprocesspsbt); documented as a stated trade-off in the README. Watch
   upstream Core for any sign-to-contract / anti-exfil RPC support.
