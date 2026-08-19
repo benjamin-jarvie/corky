@@ -184,3 +184,138 @@ def seed_length(w, h, selected=0):
     d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
+
+
+# ---- codex32 (BIP93) screens — v1.1, map ticket #5 -------------------------
+
+BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def codex32_scan(w, h):
+    img, d = _frame(w, h, "SCAN  CODEX32  SHARE")
+    d.rectangle([w // 2 - int(h * 0.18), int(h * 0.22),
+                 w // 2 + int(h * 0.18), int(h * 0.22) + int(h * 0.36)],
+                outline=GREY)
+    d.text((w // 2, int(h * 0.40)), "QR", font=_font(int(h * 0.09)),
+           fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.66)), "Codex32QR/v1-48 · 128-bit shares",
+           font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
+    d.text((w // 2, int(h * 0.74)), "256-bit shares: type them instead",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "A · type instead    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14):
+    """bech32 charset as a 4x8 grid; d-pad moves, A picks, B deletes.
+    The string echo shows the last chars; checksum judges at the end."""
+    img, d = _frame(w, h, "TYPE  SHARE")
+    shown = entered[-18:]
+    d.text((w // 2, int(h * 0.17)), shown + "_",
+           font=_font(int(h * 0.065)), fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.245)), f"{len(entered)} chars",
+           font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
+    cell_w, cell_h = w // 9, int(h * 0.115)
+    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.32)
+    for i, ch in enumerate(BECH32_CHARSET):
+        r, c = divmod(i, 8)
+        cx = x0 + c * cell_w + cell_w // 2
+        cy = y0 + r * cell_h + cell_h // 2
+        if i == cursor:
+            d.rectangle([cx - cell_w // 2 + 2, cy - cell_h // 2 + 2,
+                         cx + cell_w // 2 - 2, cy + cell_h // 2 - 2],
+                        outline=OCHRE)
+        d.text((cx, cy), ch.upper(), font=_font(int(h * 0.06)),
+               fill=CREAM if i == cursor else GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)),
+           "d-pad · move    A · pick    B · delete    C · done",
+           font=_font(int(h * 0.042)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_shares(w, h, have_ids=("A", "C"), k=3):
+    img, d = _frame(w, h, "COLLECT  SHARES")
+    d.text((w // 2, int(h * 0.30)), f"{len(have_ids)} of {k}",
+           font=_font(int(h * 0.14)), fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.48)),
+           "held: " + "  ".join(have_ids),
+           font=_font(int(h * 0.06)), fill=OCHRE, anchor="mm")
+    d.text((w // 2, int(h * 0.62)), "each share checksums on entry;",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.69)), "duplicates are refused",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "A · add next share    C · abort",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_error(w, h, detail="checksum failed at position 31"):
+    img, d = _frame(w, h)
+    d.text((w // 2, int(h * 0.32)), "SHARE  REFUSED",
+           font=_font(int(h * 0.085)), fill=RED, anchor="mm")
+    d.text((w // 2, int(h * 0.50)), detail,
+           font=_font(int(h * 0.055)), fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.64)), "detection only: this device never",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.71)), "guesses corrections to key material",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "A · re-enter    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_split_choice(w, h, selected=0):
+    img, d = _frame(w, h, "BACKUP  AS  CODEX32")
+    options = [("One string", "whole seed, one line"),
+               ("Split k-of-n", "2-of-3 · shares to guardians")]
+    for i, (label, note) in enumerate(options):
+        y = int(h * (0.28 + i * 0.17))
+        if i == selected:
+            d.rectangle([int(w * 0.06), y - int(h * 0.07),
+                         int(w * 0.94), y + int(h * 0.07)], outline=OCHRE)
+        d.text((int(w * 0.10), y), label, font=_font(int(h * 0.065)),
+               fill=CREAM if i == selected else GREY, anchor="lm")
+        d.text((int(w * 0.90), y), note, font=_font(int(h * 0.045)),
+               fill=OCHRE if i == selected else GREY, anchor="rm")
+    d.text((w // 2, int(h * 0.70)), "some practitioners discourage splitting",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.77)), "seeds; shares are optional, never required",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_share_display(w, h,
+                          share="MS12NAMEA320ZYXRPP5QSRJG",
+                          index=1, total=3):
+    img, d = _frame(w, h, f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN")
+    groups = [share[i:i + 4] for i in range(0, len(share), 4)]
+    for row in range(0, len(groups), 3):
+        y = int(h * (0.26 + (row // 3) * 0.13))
+        d.text((w // 2, y), "  ".join(groups[row:row + 3]),
+               font=_font(int(h * 0.075)), fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.72)), "checksum re-verifies before you leave",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.79)), "the codex32 kit worksheets own paper",
+           font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "A · I wrote it, verify me    C · abort",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def codex32_verified(w, h, kind="share 2 of 3"):
+    img, d = _frame(w, h)
+    d.ellipse([w // 2 - int(h * 0.13), int(h * 0.20),
+               w // 2 + int(h * 0.13), int(h * 0.20) + int(h * 0.26)],
+              outline=GREEN, width=3)
+    d.text((w // 2, int(h * 0.33)), "VALID", font=_font(int(h * 0.075)),
+           fill=GREEN, anchor="mm")
+    d.text((w // 2, int(h * 0.58)), kind, font=_font(int(h * 0.06)),
+           fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.72)), "verified without exposing the seed",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.79)), "to any other device",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
