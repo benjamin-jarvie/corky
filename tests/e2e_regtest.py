@@ -77,6 +77,12 @@ def main():
         # 5. Corky review screen + signature
         review = signer.describe_psbt(rpc, psbt)
         assert review["fee_btc"] is not None
+        # Verify the fee VALUE against Core's own decodepsbt fee, so a
+        # mis-scaled fee (e.g. x10) on the security screen is caught.
+        from decimal import Decimal
+        core_fee = Decimal(str(rpc.call("decodepsbt", psbt)["fee"]))
+        assert Decimal(str(review["fee_btc"])) == core_fee, \
+            f"fee mismatch: screen {review['fee_btc']} vs core {core_fee}"
         print(f"ok   review screen: {len(review['outputs'])} outputs, "
               f"fee {review['fee_btc']} rBTC ({review['fee_note']})")
         signed = signer.sign_psbt(rpc, psbt)

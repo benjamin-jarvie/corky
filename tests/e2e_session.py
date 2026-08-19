@@ -127,7 +127,23 @@ def main():
                        stick=stickd, qr_key=seedqr_file2)
         assert r.returncode == 0, f"D failed:\n{r.stderr}"
         assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
-        print("ok   D: 5-output PSBT paged; sign gated until all pages seen")
+        # Negative: a SINGLE 'a' at review (one page still unseen) must NOT
+        # sign — proves the gate blocks, not just that enough 'a's sign.
+        stickd2 = work / "stickD2"; stickd2.mkdir()
+        many2 = rpc.call("walletcreatefundedpsbt", [],
+                         [{rpc.call("getnewaddress", wallet="watch"): 0.2}
+                          for _ in range(4)] and
+                         [{a: v} for a, v in dests.items()],
+                         0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickd2 / "many.psbt").write_bytes(base64.b64decode(many2))
+        sq3 = work / "seedqr3.txt"; sq3.write_text("0000" * 11 + "0003")
+        # home a, menu->seedqr (a), review with ONE 'a' then quit (c)
+        r = run_device(datadir, "a" + "a" + "ac", work / "framesD2",
+                       stick=stickd2, qr_key=sq3)
+        assert not (stickd2 / "many-signed.psbt").exists(), \
+            "D2: PSBT signed with a page unseen — paging gate is broken!"
+        print("ok   D: paged review — signs only after all pages seen, "
+              "blocks when one is unseen")
 
         # ---- Session E: codex32 shares (scan) open the wallet ----
         sys.path.insert(0, str(ROOT / "corky"))

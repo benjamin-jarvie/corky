@@ -18,7 +18,12 @@ words2 = seedqr.decode(bytes(16))
 assert words2 == words, words2
 print("ok   compact SeedQR (16-byte entropy) matches")
 
-for bad in ["123", "9999" + "0000" * 11, "abcd" * 12]:
+# Boundary: index 2047 is the last valid word; 2048 must be rejected.
+last = seedqr.decode("2047" + "0000" * 10 + "0000")
+assert last.split()[0] == seedqr.load_wordlist()[2047]
+print("ok   index 2047 (last valid word) decodes")
+for bad in ["123", "9999" + "0000" * 11, "abcd" * 12,
+            "2048" + "0000" * 11]:
     try:
         seedqr.decode(bad)
         print("FAIL accepted", bad[:12]); sys.exit(1)
