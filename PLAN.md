@@ -157,6 +157,19 @@
   optional"). (d) Fractal compatibility: his share-QR conventions, once
   published, become an interop target, not a dependency.
 
+- **A-18 progress (2026-08-19): codex32 v1.1 SOFTWARE-COMPLETE.**
+  main.py wires all three capabilities against the closed map: import
+  (scan multi-share payloads, or 4x8 grid entry with per-share checksum
+  verdicts, k auto-detected from the first share, duplicates refused),
+  verify (tools menu; checksum only, zero derivation), and backup (words
+  -> BIP32 master seed -> codex32 secret, or a 2-of-3 split whose
+  randomness is derived deterministically from the seed via domain-
+  separated HMAC-SHA512 — no device RNG exists or is used, and shares
+  re-derive identically). Seed menu now six entries; tools reachable
+  from home (R). e2e session E proves shares->wallet->sign on regtest;
+  all seven suites green. Hardware-blocked remainder unchanged: camera
+  QR (M1), device bring-up (M0), RAM-resident image (M3).
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,

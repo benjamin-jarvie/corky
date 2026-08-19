@@ -18,9 +18,12 @@ DEMO_OUTPUTS = [
 for w, h, tag in [(320, 240, "ili9341"), (240, 240, "st7789")]:
     for name, img in {
         "1-home": screens.home(w, h),
-        "2-seed-entry": screens.seed_entry(w, h),
+        "2-seed-entry": screens.seed_entry(w, h, 7, 12, "mo", ("moment", "monitor", "monkey", "month")),
         "3-busy": screens.busy(w, h),
         "4-review": screens.review(w, h, DEMO_OUTPUTS, 0.0000851, 3),
+        "6-seed-menu": screens.seed_menu(w, h),
+        "7-tools": screens.tools_menu(w, h),
+        "8-c32-entry": screens.codex32_entry(w, h),
         "5-result": screens.result(w, h),
     }.items():
         img.resize((w * 2, h * 2), 0).save(OUT / f"{tag}-{name}.png")

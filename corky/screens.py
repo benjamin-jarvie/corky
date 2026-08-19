@@ -47,7 +47,7 @@ def home(w, h, version="v0"):
         y = int(h * (0.50 + i * 0.12))
         d.text((int(w * 0.08), y), line, font=_font(int(h * 0.055)),
                fill=CREAM, anchor="lm")
-    d.text((w // 2, int(h * 0.88)), "A · begin        C · nothing to do",
+    d.text((w // 2, int(h * 0.88)), "A · begin    R · tools    C · off",
            font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
     d.text((w // 2, int(h * 0.95)), f"bitcoind ready · session RAM-only · {version}",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
@@ -132,23 +132,50 @@ def busy(w, h, message="checking words, deriving in Core…"):
     return img
 
 
+SEED_MENU_OPTIONS = [
+    ("Scan SeedQR", "words via shim"),
+    ("Type seed words", "words via shim"),
+    ("Scan codex32", "BIP32-native"),
+    ("Type codex32 share(s)", "BIP32-native"),
+    ("Scan descriptor QR", "pure Core"),
+    ("Scan xprv QR", "pure Core"),
+]
+
+
 def seed_menu(w, h, selected=0):
-    """Choose the seed input mode (A-14's three modes + SeedQR)."""
+    """Choose the seed input mode (A-14's modes + SeedQR + codex32/A-18)."""
     img, d = _frame(w, h, "OPEN  WALLET")
-    options = [
-        ("Scan SeedQR", "words via shim"),
-        ("Type seed words", "words via shim"),
-        ("Scan descriptor QR", "pure Core, no shim"),
-        ("Scan xprv QR", "pure Core, no shim"),
-    ]
+    options = SEED_MENU_OPTIONS
     for i, (label, note) in enumerate(options):
-        y = int(h * (0.24 + i * 0.14))
+        y = int(h * (0.17 + i * 0.115))
         if i == selected:
             d.rectangle([int(w * 0.04), y - int(h * 0.055),
                          int(w * 0.96), y + int(h * 0.055)], outline=OCHRE)
-        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.062)),
+        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
                fill=CREAM if i == selected else GREY, anchor="lm")
-        d.text((int(w * 0.92), y), note, font=_font(int(h * 0.045)),
+        d.text((int(w * 0.92), y), note, font=_font(int(h * 0.042)),
+               fill=OCHRE if i == selected else GREY, anchor="rm")
+    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def tools_menu(w, h, selected=0):
+    """Utilities that never open a wallet: verify a share, back up a seed."""
+    img, d = _frame(w, h, "TOOLS")
+    options = [
+        ("Verify a codex32 share", "checksum only, no keys touched"),
+        ("Back up seed as codex32", "words in, string or shares out"),
+    ]
+    for i, (label, note) in enumerate(options):
+        y = int(h * (0.30 + i * 0.18))
+        if i == selected:
+            d.rectangle([int(w * 0.04), y - int(h * 0.065),
+                         int(w * 0.96), y + int(h * 0.065)], outline=OCHRE)
+        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
+               fill=CREAM if i == selected else GREY, anchor="lm")
+        d.text((int(w * 0.92), y + int(h * 0.05)), note,
+               font=_font(int(h * 0.04)),
                fill=OCHRE if i == selected else GREY, anchor="rm")
     d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")

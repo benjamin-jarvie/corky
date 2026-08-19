@@ -29,10 +29,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import signer
 import screens
+import codex32
 import filechannel
 import qrchannel
 import seedqr
 import hal
+import hashlib
+import hmac as _hmac
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 from bip39_shim import load_wordlist  # noqa: E402  (word entry candidates)
@@ -107,6 +110,9 @@ class Session:
                     self.state_load()
                     return
                 self.display.show(screens.home(self.w, self.h))
+            elif key == "r":
+                self.state_tools()
+                self.display.show(screens.home(self.w, self.h))
             elif key == "c":
                 return
 
@@ -118,14 +124,15 @@ class Session:
             self.display.show(screens.seed_menu(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 4
+                selected = (selected - 1) % 6
             elif key == "d":
-                selected = (selected + 1) % 4
+                selected = (selected + 1) % 6
             elif key == "b":
                 return False
             elif key == "a":
                 try:
                     return [self._seed_seedqr, self._seed_words,
+                            self._seed_codex32_scan, self._seed_codex32_type,
                             self._seed_descriptor, self._seed_xprv][selected]()
                 except Exception as exc:
                     self.display.show(screens.result(
@@ -238,6 +245,206 @@ class Session:
             return False
         signer.open_session_xprv(self.rpc, payload)
         return True
+
+    # -- codex32 (A-18): import, entry, tools ------------------------------
+
+    @staticmethod
+    def _threshold_of(share):
+        ch = share[3].lower()
+        return int(ch) if ch.isdigit() and ch != "1" else 0
+
+    def _codex32_open(self, shares):
+        """Open the wallet from one codex32 secret or k shares. Pure BIP32:
+        seed -> xprv via the frozen modules; Core does the rest."""
+        self.display.show(screens.busy(self.w, self.h,
+                                       "recovering seed, deriving in Core…"))
+        if len(shares) == 1 and self._threshold_of(shares[0]) == 0:
+            _, seed = codex32.decode_secret(shares[0])
+        else:
+            secret = codex32.recover(shares)
+            _, seed = codex32.decode_secret(secret)
+        xprv = codex32.to_xprv(seed, mainnet=(self.rpc.chain == "main"))
+        signer.open_session_xprv(self.rpc, xprv)
+        return True
+
+    def _seed_codex32_scan(self):
+        self.display.show(screens.codex32_scan(self.w, self.h))
+        payload = self.qr.scan_key().decode("ascii")
+        shares = [ln.strip() for ln in payload.splitlines() if ln.strip()]
+        shares = [codex32.validate(sh) for sh in shares]
+        return self._codex32_open(shares)
+
+    def _seed_codex32_type(self):
+        shares = []
+        need = None
+        while need is None or len(shares) < need:
+            self.display.show(screens.codex32_shares(
+                self.w, self.h,
+                tuple(sh[8].upper() for sh in shares), need or "?"))
+            entered = self._codex32_entry_one()
+            if entered is None:
+                return False
+            try:
+                sh = codex32.validate(entered)
+                if sh in shares:
+                    raise codex32.Codex32Error("duplicate share")
+            except codex32.Codex32Error as exc:
+                self.display.show(screens.codex32_error(
+                    self.w, self.h, str(exc)[:48]))
+                if self.buttons.read() != "a":
+                    return False
+                continue
+            t = self._threshold_of(sh)
+            if t == 0:
+                return self._codex32_open([sh])
+            need = need or t
+            shares.append(sh)
+            self.display.show(screens.codex32_verified(
+                self.w, self.h, f"share {len(shares)} of {need}"))
+            self.buttons.read()
+        return self._codex32_open(shares)
+
+    def _codex32_entry_one(self):
+        """Grid entry: d-pad moves the 4x8 cursor, A picks, B deletes,
+        C finishes (empty = abort)."""
+        entered, cursor = "", 0
+        while True:
+            self.display.show(screens.codex32_entry(
+                self.w, self.h, entered, cursor), sensitive=True)
+            key = self.buttons.read()
+            if key == "u":
+                cursor = (cursor - 8) % 32
+            elif key == "d":
+                cursor = (cursor + 8) % 32
+            elif key == "l":
+                cursor = (cursor - 1) % 32
+            elif key == "r":
+                cursor = (cursor + 1) % 32
+            elif key == "a":
+                entered += screens.BECH32_CHARSET[cursor]
+            elif key == "b":
+                entered = entered[:-1]
+            elif key == "c":
+                return entered if entered else None
+
+    def state_tools(self):
+        selected = 0
+        while True:
+            self.display.show(screens.tools_menu(self.w, self.h, selected))
+            key = self.buttons.read()
+            if key in ("u", "d"):
+                selected = 1 - selected
+            elif key == "b":
+                return
+            elif key == "a":
+                try:
+                    [self._tool_verify, self._tool_backup][selected]()
+                except Exception as exc:
+                    self.display.show(screens.result(
+                        self.w, self.h, ok=False, detail=str(exc)[:60]))
+                    self.buttons.read()
+                return
+
+    def _tool_verify(self):
+        """The zero-re-exposure check: checksum only, nothing derived."""
+        entered = self._codex32_entry_one()
+        if entered is None:
+            payload = self.qr.scan_key().decode("ascii").strip()
+            entered = payload.splitlines()[0]
+        try:
+            codex32.validate(entered)
+            self.display.show(screens.codex32_verified(
+                self.w, self.h, "checksum valid"))
+        except codex32.Codex32Error as exc:
+            self.display.show(screens.codex32_error(
+                self.w, self.h, str(exc)[:48]))
+        self.buttons.read()
+
+    def _tool_backup(self):
+        """Words in -> codex32 out (one string, or a 2-of-3 split).
+        Split randomness is derived deterministically from the seed itself
+        (HMAC-SHA512, domain-separated): no device RNG exists or is used,
+        per the no-entropy-story doctrine; deterministic shares re-derive
+        identically, which also makes the backup reproducible."""
+        words = self._collect_words()
+        if not words:
+            return
+        from bip39_shim import mnemonic_to_seed
+        seed = mnemonic_to_seed(" ".join(words), self.passphrase)[:32]
+        ident = "".join(codex32.CHARSET[b % 32] for b in
+                        hashlib.sha256(b"corky-id" + seed).digest()[:4])
+        secret = codex32.encode_secret(ident, seed, threshold=0)
+        choice = self._pick_split()
+        if choice is None:
+            return
+        if choice == 0:
+            outputs = [secret]
+        else:
+            need = 32 * 2
+            rand = b""
+            counter = 0
+            while len(rand) < need:
+                rand += _hmac.new(seed, b"corky-split-v1" + bytes([counter]),
+                                  hashlib.sha512).digest()
+                counter += 1
+            outputs = codex32.split(seed, 2, 3, ident, rand[:need])
+        for i, out in enumerate(outputs):
+            self.display.show(screens.codex32_share_display(
+                self.w, self.h, out.upper(), i + 1, len(outputs)),
+                sensitive=True)
+            if self.buttons.read() == "c":
+                return
+        self.display.show(screens.result(
+            self.w, self.h, ok=True,
+            detail="transcribed; kit worksheets own paper"))
+        self.buttons.read()
+
+    def _pick_split(self):
+        selected = 0
+        while True:
+            self.display.show(screens.codex32_split_choice(
+                self.w, self.h, selected))
+            key = self.buttons.read()
+            if key in ("u", "d"):
+                selected = 1 - selected
+            elif key == "a":
+                return selected
+            elif key == "b":
+                return None
+
+    def _collect_words(self):
+        total = self._pick_seed_length()
+        if total is None:
+            return None
+        words = []
+        while len(words) < total:
+            prefix, cursor = "", 0
+            while True:
+                candidates = [w for w in self.wordlist
+                              if w.startswith(prefix)][:4]
+                self.display.show(screens.seed_entry(
+                    self.w, self.h, len(words) + 1, total,
+                    prefix + string.ascii_lowercase[cursor],
+                    tuple(candidates)), sensitive=True)
+                key = self.buttons.read()
+                if key == "u":
+                    cursor = (cursor - 1) % 26
+                elif key == "d":
+                    cursor = (cursor + 1) % 26
+                elif key == "a":
+                    prefix += string.ascii_lowercase[cursor]
+                    cursor = 0
+                elif key == "b":
+                    prefix = prefix[:-1]
+                elif key == "c":
+                    return None
+                elif key == "r" and candidates:
+                    word = self._pick_candidate(candidates, len(words) + 1,
+                                                total)
+                    if word:
+                        words.append(word)
+                        break
+        return words
 
     # -- PSBT load: stick first, then QR frames ---------------------------
 
