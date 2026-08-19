@@ -211,8 +211,11 @@ def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14):
     """bech32 charset as a 4x8 grid; d-pad moves, A picks, B deletes.
     The string echo shows the last chars; checksum judges at the end."""
     img, d = _frame(w, h, "TYPE  SHARE")
-    shown = entered[-18:]
-    d.text((w // 2, int(h * 0.17)), shown + "_",
+    # Echo in 4-char groups with gaps, matching the write-it-down screen,
+    # so what you type reads like what you wrote.
+    tail = entered[-16:]
+    grouped = " ".join(tail[i:i + 4] for i in range(0, len(tail), 4))
+    d.text((w // 2, int(h * 0.17)), grouped + "_",
            font=_font(int(h * 0.065)), fill=CREAM, anchor="mm")
     d.text((w // 2, int(h * 0.245)), f"{len(entered)} chars",
            font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
