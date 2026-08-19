@@ -116,6 +116,47 @@
   and any future Core App hardware-wallet story runs through BHWI while
   its Corky story would be plain PSBT.
 
+- **A-18: codex32 as a first-class Core-native mode (Ben, 2026-08-18 —
+  "stop worrying about frontrunning").** Fractal's work is a SeedSigner
+  fork UI; ours is different in kind: codex32 used DIRECTLY with Bitcoin
+  Core, which is what BIP93 was designed for (it encodes BIP32 master
+  seeds — no BIP39, no PBKDF2, anywhere).
+
+  Scope, three capabilities:
+  1. **Import**: scan or key in a codex32 string (or k shares) →
+     validate/combine → master seed → xprv → `importdescriptors`. Sits
+     beside A-14's modes as the fourth entry path, and arguably the
+     best-suited to button entry: bech32's 32-character alphabet on a
+     d-pad beats cycling 26 letters toward 2048 words.
+  2. **Backup**: encode an externally-born seed (cards/dice) as a
+     codex32 string, and optionally split k-of-n, rendered on-screen and
+     as printable share sheets. Answers the Westgate constraint (Core
+     cannot export seeds) at the layer where the seed already lives.
+  3. **Verify**: recompute a share's checksum on demand — the
+     zero-re-exposure integrity check is the standard's killer property
+     and costs us one function.
+
+  Implementation rules mirror the shim: a `codex32.py` module,
+  **stdlib-only, no EC math** (BCH checksum + GF(32) share arithmetic is
+  table math), frozen once written, tested against BIP93's own vectors
+  AND cross-checked against BlockstreamResearch/codex32's reference
+  implementation. It is a second translator that sees secret material;
+  it inherits the shim's disclosure obligations (README section, hash
+  pinned in SHIM_HASH-style file, printed asterisk).
+
+  Devil's advocate, on the record: (a) v1 scope is frozen and stays
+  frozen — this is the v1.1 headline, not scope creep into v1; nothing
+  in it blocks or reorders M0–M4. (b) Two hand-rolled secret-handling
+  modules is one more than one; mitigation is the same vector discipline
+  plus cross-implementation checks, and GF(32) table math is closer to
+  the shim's hashing than to real cryptography. (c) Seed-splitting is
+  explicitly discouraged by one side of a live expert debate — Corky
+  IMPLEMENTS the standard and takes no position; split is a capability
+  behind an explicit menu choice, with the debate acknowledged on
+  screen ("some practitioners discourage splitting seeds; shares are
+  optional"). (d) Fractal compatibility: his share-QR conventions, once
+  published, become an interop target, not a dependency.
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,
