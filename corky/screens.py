@@ -255,13 +255,16 @@ def codex32_shares(w, h, have_ids=("A", "C"), k=3):
 
 def codex32_error(w, h, detail="checksum failed at position 31"):
     img, d = _frame(w, h)
-    d.text((w // 2, int(h * 0.32)), "SHARE  REFUSED",
-           font=_font(int(h * 0.085)), fill=RED, anchor="mm")
-    d.text((w // 2, int(h * 0.50)), detail,
+    r = int(h * 0.19)
+    d.ellipse([w // 2 - r, int(h * 0.13), w // 2 + r, int(h * 0.13) + 2 * r],
+              outline=RED, width=3)
+    d.text((w // 2, int(h * 0.13) + r), "INVALID",
+           font=_font(int(h * 0.07)), fill=RED, anchor="mm")
+    d.text((w // 2, int(h * 0.60)), detail,
            font=_font(int(h * 0.055)), fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.64)), "detection only: this device never",
+    d.text((w // 2, int(h * 0.70)), "detection only: this device never",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.71)), "guesses corrections to key material",
+    d.text((w // 2, int(h * 0.77)), "guesses corrections to key material",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     d.text((w // 2, int(h * 0.95)), "A · re-enter    B · back",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
@@ -310,11 +313,11 @@ def codex32_share_display(w, h,
 
 def codex32_verified(w, h, kind="share 2 of 3"):
     img, d = _frame(w, h)
-    d.ellipse([w // 2 - int(h * 0.13), int(h * 0.20),
-               w // 2 + int(h * 0.13), int(h * 0.20) + int(h * 0.26)],
-              outline=GREEN, width=3)
-    d.text((w // 2, int(h * 0.33)), "VALID", font=_font(int(h * 0.075)),
-           fill=GREEN, anchor="mm")
+    r = int(h * 0.19)
+    d.ellipse([w // 2 - r, int(h * 0.13), w // 2 + r, int(h * 0.13) + 2 * r],
+              outline=OCHRE, width=3)
+    d.text((w // 2, int(h * 0.13) + r), "VALID", font=_font(int(h * 0.07)),
+           fill=OCHRE, anchor="mm")
     d.text((w // 2, int(h * 0.58)), kind, font=_font(int(h * 0.06)),
            fill=CREAM, anchor="mm")
     d.text((w // 2, int(h * 0.72)), "verified without exposing the seed",
