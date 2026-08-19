@@ -73,8 +73,13 @@ mark the exact boundary: dice to binary, binary to words, all of it by
 hand on paper, except one step. The checksum is a SHA-256 hash, and his
 own instructions reach for an offline computer for that single command
 before returning to hand conversion. No human computes SHA-256 on paper,
-so every dice construction keeps at least that one foot in software, and
-most keep the whole mapping there. The mitigation exists, verify with
+so every dice-to-BIP39 construction keeps at least that one foot in
+software, and most keep the whole mapping there. That boundary is a
+design artifact of BIP39's hash choice, not a law:
+[codex32 (BIP93)](https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki)
+uses a BCH checksum built from lookup tables precisely so that checksums,
+verification, splitting and recovery are all, in the spec's own words,
+possible "entirely using pen and paper." The mitigation exists, verify with
 disposable test rolls against a second implementation, but the dependence
 never goes to zero.
 
@@ -265,7 +270,20 @@ privacy, so a single compromised hiding place reveals nothing; multisig
 addresses different threats; and these are not either-or decisions. Want
 one stolen backup to disclose nothing? Split the seed codex32-style,
 k-of-n, checksums verifiable by hand on paper (that hand-verifiability is
-[designed into the standard](https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki)). Want theft of a whole
+[designed into the standard](https://github.com/bitcoin/bips/blob/master/bip-0093.mediawiki)).
+codex32 also holds a property unique among backup formats, and the
+epistemic premise from Phase 2 explains its worth: because its checksums
+are hand-computable, a holder can verify a backup's integrity for
+decades without ever re-entering the secret into hardware — the one
+health check that costs no new exposure. Two boundaries complete the
+picture. It encodes BIP32 master seeds, not BIP39 words, and Bitcoin
+Core does not export seeds, so it applies to seeds born outside Core.
+And jimbocoin's counter-position deserves its place on the axis: prefer
+mechanisms endogenous to the protocol (M-of-N multisig is native, and
+Taproot hides the structure on-chain), accepting secret-splitting only
+for what the protocol cannot express, such as metadata. Splitting the
+seed versus splitting the spending authority is a real choice with real
+partisans on both sides. Want theft of a whole
 signer to be insufficient to spend? Multisig. Want both properties? Use
 both. And the companion warning from the same thread: pairing an encrypted
 backup with a separately-stored password hand-builds a fragile 2-of-2; if

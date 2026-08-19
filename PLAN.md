@@ -135,7 +135,17 @@
   (FractalEncrypt/FractalEncrypt_seedsigner, Codex32_Implementation branch).
   **Deliberately deferred until Fractal publishes — do not front-run his
   work (Ben, 2026-08-17).** Revisit after his release; his QR share specs
-  would be the compatibility target.
+  would be the compatibility target. BIP93 read in full (2026-08-18):
+  codex32 encodes BIP32 MASTER SEEDS (not BIP39 entropy); checksum, split
+  and recover are all pen-and-paper (BCH lookup tables). As an input mode
+  it would sit beside the Core-native modes (seed -> xprv, no PBKDF2),
+  and hand-verifiable shares allow decades of backup integrity checks
+  with zero re-exposure to hardware. Constraint (Westgate): Core does not
+  export seeds, so codex32 backup applies to externally-born seeds
+  (cards), which is Corky's model anyway. Momentum: Westgate building a
+  CLI/GUI, commissioned by Blockstream for Jade. The Fractal deferral is
+  about his SeedSigner UI; supporting the published BIP itself is a
+  separable later decision (Ben's call).
 - Anti-exfil: not implementable via Core's RPC today (no nonce hook in
   walletprocesspsbt); documented as a stated trade-off in the README. Watch
   upstream Core for any sign-to-contract / anti-exfil RPC support.
