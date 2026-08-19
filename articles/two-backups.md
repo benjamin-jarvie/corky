@@ -278,12 +278,31 @@ decades without ever re-entering the secret into hardware — the one
 health check that costs no new exposure. Two boundaries complete the
 picture. It encodes BIP32 master seeds, not BIP39 words, and Bitcoin
 Core does not export seeds, so it applies to seeds born outside Core.
-And jimbocoin's counter-position deserves its place on the axis: prefer
-mechanisms endogenous to the protocol (M-of-N multisig is native, and
-Taproot hides the structure on-chain), accepting secret-splitting only
-for what the protocol cannot express, such as metadata. Splitting the
-seed versus splitting the spending authority is a real choice with real
-partisans on both sides. Want theft of a whole
+And jimbocoin's counter-position deserves its full strength: he
+explicitly and generally discourages seed splitting, granting only rare
+operational exceptions (his example: an exchange running a thousand
+single-sig altcoins that needs a procedure employees can follow). His
+reasoning is protocol-shaped: Bitcoin transactions natively support
+M-of-N multisig, Taproot hides the structure on-chain, and reinventing
+protocol functionality outside the protocol is where he draws the line;
+secret-splitting earns its keep only for what the protocol cannot
+express, such as metadata.
+
+Laid side by side, the disagreement resolves into a taxonomy: there are
+three different things a holder can split. **Split the spending
+authority** (multisig: native, on-chain, the protocol enforces it).
+**Split the seed** (codex32: off-chain mathematics, hand-verifiable, and
+the option one side of this debate discourages on principle). Or **split
+the key that encrypts a backup**: keep N identical copies of a
+symmetrically encrypted payload, each stored beside one Shamir share of
+the encryption key. That third design is where the two positions quietly
+converge. Westgate's warning about hand-rolled 2-of-2s (an encrypted
+backup here, its password there) is answered by it, because k-of-n
+shares of the key turn the fragile pair into real redundancy, and both
+he and jimbocoin endorse exactly this construction for encrypted
+payloads and metadata. The remaining dispute is narrower than it first
+appears: not whether splitting is legitimate, but whether the seed
+itself is ever the right thing to split. Want theft of a whole
 signer to be insufficient to spend? Multisig. Want both properties? Use
 both. And the companion warning from the same thread: pairing an encrypted
 backup with a separately-stored password hand-builds a fragile 2-of-2; if
