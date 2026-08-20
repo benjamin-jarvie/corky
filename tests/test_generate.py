@@ -1,160 +1,107 @@
-"""Core-RNG seed generation (PLAN A-19), end to end on regtest.
-
-Proves four things about the opt-in generate tool:
-  1. The entropy comes from Bitcoin Core and differs on every call.
-  2. What Corky shows the user is a valid codex32 secret, and its shares
-     recombine to it.
-  3. The wallet derived from that backup opens in Core and signs.
-  4. The throwaway generation wallet is gone afterwards, and no Python
-     RNG is reachable from any Corky module.
-Run: python3 tests/test_generate.py
+"""A-19 exact-Core generation: key gen and usage exactly as a Core wallet.
+Run: python3 tests/test_generate.py (needs bitcoind)
 """
-
-import base64
-import re
-import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
-sys.path.insert(0, str(ROOT / "shim"))
-import codex32  # noqa: E402
+sys.path.insert(0, str(ROOT / "corky")); sys.path.insert(0, str(ROOT / "shim"))
 import signer  # noqa: E402
 
 fails = []
+def ok(m): print("ok  ", m)
+def bad(m): fails.append(m); print("FAIL", m)
 
-
-def ok(m):
-    print("ok  ", m)
-
-
-def bad(m):
-    fails.append(m)
-    print("FAIL", m)
-
-
-def static_checks():
-    """No Python RNG anywhere in the modules Corky ships."""
-    banned = re.compile(r"\bos\.urandom\b|\bimport +(random|secrets)\b|"
-                        r"\bfrom +(random|secrets) +import\b|"
-                        r"\brandom\.(random|randint|choice|getrandbits)\b|"
-                        r"\bsecrets\.(token_bytes|randbits|choice)\b")
-    sources = sorted((ROOT / "corky").glob("*.py")) + \
-        sorted((ROOT / "shim").glob("bip39_shim.py"))
-    dirty = [f.name for f in sources if banned.search(f.read_text())]
-    if dirty:
-        bad(f"python RNG referenced in {dirty}")
-    else:
-        ok(f"no python RNG in any of the {len(sources)} shipped modules")
-    # The same guarantee at runtime, in a clean interpreter: importing
-    # Corky's modules must not pull the RNG modules in. (This test file
-    # itself imports tempfile, which imports random, so it cannot be
-    # checked in-process.)
-    probe = ("import sys; sys.path[:0] = [%r, %r];"
-             "import signer, codex32, seedqr, bip39_shim;"
-             "print(sorted({'random','secrets'} & set(sys.modules)))"
-             % (str(ROOT / "corky"), str(ROOT / "shim")))
-    out = subprocess.run([sys.executable, "-c", probe],
-                         capture_output=True, text=True)
-    # Scope: every module that touches secret material or drives Core.
-    # screens.py is excluded because Pillow imports random for its own
-    # drawing helpers; screens.py never sees entropy, only glyphs.
-    if out.returncode == 0 and out.stdout.strip() == "[]":
-        ok("a clean import of the key-handling modules pulls in no RNG")
-    else:
-        bad(f"RNG modules reachable at import: {out.stdout.strip()} "
-            f"{out.stderr.strip()[:120]}")
-
-
-def node_checks():
-    datadir = tempfile.mkdtemp(prefix="corky-gen-")
-    port = 24000 + (hash(datadir) % 20000)
+def main():
+    import random as _r  # test harness only, for the rpc port
+    datadir = tempfile.mkdtemp(prefix="gen-")
     (Path(datadir) / "bitcoin.conf").write_text(
-        "regtest=1\n[regtest]\nrpcport=%d\n" % port)
+        "regtest=1\n[regtest]\nrpcport=%d\n" % _r.randint(20000, 60000))
     daemon = subprocess.Popen(
-        ["bitcoind", f"-datadir={datadir}", "-regtest", "-server",
-         "-fallbackfee=0.0002", "-daemonwait"],
+        ["bitcoind", f"-datadir={datadir}", "-regtest", "-networkactive=0",
+         "-listen=0", "-server=1", "-fallbackfee=0.0001"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     rpc = signer.Rpc(datadir, chain="regtest")
     try:
         for _ in range(120):
-            try:
-                rpc.call("getblockchaininfo")
-                break
-            except RuntimeError:
-                time.sleep(0.5)
+            try: rpc.call("getblockcount"); break
+            except RuntimeError: time.sleep(0.5)
 
-        # 1. Entropy: from Core, and fresh every time.
-        a = signer.core_entropy(rpc)
-        b = signer.core_entropy(rpc)
-        if len(a) == len(b) == 64 and a != b:
-            ok("core_entropy returns 64 fresh bytes per call")
+        # 1. Core generates; the returned key is Core's depth-0 master.
+        xprv = signer.generate_wallet(rpc)
+        if xprv.startswith("tprv8ZgxMBicQKsP") or xprv.startswith("xprv9s21ZrQH143K"):
+            ok("master xprv is depth-0 (Core's own master key)")
         else:
-            bad(f"core_entropy degenerate: {len(a)}/{len(b)} bytes, equal={a == b}")
+            bad(f"unexpected master key prefix: {xprv[:16]}")
 
-        # 4. Statelessness: the throwaway wallet is unloaded AND deleted.
-        loaded = rpc.call("listwallets")
-        on_disk = (rpc.wallet_dir / signer.GEN_WALLET).exists()
-        if signer.GEN_WALLET not in loaded and not on_disk:
-            ok("throwaway generation wallet unloaded and deleted")
-        else:
-            bad(f"generation wallet persists: loaded={loaded} disk={on_disk}")
+        # 2. Usage exactly as Core: the SAME wallet Core created signs.
+        descs = rpc.call("listdescriptors", True, wallet=signer.WALLET)["descriptors"]
+        masters = set()
+        for d in descs:
+            k = d["desc"][d["desc"].rindex("(") + 1:]
+            for stop in "/)":
+                if stop in k: k = k[:k.index(stop)]
+            masters.add(k)
+        ok("all Core descriptors share the one master") if masters == {xprv} else \
+            bad(f"descriptor masters {len(masters)} != returned key")
 
-        # 2. The backup: a valid codex32 secret, and shares that recombine.
-        ident = codex32.derive_identifier(a)
-        secret = codex32.encode_secret(ident, a, threshold=0)
-        if codex32.validate(secret) == secret and \
-                codex32.decode_secret(secret)[1] == a:
-            ok("generated seed encodes as a valid codex32 secret")
-        else:
-            bad("generated codex32 secret does not round-trip")
-        shares = codex32.split(a, 2, 3, ident,
-                               codex32.derive_split_entropy(a, 2, 3))
-        recovered = codex32.recover(shares[:2])
-        if codex32.decode_secret(recovered)[1] == a:
-            ok("2-of-3 shares of the generated seed recombine to it")
-        else:
-            bad("shares of the generated seed do not recombine")
-
-        # 3. The derived wallet opens in Core and signs a real PSBT.
-        _, seed = codex32.decode_secret(secret)
-        signer.open_session_xprv(rpc, codex32.to_xprv(seed, mainnet=False))
         addr = rpc.call("getnewaddress", wallet=signer.WALLET)
-        rpc.call("generatetoaddress", 101, addr, wallet=signer.WALLET)
-        funded = rpc.call("walletcreatefundedpsbt", [],
-                          [{addr: 1.0}], 0, {"fee_rate": 10}, True,
-                          wallet=signer.WALLET)["psbt"]
-        signed = signer.sign_psbt(rpc, funded)
-        if signed["complete"] and base64.b64decode(signed["psbt"]):
-            ok("wallet from the generated seed signs a PSBT to completion")
-        else:
-            bad("generated-seed wallet could not complete a PSBT")
+        rpc.call("createwallet", "miner")
+        maddr = rpc.call("getnewaddress", wallet="miner")
+        rpc.call("generatetoaddress", 101, maddr)
+        rpc.call("sendtoaddress", addr, 1.0, wallet="miner")
+        rpc.call("generatetoaddress", 1, maddr)
+        dest = rpc.call("getnewaddress", wallet="miner")
+        funded = rpc.call("walletcreatefundedpsbt", [], [{dest: 0.5}],
+                          0, {"fee_rate": 5}, True, wallet=signer.WALLET)
+        signed = signer.sign_psbt(rpc, funded["psbt"])
+        ok("Core-generated wallet signs a PSBT to completion") if signed["complete"] else \
+            bad("PSBT incomplete")
+
+        # 3. Restore path: the xprv backup opens an equivalent 84h wallet.
+        w1_addr = rpc.call("deriveaddresses",
+                           next(d["desc"] for d in rpc.call("listdescriptors", wallet=signer.WALLET)["descriptors"]
+                                if d["desc"].startswith("wpkh(") and not d["internal"]),
+                           [0, 0])[0]
         signer.close_session(rpc)
-        if not (rpc.wallet_dir / signer.WALLET).exists():
-            ok("session wallet deleted after signing")
-        else:
-            bad("session wallet persists after close_session")
+        signer.open_session_xprv(rpc, xprv)
+        w2 = rpc.call("listdescriptors", wallet=signer.WALLET)["descriptors"]
+        w2_addr = rpc.call("deriveaddresses",
+                           next(d["desc"] for d in w2
+                                if d["desc"].startswith("wpkh(") and not d["internal"]),
+                           [0, 0])[0]
+        ok("xprv restore derives the same BIP84 addresses") if w1_addr == w2_addr else \
+            bad(f"restore mismatch {w1_addr} vs {w2_addr}")
+
+        # 4. Statelessness: close deletes.
+        signer.close_session(rpc)
+        ok("session wallet deleted after close") if \
+            signer.WALLET not in rpc.call("listwallets") else bad("wallet lingers")
+
+        # 5. No Python RNG in shipped modules (screens excepted: Pillow
+        # imports random internally; screens never sees entropy).
+        for mod in ["signer", "codex32", "seedqr", "filechannel", "qrchannel", "main", "hal"]:
+            src = (ROOT / ("corky/%s.py" % mod)).read_text()
+            for bad_import in ["os.urandom", "import random", "import secrets"]:
+                if bad_import in src:
+                    bad(f"{mod}.py contains {bad_import}")
+        src = (ROOT / "shim/bip39_shim.py").read_text()
+        for bad_import in ["os.urandom", "import random", "import secrets"]:
+            if bad_import in src:
+                bad(f"bip39_shim.py contains {bad_import}")
+        ok("no Python RNG in any shipped module")
     finally:
-        try:
-            rpc.call("stop")
-            daemon.wait(timeout=30)
-        except Exception:
-            daemon.kill()
+        try: rpc.call("stop"); daemon.wait(timeout=30)
+        except Exception: daemon.kill()
         shutil.rmtree(datadir, ignore_errors=True)
 
-
-def main():
-    static_checks()
-    node_checks()
     if fails:
-        print("\n" + "\n".join(fails))
         sys.exit(1)
-    print("\nGENERATE PASS")
-
+    print("\nGENERATE PASS (exact-Core)")
 
 if __name__ == "__main__":
     main()

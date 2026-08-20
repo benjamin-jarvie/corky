@@ -31,7 +31,6 @@ def _json_decimal(obj):
 
 
 WALLET = "corky"
-GEN_WALLET = "corky-gen"     # throwaway; exists only inside core_entropy()
 
 # Account-level derivation, hardened, per BIP84/BIP86. Coin type 0' mainnet,
 # 1' for test networks, per SLIP-44.
@@ -190,41 +189,35 @@ def sign_psbt(rpc, psbt_b64):
     return {"psbt": result["psbt"], "complete": result["complete"]}
 
 
-def core_entropy(rpc, length=64):
-    """Entropy from Bitcoin Core's own RNG (PLAN A-19). Opt-in only.
+def generate_wallet(rpc):
+    """A-19: seed generation and usage EXACTLY as a Bitcoin Core wallet.
 
-    Core seeds a fresh descriptor wallet from GetStrongRandBytes. We create
-    a throwaway wallet, read its PRIVATE descriptors back with
-    `listdescriptors true`, and extract `length` bytes from them. The
-    randomness is entirely Core's. Corky contains no RNG of its own and
-    reaches for none of Python's; tests/test_generate.py enforces that
-    statically and at import time.
+    `createwallet` makes Core generate its master key with its own RNG
+    (GetStrongRandBytes) and derive the standard descriptor set, exactly
+    as any Core wallet is born. Corky then simply USES that wallet, and
+    the backup shown to the user is Core's own master xprv, read verbatim
+    out of the descriptors Core wrote. Nothing of ours sits between
+    Core's RNG and the backup: no extraction, no hashing, no reshaping.
 
-    The extraction step is a domain-separated HMAC-SHA512 stream over the
-    concatenated private descriptors, so it is deterministic given Core's
-    output and adds no entropy of its own. The throwaway wallet is unloaded
-    and deleted before this function returns, on every path.
+    Returns the master xprv string. Raises if the descriptors do not all
+    share one master key (they always do for Core-generated wallets; the
+    check is a sanity assertion, not entropy verification).
     """
-    if not 16 <= length <= 64:
-        raise ValueError("length must be 16-64 bytes (BIP32/BIP93 range)")
-    try:
-        rpc.call("createwallet", GEN_WALLET, False, False, "", False, True)
-        listed = rpc.call("listdescriptors", True, wallet=GEN_WALLET)
-        keyed = sorted({d["desc"] for d in listed["descriptors"]
-                        if "prv" in d["desc"]})
-        # Sanity, not verification: Core must have given us several DISTINCT
-        # private descriptors. A stuck RNG returning one constant fails here.
-        if len(keyed) < 2:
-            raise RuntimeError("Core returned no distinct private key material")
-        material = "\n".join(keyed).encode()
-    finally:
-        _drop_wallet(rpc, GEN_WALLET)
-    out, counter = b"", 0
-    while len(out) < length:
-        out += hmac.new(material, b"corky-core-rng-v1" + bytes([counter]),
-                        hashlib.sha512).digest()
-        counter += 1
-    return out[:length]
+    rpc.call("createwallet", WALLET)
+    descs = rpc.call("listdescriptors", True, wallet=WALLET)["descriptors"]
+    masters = set()
+    for d in descs:
+        text = d["desc"]
+        # innermost key expression: text after the LAST '(' up to '/' or ')'
+        key = text[text.rindex("(") + 1:]
+        for stop in "/)":
+            if stop in key:
+                key = key[: key.index(stop)]
+        masters.add(key)
+    if len(masters) != 1:
+        raise RuntimeError(
+            f"expected one master key across descriptors, got {len(masters)}")
+    return masters.pop()
 
 
 def _drop_wallet(rpc, name):

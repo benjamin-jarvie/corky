@@ -30,7 +30,9 @@ all three: **relocate trust to places where lying is hard.**
   performed by your own hands, and everything downstream is deterministic,
   so a lying device gets caught. One opt-in tool sits beside that: Corky
   can ask **Bitcoin Core** to generate a key, in a throwaway wallet it then
-  deletes, and hand you the result as a codex32 backup (PLAN A-19). That is
+  uses for signing, and hand you Core's own master xprv as the backup,
+  read verbatim from Core's descriptors (PLAN A-19) — key generation and
+  usage exactly as a Core wallet. That is
   a choice about who you trust with software entropy, not a verification
   win — Core's RNG is no more auditable at runtime than anyone else's, it
   is simply the most reviewed counterparty on offer. Core cannot make BIP39
@@ -194,25 +196,25 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 845 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 828 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (485) ·
+[`corky/main.py`](corky/main.py) (468) ·
 [`corky/screens.py`](corky/screens.py) (311) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 251 lines.**
-[`corky/signer.py`](corky/signer.py) (143) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 246 lines.**
+[`corky/signer.py`](corky/signer.py) (138) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (63) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,450 lines** (2,034 with blanks/comments).
+**Total functional code: 1,428 lines** (2,011 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,421 lines — none of it ships on the device.**
+**Test code: 2,382 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent

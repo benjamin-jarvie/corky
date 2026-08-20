@@ -385,13 +385,14 @@ class Session:
         self.buttons.read()
 
     def _tool_generate(self):
-        """Opt-in seed generation with Bitcoin Core's RNG (PLAN A-19).
-
-        Corky has no RNG of its own and still generates no entropy: Core
-        makes the key material inside a throwaway wallet that signer.py
-        deletes again, and Corky only encodes it as a codex32 backup. The
-        tradeoff screen says plainly that software entropy cannot be
-        audited as it runs, and that cards or dice remain the default.
+        """Seed generation and usage EXACTLY as a Bitcoin Core wallet
+        (PLAN A-19). Core's createwallet makes the master key with Core's
+        own RNG; Corky signs with that very wallet, and the backup shown
+        is Core's master xprv read verbatim from Core's descriptors.
+        Nothing of ours sits between Core's RNG and the paper. Restore is
+        the existing xprv entry mode (pure Core). The tradeoff screen
+        says plainly that software entropy cannot be audited as it runs
+        and that cards or dice remain the default.
         """
         self.display.show(screens.generate_warning(self.w, self.h))
         while True:
@@ -401,34 +402,17 @@ class Session:
             if key in ("b", "c"):
                 return False
         self.display.show(screens.busy(self.w, self.h,
-                                       "Bitcoin Core is generating a key…"))
-        seed = signer.core_entropy(self.rpc)
-        ident = codex32.derive_identifier(seed)
-        secret = codex32.encode_secret(ident, seed, threshold=0)
-        choice = self._pick_split()
-        if choice is None:
+                                       "Bitcoin Core is creating a wallet…"))
+        xprv = signer.generate_wallet(self.rpc)
+        # The backup IS the master xprv, in Core's own encoding, shown in
+        # 4-char groups for transcription. No split option: an xprv is a
+        # BIP32 node, not a seed, so codex32 cannot encode it; guardians
+        # of an xprv backup use Kaitiaki or the kit's practices instead.
+        self.display.show(screens.codex32_share_display(
+            self.w, self.h, xprv, 1, 1), sensitive=True)
+        if self.buttons.read() == "c":
+            signer.close_session(self.rpc)
             return False
-        if choice == 0:
-            outputs = [secret]
-        else:
-            outputs = codex32.split(seed, 2, 3, ident,
-                                    codex32.derive_split_entropy(seed, 2, 3))
-        for i, out in enumerate(outputs):
-            self.display.show(screens.codex32_share_display(
-                self.w, self.h, out.upper(), i + 1, len(outputs)),
-                sensitive=True)
-            if self.buttons.read() == "c":
-                return False
-        # Verify by re-deriving from what the user was told to write down,
-        # not from the bytes in memory: shares are recombined, secrets
-        # re-decoded. The first address is shown so the transcription can
-        # be checked later against any wallet built from the same backup.
-        self.display.show(screens.busy(self.w, self.h,
-                                       "checking your backup, opening in Core…"))
-        if len(outputs) == 1:
-            self._codex32_open([codex32.validate(outputs[0])])
-        else:
-            self._codex32_open([codex32.validate(o) for o in outputs[:2]])
         address = self.rpc.call("getnewaddress", wallet=signer.WALLET)
         self.display.show(screens.codex32_verified(
             self.w, self.h, f"first address {address}"))

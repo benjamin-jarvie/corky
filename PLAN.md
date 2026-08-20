@@ -184,20 +184,29 @@
   BITCOIN CORE for entropy, on an explicit opt-in path, in a v1.1 tool that
   sits beside the codex32 tools rather than in the seed-entry flow.
 
-  **Mechanism.** `signer.core_entropy()` creates a throwaway descriptor
-  wallet (`corky-gen`) with `createwallet`, so Core generates the key
-  material from its own `GetStrongRandBytes`. Corky reads the private
-  descriptors back with `listdescriptors true`, requires at least two
-  distinct private descriptors (a stuck RNG fails there), and extracts 64
-  bytes with a domain-separated HMAC-SHA512 stream over them. The
-  extraction adds no entropy; it only shapes Core's. The throwaway wallet
-  is unloaded and deleted on every path, before the function returns, so
-  statelessness holds.
+  **Mechanism (revised same day at Ben's direction: EXACTLY as a Core
+  wallet, no shaping).** `signer.generate_wallet()` calls `createwallet`,
+  so Core generates the master key with its own `GetStrongRandBytes` and
+  derives its standard descriptor set — key generation identical to any
+  Core wallet's birth. Corky then USES that very wallet to sign; nothing
+  is re-derived. The backup shown to the user is Core's own MASTER XPRV,
+  read verbatim from the descriptors Core wrote (`listdescriptors true`
+  stores the depth-0 master in every descriptor; empirically verified,
+  and the code asserts all descriptors share one master). Nothing of ours
+  sits between Core's RNG and the paper: no extraction, no hashing, no
+  encoding of ours. Statelessness holds: the wallet lives in the ramdisk
+  session and close_session deletes it.
 
-  **Backup form.** codex32 only: one secret string, or a 2-of-3 split, via
-  the A-18 machinery. Core cannot produce BIP39 words and Corky will not
-  invent them — a Corky-authored entropy-to-mnemonic step would be exactly
-  the unauditable code this project refuses to add. The screen says so.
+  **Backup form.** The master xprv string, in Core's own base58check
+  encoding, transcribed in 4-char groups. NOT codex32: an xprv is a BIP32
+  node (key + chain code), not a seed preimage, and BIP93 encodes seed
+  preimages — there is no seed to encode when Core births the master
+  directly. No split option either, for the same reason; guardianship of
+  an xprv backup is Kaitiaki's lane. Restore is the existing xprv entry
+  mode (pure Core), which recreates the BIP84/86 active set — the only
+  paths Corky ever hands out addresses from (verified by test: restored
+  wallet derives identical BIP84 addresses). Core cannot produce BIP39
+  words and Corky will not invent them; the screen says so.
 
   **Verification.** The user confirms transcription, then Corky re-derives
   the wallet from the codex32 strings it displayed (shares are recombined,
