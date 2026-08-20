@@ -161,48 +161,63 @@ and on-device seed generation. Corky signs for seeds that already live on metal;
 it deliberately has no entropy story of its own.
 
 
-## Bitcoin Core + 1,902 lines: audit the whole device in an afternoon
+## The code, in layers: Core + 340 lines that matter + a body
 
-Corky's pitch in numbers: everything that runs on the device is **Bitcoin
-Core plus 1,902 lines of our Python** (1,379 excluding blanks and
-comments). No line of ours performs elliptic-curve cryptography or parses
-an untrusted PSBT — Core does both. Counted 2026-08-20; the table is the
-audit map:
+Corky is Bitcoin Core plus a small body of our Python. The body is
+layered so the number that matters for trust stays tiny. Counted
+2026-08-20 as lines of functional code (blanks and comments excluded);
+file links are the audit map.
 
-| Group | File | Lines | What it does / what it must never do |
-|---|---|---|---|
-| **Secret-touching, frozen** | [`shim/bip39_shim.py`](shim/bip39_shim.py) | 92 | BIP39 words → xprv. Stdlib hashing only. Hash pinned in [`SHIM_HASH`](SHIM_HASH) |
-| | [`corky/codex32.py`](corky/codex32.py) | 350 | BIP93 encode/split/recover/verify, BIP's own reference arithmetic. Hash pinned in [`SHIM_HASH`](SHIM_HASH) |
-| Signing plumbing | [`corky/signer.py`](corky/signer.py) | 195 | Drives Core over RPC. No cryptography |
-| Transfer channels | [`corky/filechannel.py`](corky/filechannel.py) | 84 | PSBT files on a stick. Opaque bytes only |
-| | [`corky/qrchannel.py`](corky/qrchannel.py) | 101 | BC-UR animated QR. One documented framing exception |
-| | [`corky/seedqr.py`](corky/seedqr.py) | 65 | SeedQR digits → words. No keys touched |
-| UI / device | [`corky/main.py`](corky/main.py) | 577 | The state machine. Traffic cop, no crypto |
-| | [`corky/screens.py`](corky/screens.py) | 354 | PIL renders. Pixels only |
-| | [`corky/hal.py`](corky/hal.py) | 84 | Buttons and display glue |
-| **Total ours** | | **1,902** | |
+**Layer 1 — transforms secret material. 340 lines. Frozen, hash-pinned.**
+The only code of ours that ever computes on a seed or key. Stdlib only,
+no elliptic-curve math anywhere, hashes pinned in
+[`SHIM_HASH`](SHIM_HASH) and enforced by
+[`tests/test_integrity.py`](tests/test_integrity.py):
 
-Not counted as ours, and not asking for your trust in the same way:
+| File | Code lines | Does |
+|---|---|---|
+| [`shim/bip39_shim.py`](shim/bip39_shim.py) | 54 | BIP39 words → xprv |
+| [`corky/codex32.py`](corky/codex32.py) | 246 | BIP93: the BIP's own reference arithmetic |
+| [`corky/seedqr.py`](corky/seedqr.py) | 40 | SeedQR digits → words |
 
-- [`hw/vendor/`](hw/vendor/) — 2,219 lines vendored unmodified from
-  SeedSigner (display drivers, BC-UR codec; MIT/BSD, attribution in each
-  file). Integration points are ours; the code is theirs and upstream.
-- [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py) — 2,614
-  lines of tests: more test than device. The campaign behind them: a
-  90-cell signing matrix, 28 adversarial checks, property/fuzz suites
-  cross-checked against independent implementations, per-module mutation
-  kill-rates (74–100% on secret-touching modules, survivors individually
-  triaged), and two real mainnet spends — one ECDSA
-  ([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41)),
-  one Taproot Schnorr keyspend
-  ([`0ee96d29…`](https://mempool.space/tx/0ee96d2995f73768f071954c5b116fcb894847289a94dbe313e6b8615cd9981d)).
-- Run everything: [`./run_tests.sh`](run_tests.sh) (fast suites), with
-  `RUN_NODE=1` for the full bitcoind set.
+Enter by descriptor or xprv and even this layer is bypassed: pure Core.
+Words-only users trust Core + 54 lines — the original pitch, still true.
 
-The frozen files cannot drift silently:
-[`tests/test_integrity.py`](tests/test_integrity.py) fails the suite if a
-pinned hash stops matching, and the wordlist's tamper-refusal is itself
-tested.
+**Layer 2 — sees secrets, computes nothing with them. 815 lines.**
+The device's body: menus, screens, buttons. It routes and displays
+secret material during entry but performs no cryptography on it.
+[`corky/main.py`](corky/main.py) (475) ·
+[`corky/screens.py`](corky/screens.py) (291) ·
+[`corky/hal.py`](corky/hal.py) (49).
+
+**Layer 3 — never touches secrets at all. 224 lines.**
+[`corky/signer.py`](corky/signer.py) (116) drives Core over RPC;
+[`corky/filechannel.py`](corky/filechannel.py) (45) and
+[`corky/qrchannel.py`](corky/qrchannel.py) (63) move PSBTs as opaque
+bytes — Core is the only parser, by law
+([PLAN.md A-11](PLAN.md)).
+
+**Total functional code: 1,379 lines** (1,902 with blanks/comments).
+A bug in layers 2–3 can annoy you; it cannot leak what it never
+algebraically touches.
+
+**Test code: 1,936 lines — none of it ships on the device.**
+[`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
+than device is deliberate: a 90-cell signing matrix, 28 adversarial
+checks, property/fuzz suites cross-checked against independent
+implementations, per-module mutation kill-rates (74–100% on
+secret-touching modules, survivors individually triaged), and two real
+mainnet spends — ECDSA
+([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41))
+and a Taproot Schnorr keyspend
+([`0ee96d29…`](https://mempool.space/tx/0ee96d2995f73768f071954c5b116fcb894847289a94dbe313e6b8615cd9981d)).
+Run it all: [`./run_tests.sh`](run_tests.sh) (`RUN_NODE=1` adds the
+bitcoind suites).
+
+**Vendored, not ours: 2,219 lines** in [`hw/vendor/`](hw/vendor/) —
+SeedSigner's display drivers and BC-UR codec, unmodified, MIT/BSD with
+attribution. Theirs to audit upstream; only the integration points are
+ours.
 
 ## Audit record
 
