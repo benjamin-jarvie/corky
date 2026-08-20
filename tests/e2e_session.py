@@ -507,8 +507,35 @@ def main():
             "N2: forced-advance page order drifted"
         print("ok   N: 3-page review order pinned (nav and forced advance)")
 
+        # ---- Session G: Core-RNG generation from the tools menu (A-19) ---
+        # r = tools, d,d = third entry, a = select, a = accept the tradeoff,
+        # a = one string, a = wrote it down, a = leave the verify screen,
+        # b = abort the PSBT load loop the generated wallet drops us into.
+        fg = work / "framesG"
+        r = run_device(datadir, "r" + "dd" + "a" + "a" + "a" + "a" + "a" + "b",
+                       fg)
+        assert r.returncode == 0, f"G failed:\n{r.stderr}"
+        assert _has(fg, _render(scr.generate_warning)), \
+            "G: the tradeoff screen was never shown before generation"
+        assert _has(fg, _render(scr.busy,
+                                "Bitcoin Core is generating a key…")), \
+            "G: Core was not asked for the entropy"
+        gen_dir = rpc.wallet_dir / signer.GEN_WALLET
+        assert not gen_dir.exists(), \
+            "G: the throwaway generation wallet survived the session"
+        assert signer.GEN_WALLET not in rpc.call("listwallets"), \
+            "G: the throwaway generation wallet is still loaded"
+        assert not (rpc.wallet_dir / signer.WALLET).exists(), \
+            "G: the derived session wallet was not deleted at teardown"
+        assert _has(fg, _render(scr.busy,
+                                "checking your backup, opening in Core…")), \
+            "G: the backup was never re-derived and verified"
+        print("ok   G: Core-RNG generation -> codex32 backup -> wallet open "
+              "in Core -> both wallets gone at teardown")
+
         print("\nSESSION PASS: word-entry(12/24 picker), xprv-QR, SeedQR, "
-              "codex32 shares, QR in/out, stick in/out, refusal, paged review")
+              "codex32 shares, Core-RNG generation, QR in/out, stick in/out, "
+              "refusal, paged review")
     finally:
         try:
             rpc.call("stop")

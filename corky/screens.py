@@ -161,11 +161,12 @@ def seed_menu(w, h, selected=0):
 
 
 def tools_menu(w, h, selected=0):
-    """Utilities that never open a wallet: verify a share, back up a seed."""
+    """Utilities: verify a share, back up a seed, generate one from Core."""
     img, d = _frame(w, h, "TOOLS")
     options = [
         ("Verify a codex32 share", "checksum only, no keys touched"),
         ("Back up seed as codex32", "words in, string or shares out"),
+        ("Generate a seed (Core RNG)", "opt-in; entropy from Bitcoin Core"),
     ]
     for i, (label, note) in enumerate(options):
         y = int(h * (0.30 + i * 0.18))
@@ -178,6 +179,26 @@ def tools_menu(w, h, selected=0):
                font=_font(int(h * 0.04)),
                fill=OCHRE if i == selected else GREY, anchor="rm")
     d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    return img
+
+
+def generate_warning(w, h):
+    """Shown before Core-RNG generation (PLAN A-19). States the tradeoff
+    before any key material exists, not after."""
+    img, d = _frame(w, h, "GENERATE  A  SEED")
+    d.text((w // 2, int(h * 0.24)), "Entropy comes from Bitcoin Core.",
+           font=_font(int(h * 0.068)), fill=OCHRE, anchor="mm")
+    lines = ["Core's own RNG makes this key, not Corky and not a vendor.",
+             "It is software. You cannot audit it as it runs.",
+             "Cards or dice stay the verifiable option, and the default.",
+             "Choose this if you trust Core's RNG more than any other.",
+             "Core cannot make BIP39 words. Corky will not invent them.",
+             "Your backup is a codex32 string, or k-of-n shares."]
+    for i, line in enumerate(lines):
+        d.text((w // 2, int(h * (0.38 + i * 0.085))), line,
+               font=_font(int(h * 0.045)), fill=CREAM, anchor="mm")
+    d.text((w // 2, int(h * 0.95)), "A · generate in Core    B · back",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 

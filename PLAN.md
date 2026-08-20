@@ -170,6 +170,48 @@
   all seven suites green. Hardware-blocked remainder unchanged: camera
   QR (M1), device bring-up (M0), RAM-resident image (M3).
 
+- **A-19: opt-in seed generation with Bitcoin Core's RNG (Ben, 2026-08-20).**
+  Ben's call, in his words: Core is the most trusted software there is, so
+  if you are going to trust any RNG, trust that one. Against other devices
+  this is a selling point, because their RNG is a vendor's and Corky's is
+  the reference implementation's.
+
+  **What it changes.** A-9 froze v1 with *no on-device seed generation*, and
+  A-18 recorded that no device RNG exists or is used. Both stand for
+  CORKY's own code: Corky still contains no RNG, calls no `os.urandom` and
+  imports neither `random` nor `secrets` (tests/test_generate.py enforces
+  this statically and at import time). What is now permitted is asking
+  BITCOIN CORE for entropy, on an explicit opt-in path, in a v1.1 tool that
+  sits beside the codex32 tools rather than in the seed-entry flow.
+
+  **Mechanism.** `signer.core_entropy()` creates a throwaway descriptor
+  wallet (`corky-gen`) with `createwallet`, so Core generates the key
+  material from its own `GetStrongRandBytes`. Corky reads the private
+  descriptors back with `listdescriptors true`, requires at least two
+  distinct private descriptors (a stuck RNG fails there), and extracts 64
+  bytes with a domain-separated HMAC-SHA512 stream over them. The
+  extraction adds no entropy; it only shapes Core's. The throwaway wallet
+  is unloaded and deleted on every path, before the function returns, so
+  statelessness holds.
+
+  **Backup form.** codex32 only: one secret string, or a 2-of-3 split, via
+  the A-18 machinery. Core cannot produce BIP39 words and Corky will not
+  invent them — a Corky-authored entropy-to-mnemonic step would be exactly
+  the unauditable code this project refuses to add. The screen says so.
+
+  **Verification.** The user confirms transcription, then Corky re-derives
+  the wallet from the codex32 strings it displayed (shares are recombined,
+  not read back out of memory) and shows the first receive address, so the
+  transcription can be checked later against any wallet restored from it.
+
+  **The honest caveat, on the record.** Software entropy is unverifiable by
+  inspection. A compromised RNG is undetectable from its output, and that
+  is as true of Core's as of anyone's; trusting it is a choice about the
+  counterparty, not a verification win. Cards and dice remain the
+  documented default and the only path where the unauditable step happens
+  in your own hands. A-19 adds an option; it does not move the recommendation.
+
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,

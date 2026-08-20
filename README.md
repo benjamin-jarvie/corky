@@ -21,12 +21,20 @@ the long version is [articles/two-backups.md](articles/two-backups.md)).
 Corky is a position taken in each phase, and the guiding principle across
 all three: **relocate trust to places where lying is hard.**
 
-- **Generation: not our job, by design.** A compromised random number
-  generator is undetectable from its output, so Corky has no entropy story
-  at all — no on-device seed generation, ever. Seeds are born in the
-  physical world (SeedPicker-style cards, or dice with cross-checked
-  mapping) where the one unauditable step is performed by your own hands.
-  Everything downstream is deterministic, so a lying device gets caught.
+- **Generation: cards and dice by default, Bitcoin Core by choice.** A
+  compromised random number generator is undetectable from its output, so
+  Corky writes no RNG of its own and ships none: no `os.urandom`, no
+  `random`, no `secrets`, enforced by a test. The recommended path is
+  unchanged. Seeds are born in the physical world (SeedPicker-style cards,
+  or dice with cross-checked mapping) where the one unauditable step is
+  performed by your own hands, and everything downstream is deterministic,
+  so a lying device gets caught. One opt-in tool sits beside that: Corky
+  can ask **Bitcoin Core** to generate a key, in a throwaway wallet it then
+  deletes, and hand you the result as a codex32 backup (PLAN A-19). That is
+  a choice about who you trust with software entropy, not a verification
+  win — Core's RNG is no more auditable at runtime than anyone else's, it
+  is simply the most reviewed counterparty on offer. Core cannot make BIP39
+  words and Corky will not invent them.
 - **Use: the reference implementation, on radio-free silicon.** Signing
   runs Bitcoin Core's own wallet code, and v1 hardware is a compute module
   manufactured without wireless: "cannot transmit" outranks every
@@ -157,9 +165,11 @@ outputs, amounts and the fee as computed by Core from the coordinator-supplied
 input amounts (an air-gapped signer cannot independently verify input amounts;
 none can). Coordinator target: Sparrow.
 
-Out of scope for v1: multisig, message signing, address explorer, dice entropy,
-and on-device seed generation. Corky signs for seeds that already live on metal;
-it deliberately has no entropy story of its own.
+Out of scope for v1: multisig, message signing, address explorer, and dice
+entropy. Corky signs for seeds that already live on metal, and writes no
+randomness of its own; the one generation path it offers (v1.1, opt-in)
+asks Bitcoin Core for the entropy and gives you a codex32 string to write
+down. See PLAN A-19 for the tradeoff, stated plainly.
 
 
 ## The code, in layers: Core + 354 lines that matter + a body
@@ -184,28 +194,28 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 785 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 845 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (442) ·
-[`corky/screens.py`](corky/screens.py) (294) ·
+[`corky/main.py`](corky/main.py) (485) ·
+[`corky/screens.py`](corky/screens.py) (311) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 224 lines.**
-[`corky/signer.py`](corky/signer.py) (116) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 251 lines.**
+[`corky/signer.py`](corky/signer.py) (143) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (63) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,363 lines** (1,906 with blanks/comments).
+**Total functional code: 1,450 lines** (2,034 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,282 lines — none of it ships on the device.**
+**Test code: 2,421 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, 8 scripted device sessions, property/fuzz suites cross-checked against independent
+checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never

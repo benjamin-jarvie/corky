@@ -109,7 +109,11 @@ class Session:
                     return
                 self.display.show(screens.home(self.w, self.h))
             elif key == "r":
-                self.state_tools()
+                if self.state_tools():
+                    # Generation leaves a wallet open in Core: go straight
+                    # on to loading a PSBT rather than back to HOME.
+                    self.state_load()
+                    return
                 self.display.show(screens.home(self.w, self.h))
             elif key == "c":
                 return
@@ -306,23 +310,27 @@ class Session:
             elif key == "c":
                 return entered if len(entered) > 3 else None
 
-    def state_tools(self):
+    def state_tools(self) -> bool:
+        """Returns True only when a tool left a wallet open in Core."""
         selected = 0
+        tools = [self._tool_verify, self._tool_backup, self._tool_generate]
         while True:
             self.display.show(screens.tools_menu(self.w, self.h, selected))
             key = self.buttons.read()
-            if key in ("u", "d"):
-                selected = 1 - selected
+            if key == "u":
+                selected = (selected - 1) % len(tools)
+            elif key == "d":
+                selected = (selected + 1) % len(tools)
             elif key == "b":
-                return
+                return False
             elif key == "a":
                 try:
-                    [self._tool_verify, self._tool_backup][selected]()
+                    return bool(tools[selected]())
                 except Exception as exc:
                     self.display.show(screens.result(
                         self.w, self.h, ok=False, detail=str(exc)[:60]))
                     self.buttons.read()
-                return
+                return False
 
     def _tool_verify(self):
         """The zero-re-exposure check: checksum only, nothing derived.
@@ -375,6 +383,57 @@ class Session:
             self.w, self.h, ok=True,
             detail="transcribed; kit worksheets own paper"))
         self.buttons.read()
+
+    def _tool_generate(self):
+        """Opt-in seed generation with Bitcoin Core's RNG (PLAN A-19).
+
+        Corky has no RNG of its own and still generates no entropy: Core
+        makes the key material inside a throwaway wallet that signer.py
+        deletes again, and Corky only encodes it as a codex32 backup. The
+        tradeoff screen says plainly that software entropy cannot be
+        audited as it runs, and that cards or dice remain the default.
+        """
+        self.display.show(screens.generate_warning(self.w, self.h))
+        while True:
+            key = self.buttons.read()
+            if key == "a":
+                break
+            if key in ("b", "c"):
+                return False
+        self.display.show(screens.busy(self.w, self.h,
+                                       "Bitcoin Core is generating a key…"))
+        seed = signer.core_entropy(self.rpc)
+        ident = codex32.derive_identifier(seed)
+        secret = codex32.encode_secret(ident, seed, threshold=0)
+        choice = self._pick_split()
+        if choice is None:
+            return False
+        if choice == 0:
+            outputs = [secret]
+        else:
+            outputs = codex32.split(seed, 2, 3, ident,
+                                    codex32.derive_split_entropy(seed, 2, 3))
+        for i, out in enumerate(outputs):
+            self.display.show(screens.codex32_share_display(
+                self.w, self.h, out.upper(), i + 1, len(outputs)),
+                sensitive=True)
+            if self.buttons.read() == "c":
+                return False
+        # Verify by re-deriving from what the user was told to write down,
+        # not from the bytes in memory: shares are recombined, secrets
+        # re-decoded. The first address is shown so the transcription can
+        # be checked later against any wallet built from the same backup.
+        self.display.show(screens.busy(self.w, self.h,
+                                       "checking your backup, opening in Core…"))
+        if len(outputs) == 1:
+            self._codex32_open([codex32.validate(outputs[0])])
+        else:
+            self._codex32_open([codex32.validate(o) for o in outputs[:2]])
+        address = self.rpc.call("getnewaddress", wallet=signer.WALLET)
+        self.display.show(screens.codex32_verified(
+            self.w, self.h, f"first address {address}"))
+        self.buttons.read()
+        return True
 
     def _pick_split(self):
         selected = 0
