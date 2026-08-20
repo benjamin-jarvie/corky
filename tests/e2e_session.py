@@ -23,6 +23,19 @@ MNEMONIC = "abandon " * 11 + "about"
 # about:   'a', +1 to 'b', append, +14 to 'o', append, candidates, accept
 WORDS_SCRIPT = "ara" * 11 + ("a" + "da" + "d" * 14 + "a" + "ra")
 
+BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def grid_keys(payload):
+    """Button script that types payload on the 4x8 grid (cursor starts 0)."""
+    cur, out = 0, []
+    for ch in payload:
+        tgt = BECH32.index(ch)
+        d = (tgt - cur) % 32
+        out.append("d" * (d // 8) + "r" * (d % 8) + "a")
+        cur = tgt
+    return "".join(out)
+
 
 def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
     cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
@@ -74,6 +87,20 @@ def main():
             return rpc.call("walletcreatefundedpsbt", [], [{dest: amount}],
                             0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
 
+        import io
+        import screens as scr
+
+        def _render(fn, *a, **k):
+            b = io.BytesIO()
+            fn(320, 240, *a, **k).save(b, format="PNG")
+            return b.getvalue()
+
+        def _frames(d):
+            return sorted(Path(d).glob("frame-*.png"))
+
+        def _has(d, png):
+            return any(p.read_bytes() == png for p in _frames(d))
+
         # ---- Session A: typed word entry + stick sign ----
         stick = work / "stickA"; stick.mkdir()
         (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
@@ -87,6 +114,9 @@ def main():
         txid = rpc.call("sendrawtransaction", final["hex"])
         rpc.call("generatetoaddress", 1, addr)
         assert rpc.call("gettransaction", txid, wallet="watch")["confirmations"] >= 1
+        assert _frames(work / "framesA")[-1].read_bytes() == _render(
+            scr.result, ok=True, detail="hui-signed.psbt written"), \
+            "A: final frame is not the exact success screen"
         print(f"ok   A: typed 12 words on the keypad -> stick sign -> confirmed {txid[:12]}…")
 
         # ---- Session B: xprv via QR + PSBT in AND out via QR ----
@@ -161,6 +191,10 @@ def main():
                        stick=stickd2, qr_key=sq3)
         assert not (stickd2 / "many-signed.psbt").exists(), \
             "D2: PSBT signed with a page unseen — paging gate is broken!"
+        assert r.returncode == 0, f"D2 failed:\n{r.stderr}"
+        assert _frames(work / "framesD2")[-1].read_bytes() == _render(
+            scr.result, ok=False, detail="rejected by user"), \
+            "D2: final frame is not the exact rejection screen"
         print("ok   D: paged review — signs only after all pages seen, "
               "blocks when one is unseen")
 
@@ -238,6 +272,187 @@ def main():
         assert r.returncode == 0, f"E failed:\n{r.stderr}"
         assert (sticke / "c32-signed.psbt").exists(), "E: signed file missing"
         print("ok   E: codex32 2-of-3 shares (scan) -> wallet open -> stick sign")
+
+
+        # ---- Session R3: 3-output PSBT is exactly ONE page ----
+        # pages = (len+2)//3 : 3 outputs -> 1 page, a single 'a' signs.
+        stickr = work / "stickR3"; stickr.mkdir()
+        p3 = rpc.call("walletcreatefundedpsbt", [],
+                      [{rpc.call("getnewaddress", wallet="watch"): 0.1},
+                       {rpc.call("getnewaddress", wallet="watch"): 0.1}],
+                      0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickr / "p3.psbt").write_bytes(base64.b64decode(p3))
+        sqr = work / "sq_r3.txt"; sqr.write_text("0000" * 11 + "0003")
+        r = run_device(datadir, "a" + "a" + "a", work / "framesR3",
+                       stick=stickr, qr_key=sqr)
+        assert r.returncode == 0, f"R3 failed:\n{r.stderr}"
+        assert (stickr / "p3-signed.psbt").exists(), "R3: 3-out page count wrong"
+        print("ok   R3: 3-output PSBT reviewed as one page and signed")
+
+        # ---- Session I: incomplete QR assembly, then abort at load ----
+        allframes = qrchannel.psbt_to_frames(fund_psbt(1.0))
+        assert len(allframes) > 1, "I: need a multi-frame PSBT"
+        part = work / "partial_frames.txt"
+        part.write_text(allframes[0])
+        emptystick = work / "stickI"; emptystick.mkdir()
+        sqi = work / "sq_i.txt"; sqi.write_text("0000" * 11 + "0003")
+        for abkey in ("b", "c"):
+            r = run_device(datadir, "a" + "a" + abkey,
+                           work / ("framesI" + abkey),
+                           stick=emptystick, qr_key=sqi, qr_psbt=part)
+            assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
+            assert _frames(work / ("framesI" + abkey))[-1].read_bytes() == \
+                _render(scr.busy, "insert stick or show QR…"), \
+                f"I({abkey}): last frame is not the load screen"
+        print("ok   I: partial QR makes progress; b/c abort the load loop")
+
+        # ---- Session J: PSBT this wallet cannot complete -> refusal ----
+        stickj = work / "stickJ"; stickj.mkdir()
+        foreign = rpc.call("walletcreatefundedpsbt", [],
+                           [{rpc.call("getnewaddress", wallet="watchE"): 0.5}],
+                           0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
+        (stickj / "alien.psbt").write_bytes(base64.b64decode(foreign))
+        sqj = work / "sq_j.txt"; sqj.write_text("0000" * 11 + "0003")
+        r = run_device(datadir, "a" + "a" + "a", work / "framesJ",
+                       stick=stickj, qr_key=sqj)
+        assert r.returncode == 0, f"J failed:\n{r.stderr}"
+        assert not (stickj / "alien-signed.psbt").exists(), "J: signed foreign PSBT!"
+        assert _frames(work / "framesJ")[-1].read_bytes() == _render(
+            scr.result, ok=False, detail="wallet cannot complete this PSBT"), \
+            "J: final frame is not the exact cannot-complete screen"
+        print("ok   J: foreign PSBT -> cannot-complete refusal, golden-verified")
+
+        # ---- Session H: codex32 secret TYPED on the grid -> sign ----
+        H_SECRET = ("ms10cqr0sqqqsyqcyq5rqwzqfpg9scrgwpugpzysnzs23v9ccrydpk8"
+                    "qarc0sh5qqf9nteh5xm")   # frozen: bytes(range(32)), k=0
+        stickh = work / "stickH"; stickh.mkdir()
+        ph = rpc.call("walletcreatefundedpsbt", [],
+                      [{rpc.call("getnewaddress", wallet="watchE"): 0.7}],
+                      0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
+        (stickh / "typed.psbt").write_bytes(base64.b64decode(ph))
+        # menu index 3 = typed codex32; exercise u/l wrap and backspace too
+        entry = "ud" + "lr" + "a" + "b" + grid_keys(H_SECRET[3:]) + "c"
+        r = run_device(datadir, "a" + "ddda" + entry + "a",
+                       work / "framesH", stick=stickh)
+        assert r.returncode == 0, f"H failed:\n{r.stderr}"
+        assert (stickh / "typed-signed.psbt").exists(), "H: typed-entry sign missing"
+        assert _has(work / "framesH",
+                    _render(scr.busy, "recovering seed, deriving in Core…")), \
+            "H: recovery busy screen missing"
+        print("ok   H: codex32 secret typed on the grid -> wallet open -> sign")
+
+        # ---- Session H2: TWO typed shares, duplicate + error paths ----
+        stickh2 = work / "stickH2"; stickh2.mkdir()
+        ph2 = rpc.call("walletcreatefundedpsbt", [],
+                       [{rpc.call("getnewaddress", wallet="watchE"): 0.6}],
+                       0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
+        (stickh2 / "duo.psbt").write_bytes(base64.b64decode(ph2))
+        g1 = grid_keys(FROZEN_SHARES[0][3:]) + "c"
+        g2 = grid_keys(FROZEN_SHARES[1][3:]) + "c"
+        script = ("a" + "ddda"
+                  + g1 + "a"          # share 1 accepted, dismiss VALID
+                  + g1 + "a"          # duplicate -> error -> continue
+                  + g2 + "a"          # share 2 accepted, dismiss VALID
+                  + "a")              # review: sign
+        r = run_device(datadir, script, work / "framesH2", stick=stickh2)
+        assert r.returncode == 0, f"H2 failed:\n{r.stderr}"
+        assert (stickh2 / "duo-signed.psbt").exists(), "H2: 2-share sign missing"
+        fh2 = work / "framesH2"
+        assert _has(fh2, _render(scr.codex32_shares, (), "?")), "H2: first collect screen"
+        assert _has(fh2, _render(scr.codex32_shares,
+                                 (FROZEN_SHARES[0][8].upper(),), 2)), \
+            "H2: collect screen after share 1"
+        assert _has(fh2, _render(scr.codex32_error, "duplicate share")), \
+            "H2: duplicate-share error screen"
+        assert _has(fh2, _render(scr.codex32_verified, "share 1 of 2")), \
+            "H2: share-1 VALID screen"
+        assert _has(fh2, _render(scr.codex32_verified, "share 2 of 2")), \
+            "H2: share-2 VALID screen"
+        print("ok   H2: typed 2-of-3 shares, duplicate rejected, golden screens")
+
+        # ---- Session H3/H4: typed-entry aborts stay closed ----
+        r = run_device(datadir, "a" + "ddda" + "c" + "c", work / "framesH3")
+        assert r.returncode == 0, f"H3 failed:\n{r.stderr}"
+        # invalid share -> error -> 'b' declines -> home -> quit
+        r = run_device(datadir, "a" + "ddda" + "aaaa" + "c" + "b" + "c",
+                       work / "framesH4")
+        assert r.returncode == 0, f"H4 failed:\n{r.stderr}"
+        assert _has(work / "framesH4", _render(
+            scr.codex32_error,
+            "not a valid codex32 string (checksum or format)"[:48])), \
+            "H4: checksum error screen missing"
+        print("ok   H3/H4: typed-entry abort and error-decline return home")
+
+        # ---- Session F: backup tool, in-process with share capture ----
+        # Dev frames redact sensitive screens, so the shares are pinned by
+        # intercepting the share screen call. FROZEN backup vectors for the
+        # canonical mnemonic (computed once, must never drift):
+        F_SECRET = ("ms105js5st6cqh0wu7p5ssjyf4z4ez42ks9jlt3zneju9uuypr2hdda"
+                    "k6tlqsy8akze8npeflj")
+        F_SHARES = [
+            "ms125js5ahcchqk58er3w4nyj2rlcd96hxfsjtt053c23n0h5eel6sdhxwcgq3t6v77pudlwk2",
+            "ms125js5c5lcc0v768yg2vyy0e5y005tq7mhhtp22drjw3wkuncr4yuq9hx53r326ut07z8de2",
+            "ms125js5dqjcwesatzfqnyky7jx5ah8cj6u6ztzl0snk8fz68s57rz0j3lrfzyd4yyp4x5re02",
+        ]
+        import hal
+        import main as corky_main
+        rec = []
+        orig_sd = scr.codex32_share_display
+        scr.codex32_share_display = (
+            lambda w, h, share, index, total:
+            (rec.append((share, index, total)) or orig_sd(w, h, share,
+                                                          index, total)))
+        try:
+            def backup_run(script, tag):
+                d = work / ("framesF" + tag)
+                sess = corky_main.Session(hal.DevDisplay(d),
+                                          hal.DevButtons(script), rpc=None)
+                sess._tool_backup()
+                return d
+            rec.clear()
+            fd = backup_run("a" + WORDS_SCRIPT + "a" + "a" + "a", "1")
+            assert rec == [(F_SECRET.upper(), 1, 1)], f"F1 drifted: {rec}"
+            rec.clear()
+            fd = backup_run("a" + WORDS_SCRIPT + "da" + "aaa" + "a", "2")
+            assert rec == [(sh.upper(), i + 1, 3)
+                           for i, sh in enumerate(F_SHARES)], f"F2 drifted: {rec}"
+            assert _frames(fd)[-1].read_bytes() == _render(
+                scr.result, ok=True,
+                detail="transcribed; kit worksheets own paper"), \
+                "F2: final frame is not the exact backup-done screen"
+            rec.clear()
+            backup_run("a" + WORDS_SCRIPT + "b", "3")   # abort at split choice
+            assert rec == [], "F3: aborted backup still showed a share"
+            rec.clear()
+            fd = backup_run("a" + WORDS_SCRIPT + "da" + "c", "4")  # C aborts
+            assert len(rec) == 1, "F4: C after share 1 did not stop the flow"
+            assert not _has(fd, _render(
+                scr.result, ok=True,
+                detail="transcribed; kit worksheets own paper")), \
+                "F4: aborted backup still claimed success"
+        finally:
+            scr.codex32_share_display = orig_sd
+        # unit pins: threshold parsing and mainnet/testnet xprv selection
+        th = corky_main.Session._threshold_of
+        assert th(FROZEN_SHARES[0]) == 2, "threshold: k=2 share"
+        assert th(H_SECRET) == 0, "threshold: k=0 secret"
+        assert th("ms11xxxx") == 0, "threshold: '1' is invalid"
+        assert th("msxaxxxx") == 0, "threshold: non-digit"
+        import types as _types
+        cap = []
+        orig_open = corky_main.signer.open_session_xprv
+        corky_main.signer.open_session_xprv = lambda rpc, x: cap.append(x)
+        try:
+            for chain, prefix in (("main", "xprv"), ("regtest", "tprv")):
+                sess = corky_main.Session(
+                    hal.DevDisplay(work / ("framesFx" + chain)),
+                    hal.DevButtons(""), _types.SimpleNamespace(chain=chain))
+                assert sess._codex32_open([H_SECRET]) is True
+                assert cap[-1].startswith(prefix), f"{chain}: wrong xprv net"
+        finally:
+            corky_main.signer.open_session_xprv = orig_open
+        print("ok   F: backup tool pinned to frozen vectors; threshold + "
+              "network unit pins")
 
         print("\nSESSION PASS: word-entry(12/24 picker), xprv-QR, SeedQR, "
               "codex32 shares, QR in/out, stick in/out, refusal, paged review")

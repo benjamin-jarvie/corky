@@ -307,7 +307,7 @@ class Session:
     def _codex32_entry_one(self):
         """Grid entry: d-pad moves the 4x8 cursor, A picks, B deletes,
         C finishes (empty = abort)."""
-        entered, cursor = "", 0
+        entered, cursor = "ms1", 0
         while True:
             self.display.show(screens.codex32_entry(
                 self.w, self.h, entered, cursor), sensitive=True)
@@ -323,9 +323,9 @@ class Session:
             elif key == "a":
                 entered += screens.BECH32_CHARSET[cursor]
             elif key == "b":
-                entered = entered[:-1]
+                entered = entered[:-1] if len(entered) > 3 else entered
             elif key == "c":
-                return entered if entered else None
+                return entered if len(entered) > 3 else None
 
     def state_tools(self):
         selected = 0
