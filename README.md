@@ -205,8 +205,11 @@ algebraically touches.
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, property/fuzz suites cross-checked against independent
-implementations, per-module mutation kill-rates (74–100% on
-secret-touching modules, survivors individually triaged), and two real
+implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
+and 25%→81% on the state machine after mutation-driven test writing
+there exposed and fixed a real bug (typed codex32 entry could never
+type the ms1 separator; the flow was unusable until session G existed) —
+survivors individually triaged, and two real
 mainnet spends — ECDSA
 ([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41))
 and a Taproot Schnorr keyspend
