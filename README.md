@@ -201,10 +201,10 @@ bytes — Core is the only parser, by law
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 1,936 lines — none of it ships on the device.**
+**Test code: 2,168 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, property/fuzz suites cross-checked against independent
+checks, fourteen scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never

@@ -114,6 +114,8 @@ def main():
         txid = rpc.call("sendrawtransaction", final["hex"])
         rpc.call("generatetoaddress", 1, addr)
         assert rpc.call("gettransaction", txid, wallet="watch")["confirmations"] >= 1
+        assert _has(work / "framesA", _render(scr.busy, "signing in Core…")), \
+            "A: signing busy screen missing"
         assert _frames(work / "framesA")[-1].read_bytes() == _render(
             scr.result, ok=True, detail="hui-signed.psbt written"), \
             "A: final frame is not the exact success screen"
@@ -129,6 +131,10 @@ def main():
         assert r.returncode == 0, f"B failed:\n{r.stderr}"
         shots = sorted((work / "framesB").glob("frame-*.png"))
         assert len(shots) > 6, "B: expected QR output frames on screen"
+        lastb = shots[-1].read_bytes()
+        assert any(lastb == _render(scr.result, ok=True,
+                                    detail=f"shown as {n} QR frames")
+                   for n in range(1, 80)), "B: final frame not a QR-out result"
         print(f"ok   B: xprv QR (warning screen shown) -> PSBT via QR -> signed QR out ({len(shots)} frames)")
 
         # ---- Session C: SeedQR + fee-less PSBT refused ----
@@ -373,10 +379,14 @@ def main():
         # ---- Session H3/H4: typed-entry aborts stay closed ----
         r = run_device(datadir, "a" + "ddda" + "c" + "c", work / "framesH3")
         assert r.returncode == 0, f"H3 failed:\n{r.stderr}"
+        assert _frames(work / "framesH3")[-1].read_bytes() == _render(scr.home), \
+            "H3: abort did not land back on the home screen"
         # invalid share -> error -> 'b' declines -> home -> quit
         r = run_device(datadir, "a" + "ddda" + "aaaa" + "c" + "b" + "c",
                        work / "framesH4")
         assert r.returncode == 0, f"H4 failed:\n{r.stderr}"
+        assert _frames(work / "framesH4")[-1].read_bytes() == _render(scr.home), \
+            "H4: error-decline did not land back on the home screen"
         assert _has(work / "framesH4", _render(
             scr.codex32_error,
             "not a valid codex32 string (checksum or format)"[:48])), \
@@ -420,6 +430,9 @@ def main():
                 scr.result, ok=True,
                 detail="transcribed; kit worksheets own paper"), \
                 "F2: final frame is not the exact backup-done screen"
+            for i, sh in enumerate(F_SHARES):
+                assert not _has(fd, _render(orig_sd, sh.upper(), i + 1, 3)), \
+                    "F2: SENSITIVE share screen leaked to a dev frame"
             rec.clear()
             backup_run("a" + WORDS_SCRIPT + "b", "3")   # abort at split choice
             assert rec == [], "F3: aborted backup still showed a share"
@@ -453,6 +466,45 @@ def main():
             corky_main.signer.open_session_xprv = orig_open
         print("ok   F: backup tool pinned to frozen vectors; threshold + "
               "network unit pins")
+
+
+        # ---- Session N: 3-page review, page ORDER pinned frame-by-frame --
+        def paged_run(tag, navkeys):
+            st = work / ("stickN" + tag); st.mkdir()
+            pn = rpc.call("walletcreatefundedpsbt", [],
+                          [{rpc.call("getnewaddress", wallet="watch"): 0.05}
+                           for _ in range(6)],
+                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+            (st / "n.psbt").write_bytes(base64.b64decode(pn))
+            signer.open_session(rpc, MNEMONIC)
+            info = signer.describe_psbt(rpc, pn)
+            signer.close_session(rpc)
+            outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
+            assert (len(outs) + 2) // 3 == 3, "N: expected exactly 3 pages"
+            pages = [_render(scr.review, outs, info["fee_btc"],
+                             info["input_count"],
+                             input_total_btc=info["input_total_btc"], page=i)
+                     for i in range(3)]
+            sq = work / ("sq_n" + tag + ".txt")
+            sq.write_text("0000" * 11 + "0003")
+            r = run_device(datadir, "a" + "a" + navkeys,
+                           work / ("framesN" + tag), stick=st, qr_key=sq)
+            assert r.returncode == 0, f"N{tag} failed:\n{r.stderr}"
+            assert (st / "n-signed.psbt").exists(), f"N{tag}: sign missing"
+            seq = []
+            for f in _frames(work / ("framesN" + tag)):
+                raw = f.read_bytes()
+                for i, pg in enumerate(pages):
+                    if raw == pg:
+                        seq.append(i)
+            return seq
+        # navigate d,d,u,u then sign: displayed pages must be 0,1,2,1,0
+        assert paged_run("1", "dduua") == [0, 1, 2, 1, 0], \
+            "N1: page navigation order drifted"
+        # forced advance a,a,a: gate walks 0,1,2 in order before signing
+        assert paged_run("2", "aaa") == [0, 1, 2], \
+            "N2: forced-advance page order drifted"
+        print("ok   N: 3-page review order pinned (nav and forced advance)")
 
         print("\nSESSION PASS: word-entry(12/24 picker), xprv-QR, SeedQR, "
               "codex32 shares, QR in/out, stick in/out, refusal, paged review")
