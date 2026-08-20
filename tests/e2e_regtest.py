@@ -30,6 +30,10 @@ WATCH = "watcher"
 
 def main():
     datadir = tempfile.mkdtemp(prefix="corky-regtest-")
+    import random as _rnd
+    _port = _rnd.randint(20000, 60000)
+    (Path(datadir) / "bitcoin.conf").write_text(
+        "regtest=1\n[regtest]\nrpcport=%d\n" % _port)
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
          "-fallbackfee=0.0001", "-server=1"],

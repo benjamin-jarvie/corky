@@ -39,6 +39,10 @@ def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
 
 def main():
     datadir = tempfile.mkdtemp(prefix="corky-sess-")
+    import random as _rnd
+    _port = _rnd.randint(20000, 60000)
+    (Path(datadir) / "bitcoin.conf").write_text(
+        "regtest=1\n[regtest]\nrpcport=%d\n" % _port)
     work = Path(tempfile.mkdtemp(prefix="corky-sess-work-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
@@ -149,10 +153,15 @@ def main():
         sys.path.insert(0, str(ROOT / "corky"))
         import codex32 as c32
         seed = bytes(range(32))
-        ident = "corq"[:4].replace("o", "q")  # bech32-safe: 'cqrq'? build safely below
-        ident = "".join(ch for ch in "cqr0")
-        secret = c32.encode_secret(ident, seed, threshold=0)
-        # deterministic split entropy, mirroring the device's method
+        ident = "cqr0"
+        # FROZEN vectors: computed once from the device's derivation and
+        # pinned here as independent expectations — the test must NOT
+        # re-derive them with the same code it is checking (tautology).
+        FROZEN_SHARES = [
+            "ms12cqr0a94fnp8pnd9j8lkl86yepyt6xwnvucpq77mcxrzhrzrr447fz6gdhx9flxvjeaa7s8",
+            "ms12cqr0cuazrcemugr5eefvj8k688hv6v3zgjc3mahwfpu474ak29yz3qe2f6tvs9vz0whcvf",
+            "ms12cqr0d5xdusu82az4ucq8ck3wxn2j85fcw3szwf4sleed08cur6cd6u28v83ex3va395e3n",
+        ]
         import hmac as hm, hashlib as hl
         rand = b""
         i = 0
@@ -160,6 +169,7 @@ def main():
             rand += hm.new(seed, b"corky-split-v1" + bytes([i]), hl.sha512).digest()
             i += 1
         shares = c32.split(seed, 2, 3, ident, rand[:64])
+        assert shares == FROZEN_SHARES, "split derivation drifted from frozen vectors"
         key_file = work / "c32shares.txt"
         key_file.write_text("\n".join(shares[:2]))
         sticke = work / "stickE"; sticke.mkdir()

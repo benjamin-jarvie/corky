@@ -160,6 +160,50 @@ Out of scope for v1: multisig, message signing, address explorer, dice entropy,
 and on-device seed generation. Corky signs for seeds that already live on metal;
 it deliberately has no entropy story of its own.
 
+
+## Bitcoin Core + 1,902 lines: audit the whole device in an afternoon
+
+Corky's pitch in numbers: everything that runs on the device is **Bitcoin
+Core plus 1,902 lines of our Python** (1,379 excluding blanks and
+comments). No line of ours performs elliptic-curve cryptography or parses
+an untrusted PSBT — Core does both. Counted 2026-08-20; the table is the
+audit map:
+
+| Group | File | Lines | What it does / what it must never do |
+|---|---|---|---|
+| **Secret-touching, frozen** | [`shim/bip39_shim.py`](shim/bip39_shim.py) | 92 | BIP39 words → xprv. Stdlib hashing only. Hash pinned in [`SHIM_HASH`](SHIM_HASH) |
+| | [`corky/codex32.py`](corky/codex32.py) | 350 | BIP93 encode/split/recover/verify, BIP's own reference arithmetic. Hash pinned in [`SHIM_HASH`](SHIM_HASH) |
+| Signing plumbing | [`corky/signer.py`](corky/signer.py) | 195 | Drives Core over RPC. No cryptography |
+| Transfer channels | [`corky/filechannel.py`](corky/filechannel.py) | 84 | PSBT files on a stick. Opaque bytes only |
+| | [`corky/qrchannel.py`](corky/qrchannel.py) | 101 | BC-UR animated QR. One documented framing exception |
+| | [`corky/seedqr.py`](corky/seedqr.py) | 65 | SeedQR digits → words. No keys touched |
+| UI / device | [`corky/main.py`](corky/main.py) | 577 | The state machine. Traffic cop, no crypto |
+| | [`corky/screens.py`](corky/screens.py) | 354 | PIL renders. Pixels only |
+| | [`corky/hal.py`](corky/hal.py) | 84 | Buttons and display glue |
+| **Total ours** | | **1,902** | |
+
+Not counted as ours, and not asking for your trust in the same way:
+
+- [`hw/vendor/`](hw/vendor/) — 2,219 lines vendored unmodified from
+  SeedSigner (display drivers, BC-UR codec; MIT/BSD, attribution in each
+  file). Integration points are ours; the code is theirs and upstream.
+- [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py) — 2,614
+  lines of tests: more test than device. The campaign behind them: a
+  90-cell signing matrix, 28 adversarial checks, property/fuzz suites
+  cross-checked against independent implementations, per-module mutation
+  kill-rates (74–100% on secret-touching modules, survivors individually
+  triaged), and two real mainnet spends — one ECDSA
+  ([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41)),
+  one Taproot Schnorr keyspend
+  ([`0ee96d29…`](https://mempool.space/tx/0ee96d2995f73768f071954c5b116fcb894847289a94dbe313e6b8615cd9981d)).
+- Run everything: [`./run_tests.sh`](run_tests.sh) (fast suites), with
+  `RUN_NODE=1` for the full bitcoind set.
+
+The frozen files cannot drift silently:
+[`tests/test_integrity.py`](tests/test_integrity.py) fails the suite if a
+pinned hash stops matching, and the wordlist's tamper-refusal is itself
+tested.
+
 ## Audit record
 
 The codebase has passed four independent review lenses with converging

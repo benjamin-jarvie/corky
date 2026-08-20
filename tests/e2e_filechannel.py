@@ -24,6 +24,10 @@ MNEMONIC = "abandon " * 11 + "about"
 
 def main():
     datadir = tempfile.mkdtemp(prefix="corky-fc-")
+    import random as _rnd
+    _port = _rnd.randint(20000, 60000)
+    (Path(datadir) / "bitcoin.conf").write_text(
+        "regtest=1\n[regtest]\nrpcport=%d\n" % _port)
     stick = Path(tempfile.mkdtemp(prefix="corky-stick-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
