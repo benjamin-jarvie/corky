@@ -106,6 +106,50 @@ except qrchannel.QrChannelError as exc:
         failures.append(f"oversized frame wrong error: {exc}")
         print(f"FAIL oversized frame wrong error: {exc}")
 
+# 7. Rejection REASON is pinned per cause, not just the exception type.
+#    Each branch of feed() must raise its own exact message, so a change
+#    to any one message string is caught.
+reason_cases = [
+    ("ur:crypto-psbt/" + "a" * (3001 - len("ur:crypto-psbt/")),
+     "QR frame too large, refusing"),          # size branch, fixed 3001 len
+    ("ur:crypto-seed/aaaa", "not a crypto-psbt UR frame"),   # prefix branch
+    ("ur:crypto-psbt/<script>", "frame contains invalid characters"),  # charset
+]
+for frame, want in reason_cases:
+    try:
+        qrchannel.FrameAssembler().feed(frame)
+        failures.append(f"reason case accepted: {want}")
+        print(f"FAIL reason case accepted: {want}")
+    except qrchannel.QrChannelError as exc:
+        if str(exc) == want:
+            print(f"ok   exact rejection message: {want}")
+        else:
+            failures.append(f"wrong message: got {exc!r} want {want!r}")
+            print(f"FAIL wrong message: got {exc!r} want {want!r}")
+
+# 8. A frame of length exactly MAX_FRAME_CHARS+1 = 3001 (hardcoded, not
+#    derived from the constant) must be refused for size. This pins the
+#    cap value itself: raising the cap by one lets this frame through.
+sized = "ur:crypto-psbt/" + "a" * (3001 - len("ur:crypto-psbt/"))
+assert len(sized) == 3001
+try:
+    qrchannel.FrameAssembler().feed(sized)
+    failures.append("3001-char frame not refused (MAX_FRAME_CHARS raised?)")
+    print("FAIL 3001-char frame not refused")
+except qrchannel.QrChannelError as exc:
+    assert "too large" in str(exc), f"3001-char frame wrong reason: {exc}"
+    print("ok   3001-char frame refused for size (MAX_FRAME_CHARS==3000)")
+
+# 9. frames_to_images defaults (box_size=4, border=2) pin the render scale.
+#    Rendering with the defaults must equal an explicit box_size=4/border=2
+#    render; a changed default shifts the pixel size and breaks this.
+_bframe = qrchannel.psbt_to_frames(
+    base64.b64encode(bytes(range(256)) * 2).decode(), max_fragment_len=400)[0]
+_def = qrchannel.frames_to_images([_bframe])[0].size
+_exp = qrchannel.frames_to_images([_bframe], box_size=4, border=2)[0].size
+assert _def == _exp, f"default render scale changed: {_def} != {_exp}"
+print(f"ok   frames_to_images defaults pin box_size=4/border=2 ({_def[0]}px)")
+
 if failures:
     sys.exit(1)
 print("\nQR CHANNEL PASS: static, animated, lossy-camera and hostile-input cases")

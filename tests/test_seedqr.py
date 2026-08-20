@@ -49,4 +49,30 @@ try:
 except seedqr.SeedQrError:
     print("ok   17-byte entropy length rejected")
 
+# Every valid COMPACT entropy length (16/20/24/28/32 bytes) must decode.
+# This pins the length tuple in decode_compact: an off-by-one on any
+# boundary makes that length raise instead of producing a mnemonic.
+for nbytes, nwords in [(16, 12), (20, 15), (24, 18), (28, 21), (32, 24)]:
+    w = seedqr.decode(bytes(nbytes))
+    assert len(w.split()) == nwords, f"{nbytes}-byte compact -> {w}"
+print("ok   all compact entropy lengths (16/20/24/28/32) decode")
+
+# Every valid STANDARD digit-stream length (48/60/72/84/96) must decode.
+# Pins the length tuple in decode_standard.
+for ndigits, nwords in [(48, 12), (60, 15), (72, 18), (84, 21), (96, 24)]:
+    w = seedqr.decode("0000" * (ndigits // 4))
+    assert len(w.split()) == nwords, f"{ndigits} digits -> {w}"
+print("ok   all standard digit lengths (48/60/72/84/96) decode")
+
+# The bytes-first routing must send EVERY entropy-sized all-ASCII-digit
+# payload to decode_compact, not decode_standard. Pins the length tuple in
+# decode(): if a boundary is dropped, that payload falls through to
+# decode_standard, which rejects the (wrong) digit-stream length.
+for nbytes, nwords in [(16, 12), (20, 15), (24, 18), (28, 21), (32, 24)]:
+    payload = ("1" * nbytes).encode("ascii")
+    assert len(payload) == nbytes
+    w = seedqr.decode(payload)
+    assert len(w.split()) == nwords, f"{nbytes} ascii-digit bytes -> {w}"
+print("ok   all ASCII-digit byte lengths route to compact (bytes-first)")
+
 print("\nSEEDQR PASS")
