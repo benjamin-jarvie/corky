@@ -214,8 +214,8 @@ compromised vendor, and neither defends against both.
 
 **Who you still depend on after the sale.** The 2026 Coldcard incident
 surfaced a fourth question that the first three hide: after you buy a
-signer, what still requires its maker? The property long-time Coldcard
-users named as the real loss was not a feature but a freedom: a device
+signer, what still requires its maker? The property [Shinobi named](https://x.com/brian_trollz/status/2090155610994065573)
+as the real loss was not a feature but a freedom: a device
 that never required the vendor's app to generate keys, to sign, or to
 update firmware, and never sent an xpub to a vendor server during setup.
 Most reputable hardware wallets fail at least one of those tests, and a
@@ -226,7 +226,7 @@ today are the DIY and Core-based classes, which buy the freedom with
 labor; the assessment each person must make is how much vendor
 dependency they accept, and whether they could keep operating, and
 eventually replace, every component of their setup if its maker vanished
-or turned. One security consultant framed the goal precisely: design the
+or turned. Tony of The Bitcoin Way [framed the goal precisely](https://x.com/v4btc/status/2090159244981211599): design the
 setup so that no manufacturer, application, server, firmware ecosystem,
 or single device becomes a dependency you cannot escape.
 

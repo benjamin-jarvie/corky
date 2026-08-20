@@ -124,8 +124,9 @@ loop at all:
 If this project disappeared tomorrow, every Corky keeps working
 forever, and this repo builds new ones. The honest asterisk: the same
 commentator excluded DIY devices from consideration, and Corky is one.
-That is the price of the property today; an assembled device changes
-the labor, not the architecture.
+That is the price of the property today: Corky is DIY while we perfect
+it. An assembled device would change the labor, not the architecture,
+and may come later.
 
 ## The trade-offs, before critics find them
 
@@ -190,15 +191,20 @@ OS and no secure element, mitigated by statelessness (a seized Corky
 holds nothing) rather than by tamper-resistant silicon.
 
 **Open source is not, by itself, a security claim.** Source
-availability is an inspection property; it does not transfer integrity
-onto silicon, and "many eyes" is not a threat model. Corky does not ask
-you to believe it is secure because it is readable. The claims are
-narrower and measured: the reviewed reference implementation does the
-cryptography; our 354 secret-touching lines are frozen, hash-pinned,
-and vector-tested against independent implementations; the test suite's
-fault-detection is mutation-measured per module; and the signing path
-is proven on mainnet. Read the code because you can; trust the
-measurements because they are reproducible.
+availability is an inspection property, and "many eyes" is a hope, not a
+threat model: nobody reviews code for free, and we do not pretend
+otherwise. Corky's trust story, in honest order: first, the cryptography
+is Bitcoin Core's and the reviewed reference implementations', already
+the most-reviewed lines in Bitcoin. Second, our 354 secret-touching
+lines are small enough for one person to read in an afternoon;
+smallness, not testing, is what makes real review possible. Third, the
+test suite's fault-detection is mutation-measured per module so you can
+judge the tests instead of taking them on faith, and the signing path is
+proven on mainnet; these numbers measure verification depth against the
+failures we modeled, and an attacker is not limited to our imagination.
+Fourth, no independent security audit exists yet. Until one does, that
+is a named open trust, and this section exists so nobody carries it
+unknowingly.
 
 **One maintainer, pinned versions.** Each release is a pinned tuple
 (OS image, Core version, front-end commit) that updates only by reflash.
