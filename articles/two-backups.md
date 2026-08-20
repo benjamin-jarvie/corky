@@ -212,6 +212,41 @@ hash-verified build. Anti-exfil
 defends against a compromised build, transparency defends against a
 compromised vendor, and neither defends against both.
 
+**Who you still depend on after the sale.** The 2026 Coldcard incident
+surfaced a fourth question that the first three hide: after you buy a
+signer, what still requires its maker? The property long-time Coldcard
+users named as the real loss was not a feature but a freedom: a device
+that never required the vendor's app to generate keys, to sign, or to
+update firmware, and never sent an xpub to a vendor server during setup.
+Most reputable hardware wallets fail at least one of those tests, and a
+setup performed on an online computer with the vendor's companion app
+typically discloses your extended public keys, and therefore your entire
+balance history, to that vendor. The systems that pass all four tests
+today are the DIY and Core-based classes, which buy the freedom with
+labor; the assessment each person must make is how much vendor
+dependency they accept, and whether they could keep operating, and
+eventually replace, every component of their setup if its maker vanished
+or turned. One security consultant framed the goal precisely: design the
+setup so that no manufacturer, application, server, firmware ecosystem,
+or single device becomes a dependency you cannot escape.
+
+A second honest note from the same debate: open source is an inspection
+property, not by itself a security property. Source availability lets
+you verify software you compile and run; on a hardware device it cannot
+prove that what runs is what you loaded (that requires attestation, which
+open DIY devices lack), it cannot open the chip's own black-box
+firmware, and "many eyes" is a hope, not a threat model. Secure-element
+vendors make this argument in defense of their closed layers, and the
+argument is sound as far as it goes; what it purchases in physical-attack
+resistance it pays for in vendor dependency and unauditable code, which
+is the same trade this whole section describes, taken from the other
+end. Neither side of it is free. And one principle survived the incident
+intact on all sides: risk isolation and attack-surface minimization,
+keys on a dedicated, single-purpose, offline device, remain correct even
+when one implementation of them fails. A flawed signer does not argue
+for keys on a networked general-purpose computer; it argues for signers
+whose failures you can survive.
+
 ## Phase 3: Seed at rest, or the two backups
 
 Now the phase where most coins are actually lost, and the distinction the
@@ -384,6 +419,10 @@ chose on purpose, on hardware whose radios are absent rather than
 promised off. Words on steel for the secret, a descriptor on paper for
 the map, splitting when privacy of the backup itself matters. None of
 this removes trust; it relocates trust to places where lying is hard.
+And run the dependency test on the result: if any single maker, app, or
+server in your setup disappeared tomorrow, could you still generate,
+sign, update, and recover? Every "no" is a trust you are carrying,
+whether or not you knew its name.
 
 The words were never your wallet. They were one third of one phase of it.
 Now you have the map.

@@ -98,6 +98,35 @@ The wordlist must hash to the canonical BIP39 value
 in `SHIM_HASH` at the repo root and updated only with a passing vector run.
 
 
+## The freedom property
+
+The 2026 Coldcard incident taught the market a lesson bigger than one
+device: the rarest property in hardware custody is not a feature, it is
+independence. As one long-time Coldcard user put it after the incident,
+what was lost was a device that never required the vendor's app to
+generate keys, sign, or update firmware, and never leaked an xpub to a
+vendor server at setup: "you did not depend on Coinkite in any way to
+actually use your device after you bought it from them."
+
+Corky has that property structurally, because there is no vendor in the
+loop at all:
+
+- **Key generation** needs no app and no server: cards, dice, words, a
+  codex32 share set, or Bitcoin Core's own RNG on the device.
+- **Signing** speaks PSBT files and BC-UR QR codes: any coordinator,
+  any decade.
+- **"Firmware" updates** are a pinned image you build and flash
+  yourself, from this repo, from a fork, or never. No update server
+  exists. Nothing phones home because there is nothing to phone.
+- **Nobody learns your xpubs**: setup touches no network by
+  construction.
+
+If this project disappeared tomorrow, every Corky keeps working
+forever, and this repo builds new ones. The honest asterisk: the same
+commentator excluded DIY devices from consideration, and Corky is one.
+That is the price of the property today; an assembled device changes
+the labor, not the architecture.
+
 ## The trade-offs, before critics find them
 
 **Corky's trusted computing base is large, on purpose.** SeedSigner and Krux
@@ -136,6 +165,40 @@ whose nonces you must distrust. These are different mitigations with
 different failure modes; anti-exfil protects against a compromised *build*,
 transparency protects against a compromised *vendor*. If anti-exfil is your
 requirement, Corky cannot meet it today.
+
+**No attestation, no tamper resistance.** A secure-element vendor can
+argue you cannot know that what runs on any device is what you loaded,
+and Corky has no cryptographic attestation to answer with. Our answer is
+relocation, not denial: the hardware is commodity silicon with nothing
+wallet-shaped to intercept in a supply chain, and the software is a
+pinned, hash-published image you flash yourself, so "what runs" narrows
+to "what you flashed onto a generic board." The SoC itself remains a
+black box, as it does for every device on the market. If hardware
+attestation is your requirement, a secure-element device serves it and
+Corky does not.
+
+**"Isn't this just Bitcoin Core on a computer?"** No, and the
+distinction is the whole design: running Core on a networked
+general-purpose machine as a wallet is exactly what security
+practitioners rightly call reckless. Corky is Core as a single-purpose,
+stateless, offline cold signer: no network stack in the release image,
+no radios in the silicon, no persistence, one job. The principles the
+industry defends — risk isolation, attack-surface minimization,
+dedicated devices for keys — are this device's shape. The remaining
+honest gap against purpose-built hardware is physical: a general-purpose
+OS and no secure element, mitigated by statelessness (a seized Corky
+holds nothing) rather than by tamper-resistant silicon.
+
+**Open source is not, by itself, a security claim.** Source
+availability is an inspection property; it does not transfer integrity
+onto silicon, and "many eyes" is not a threat model. Corky does not ask
+you to believe it is secure because it is readable. The claims are
+narrower and measured: the reviewed reference implementation does the
+cryptography; our 354 secret-touching lines are frozen, hash-pinned,
+and vector-tested against independent implementations; the test suite's
+fault-detection is mutation-measured per module; and the signing path
+is proven on mainnet. Read the code because you can; trust the
+measurements because they are reproducible.
 
 **One maintainer, pinned versions.** Each release is a pinned tuple
 (OS image, Core version, front-end commit) that updates only by reflash.
