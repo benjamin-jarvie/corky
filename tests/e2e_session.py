@@ -114,7 +114,22 @@ def main():
                        stick=stickc, qr_key=seedqr_file)
         assert r.returncode == 0, f"C failed:\n{r.stderr}"
         assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
-        print("ok   C: SeedQR entry -> fee-less PSBT refused, nothing signed")
+        # Golden-frame: the LAST rendered frame must be byte-identical to
+        # the refusal screen (ok=False). Kills visual-lie mutants (e.g.
+        # ok False->True showing success on a refusal) that no logic
+        # assertion can see. PIL renders are deterministic.
+        sys.path.insert(0, str(ROOT / "corky"))
+        import screens as scr
+        import io
+        last = sorted((work / "framesC").glob("frame-*.png"))[-1]
+        buf = io.BytesIO()
+        scr.result(320, 240, ok=False,
+                   detail="PSBT lacks input data; fee unknown — refused"
+                   ).save(buf, format="PNG")
+        assert last.read_bytes() == buf.getvalue(), \
+            "C: final frame is not the exact refusal screen (visual lie?)"
+        print("ok   C: SeedQR entry -> fee-less PSBT refused, nothing signed; "
+              "refusal frame golden-verified")
 
         # ---- Session D: many-output PSBT forces paged review ----
         stickd = work / "stickD"; stickd.mkdir()
@@ -148,6 +163,34 @@ def main():
             "D2: PSBT signed with a page unseen — paging gate is broken!"
         print("ok   D: paged review — signs only after all pages seen, "
               "blocks when one is unseen")
+
+        # ---- Session D3: paging NAVIGATION (u/d, wraparound) ----
+        # Mutation testing showed the u/d paths and modulo arithmetic were
+        # never exercised: D only force-advanced via 'a'. Here all pages
+        # are seen by real navigation, both directions.
+        stickd3 = work / "stickD3"; stickd3.mkdir()
+        many3 = rpc.call("walletcreatefundedpsbt", [],
+                         [{a: v} for a, v in dests.items()],
+                         0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickd3 / "many.psbt").write_bytes(base64.b64decode(many3))
+        sq4 = work / "seedqr4.txt"; sq4.write_text("0000" * 11 + "0003")
+        # review: d (page1), u (page0), d (page1), a -> all seen via nav
+        r = run_device(datadir, "a" + "a" + "duda", work / "framesD3",
+                       stick=stickd3, qr_key=sq4)
+        assert r.returncode == 0, f"D3 failed:\n{r.stderr}"
+        assert (stickd3 / "many-signed.psbt").exists(), "D3: nav-sign missing"
+        # wraparound: u from page0 lands on page1 ((0-1)%2)
+        stickd4 = work / "stickD4"; stickd4.mkdir()
+        many4 = rpc.call("walletcreatefundedpsbt", [],
+                         [{a: v} for a, v in dests.items()],
+                         0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickd4 / "many.psbt").write_bytes(base64.b64decode(many4))
+        sq5 = work / "seedqr5.txt"; sq5.write_text("0000" * 11 + "0003")
+        r = run_device(datadir, "a" + "a" + "ua", work / "framesD4",
+                       stick=stickd4, qr_key=sq5)
+        assert r.returncode == 0, f"D4 failed:\n{r.stderr}"
+        assert (stickd4 / "many-signed.psbt").exists(), "D4: wraparound broken"
+        print("ok   D3/D4: paging navigation u/d + wraparound exercised")
 
         # ---- Session E: codex32 shares (scan) open the wallet ----
         sys.path.insert(0, str(ROOT / "corky"))
