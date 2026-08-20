@@ -98,12 +98,13 @@ code in existence. These are opposite philosophies and neither wins outright.
 If "least code" is your definition of a signer, use SeedSigner; it is a good
 one. Corky exists for people whose definition is "Core's code".
 
-**The radios are still on the board.** The Pi Zero 2 W physically contains
-WiFi and Bluetooth. Corky disables them in firmware and blacklists the
-drivers, and the build docs describe removing the wireless front-end
-component for hardware-level assurance. Until you do that step, call this
-device radio-disabled, not air-gapped-by-physics. The Zero 1.3 has no radio
-at all but cannot run Core's published binaries.
+**Radios: absent on the primary build, present on the pocket build.** The
+CM4 Lite (v1 hardware, PLAN A-15) is manufactured without wireless
+silicon, so there is nothing to disable. The Pi Zero 2 W pocket build is
+different: it carries WiFi and Bluetooth on the die, disabled in firmware
+with the drivers blacklisted, and the build docs describe removing the
+wireless front-end component for hardware-level assurance. On that build,
+call the device radio-disabled, not air-gapped-by-physics.
 
 **No secure element, no PIN.** Same position as SeedSigner: statelessness is
 the substitute. The device holds nothing worth extracting; the seed lives on
@@ -161,14 +162,14 @@ and on-device seed generation. Corky signs for seeds that already live on metal;
 it deliberately has no entropy story of its own.
 
 
-## The code, in layers: Core + 340 lines that matter + a body
+## The code, in layers: Core + 354 lines that matter + a body
 
 Corky is Bitcoin Core plus a small body of our Python. The body is
 layered so the number that matters for trust stays tiny. Counted
 2026-08-20 as lines of functional code (blanks and comments excluded);
 file links are the audit map.
 
-**Layer 1 — transforms secret material. 340 lines. Frozen, hash-pinned.**
+**Layer 1 — transforms secret material. 354 lines. Frozen, hash-pinned.**
 The only code of ours that ever computes on a seed or key. Stdlib only,
 no elliptic-curve math anywhere, hashes pinned in
 [`SHIM_HASH`](SHIM_HASH) and enforced by
@@ -177,17 +178,17 @@ no elliptic-curve math anywhere, hashes pinned in
 | File | Code lines | Does |
 |---|---|---|
 | [`shim/bip39_shim.py`](shim/bip39_shim.py) | 54 | BIP39 words → xprv |
-| [`corky/codex32.py`](corky/codex32.py) | 246 | BIP93: the BIP's own reference arithmetic |
+| [`corky/codex32.py`](corky/codex32.py) | 260 | BIP93: the BIP's own reference arithmetic |
 | [`corky/seedqr.py`](corky/seedqr.py) | 40 | SeedQR digits → words |
 
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 815 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 785 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (475) ·
-[`corky/screens.py`](corky/screens.py) (291) ·
+[`corky/main.py`](corky/main.py) (442) ·
+[`corky/screens.py`](corky/screens.py) (294) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
 **Layer 3 — never touches secrets at all. 224 lines.**
@@ -197,14 +198,14 @@ secret material during entry but performs no cryptography on it.
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,379 lines** (1,902 with blanks/comments).
+**Total functional code: 1,363 lines** (1,906 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,254 lines — none of it ships on the device.**
+**Test code: 2,282 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, fourteen scripted device sessions, property/fuzz suites cross-checked against independent
+checks, 8 scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never
@@ -270,4 +271,4 @@ that wallet-only bitcoind fits and signs on the Zero 2 W's 512MB
 | M1 | QR round trip vs Sparrow watch-only, testnet | fee/outputs match Sparrow; signed PSBT broadcasts |
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |
-| M4 | mainnet trial | small-sats spend from a metal-backed seed |
+| M4 | mainnet trial | software path proven on real funds (ECDSA + Taproot, both confirmed); on-device trial pending hardware |

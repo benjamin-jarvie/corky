@@ -2,7 +2,14 @@
 *Extracted from the SeedSigner repo (MIT) 2026-08-17, so the UI layer targets
 Ben's exact kit with zero guesswork.*
 
-## The kit (identical to a SeedSigner build, board swapped)
+## The kit
+
+**v1 primary build (PLAN A-15):** Raspberry Pi CM4 Lite, no-wireless, 2GB
+(CM4002000) on a Waveshare CM4-IO-BASE-B carrier, with Ben's SeedSigner+
+hat (2.8" ST7789 320x240, d-pad + keys) on the carrier's 40-pin header,
+and a camera on the carrier's CSI port. Parts list: ../ORDER.md.
+
+**Pocket build (also supported):** the SeedSigner-shaped original —
 
 - Raspberry Pi Zero 2 W
 - WaveShare 1.3" LCD hat: 240×240 IPS, ST7789 controller, RGB565, plus a

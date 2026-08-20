@@ -25,9 +25,10 @@ for line in (ROOT / "SHIM_HASH").read_text().splitlines():
     if line.strip():
         h, _, path = line.strip().partition("  ")
         pins[path] = h
-expected_pinned = {"shim/bip39_shim.py", "corky/codex32.py"}
+expected_pinned = {"shim/bip39_shim.py", "corky/codex32.py",
+                   "corky/seedqr.py"}
 if set(pins) == expected_pinned:
-    ok("SHIM_HASH pins exactly the two frozen modules")
+    ok("SHIM_HASH pins exactly the three frozen Layer-1 modules")
 else:
     fail(f"SHIM_HASH pins {set(pins)}, expected {expected_pinned}")
 for path, pinned in pins.items():

@@ -369,6 +369,29 @@ check_raises("identifier 3 chars rejected", encode_secret, "tes", bytes(16), 0)
 check_raises("identifier 5 chars rejected", encode_secret, "tests", bytes(16), 0)
 
 print()
+# --- Backup round-trip: the bug that shipped a DIFFERENT wallet ---------
+# _tool_backup encodes the seed the words produce. If it truncates or
+# transforms that seed, restoring from the share opens another wallet
+# silently. Pin the identity: words -> xprv MUST equal
+# words -> seed -> codex32 -> decode -> xprv, for 12 and 24 words.
+import sys as _s
+_s.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
+from bip39_shim import mnemonic_to_seed, mnemonic_to_xprv  # noqa: E402
+for _mn in ("abandon " * 11 + "about",
+            "zoo " * 23 + "vote"):
+    _seed = mnemonic_to_seed(_mn)
+    _ident = codex32.derive_identifier(_seed)
+    _secret = codex32.encode_secret(_ident, _seed, threshold=0)
+    _, _back = codex32.decode_secret(codex32.validate(_secret))
+    check(f"backup round-trip ({len(_mn.split())} words): same wallet",
+          codex32.to_xprv(_back), mnemonic_to_xprv(_mn))
+    # and via a 2-of-3 split, recovered from two shares
+    _shares = codex32.split(_seed, 2, 3, _ident,
+                            codex32.derive_split_entropy(_seed, 2, 3))
+    _, _rec = codex32.decode_secret(codex32.recover(_shares[:2]))
+    check(f"split round-trip ({len(_mn.split())} words): same wallet",
+          codex32.to_xprv(_rec), mnemonic_to_xprv(_mn))
+
 if FAILURES:
     print(f"{len(FAILURES)} FAILURES")
     for f in FAILURES:

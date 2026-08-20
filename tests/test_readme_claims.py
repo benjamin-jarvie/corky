@@ -101,13 +101,25 @@ if c is not None:
         bad(f"vendored: README {c}, actual {vend}")
 
 # Every file the README links must exist
-for link in set(re.findall(r"\]\((?!http)([^)#]+)\)", README)):
-    if (ROOT / link).exists():
-        continue
-    bad(f"README links a missing path: {link}")
-else:
+broken = [l for l in set(re.findall(r"\]\((?!http)([^)#]+)\)", README))
+          if not (ROOT / l).exists()]
+for l in broken:
+    bad(f"README links a missing path: {l}")
+if not broken:
     ok("every relative README link resolves")
 
+# Prose figures the README asserts about the test campaign.
+import subprocess
+sess = len(re.findall(r'print\("ok   [A-Z]:', (ROOT / "tests" / "e2e_session.py").read_text()))
+c = claimed(r"([\d]+) scripted device sessions", "device sessions")
+if c is not None:
+    ok(f"device sessions: {c} == {sess}") if c == sess else \
+        bad(f"device sessions: README {c}, actual {sess}")
+adv = (ROOT / "tests" / "test_adversarial.py").read_text()
+n_attacks = len(re.findall(r"^# *\d+\.|^ATTACK", adv, re.M)) or adv.count("attack(")
+c = claimed(r"([\d]+) adversarial\s*\n?checks", "adversarial checks")
+if c is not None and n_attacks:
+    ok(f"adversarial: README {c} vs {n_attacks} labelled attacks (informational)")
 if fails:
     print("\n" + "\n".join(fails))
     sys.exit(1)

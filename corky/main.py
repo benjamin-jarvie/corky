@@ -34,8 +34,6 @@ import filechannel
 import qrchannel
 import seedqr
 import hal
-import hashlib
-import hmac as _hmac
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 from bip39_shim import load_wordlist  # noqa: E402  (word entry candidates)
@@ -147,43 +145,18 @@ class Session:
 
     def _seed_seedqr(self):
         self.display.show(screens.busy(self.w, self.h, "scan your SeedQR…"))
-        return self._open_words(seedqr.decode(self.qr.scan_key()))
+        raw = self.qr.scan_key()
+        if len(raw) > MAX_KEY_PAYLOAD:
+            raise RuntimeError("SeedQR payload too large, refusing")
+        return self._open_words(seedqr.decode(raw))
 
     def _seed_words(self):
-        """Button-driven word entry. Per letter: u/d cycles a-z, a appends.
-        r opens the candidate list (u/d select, a accept word), b backspaces."""
-        total = self._pick_seed_length()
-        if total is None:
+        """Button-driven word entry (see _collect_words for the loop)."""
+        words = self._collect_words()
+        if not words:
             return False
-        words = []
-        while len(words) < total:
-            prefix, cursor = "", 0
-            while True:
-                candidates = [w for w in self.wordlist
-                              if w.startswith(prefix)][:4]
-                self.display.show(screens.seed_entry(
-                    self.w, self.h, len(words) + 1, total,
-                    prefix + string.ascii_lowercase[cursor],
-                    tuple(candidates)), sensitive=True)
-                key = self.buttons.read()
-                if key == "u":
-                    cursor = (cursor - 1) % 26
-                elif key == "d":
-                    cursor = (cursor + 1) % 26
-                elif key == "a":
-                    prefix += string.ascii_lowercase[cursor]
-                    cursor = 0
-                elif key == "b":
-                    prefix = prefix[:-1]
-                elif key == "c":
-                    return False          # abort word entry entirely
-                elif key == "r" and candidates:
-                    word = self._pick_candidate(candidates, len(words) + 1,
-                                                total)
-                    if word:
-                        words.append(word)
-                        break
         return self._open_words(" ".join(words))
+
 
     def _pick_seed_length(self):
         selected = 0
@@ -220,12 +193,7 @@ class Session:
         while True:
             key = self.buttons.read()
             if key == "a":
-                raw = self.qr.scan_key()
-                if len(raw) > MAX_KEY_PAYLOAD:
-                    raise RuntimeError("key payload too large, refusing")
-                payload = raw.decode("ascii").strip()
-                if not set(payload) <= _KEY_CHARSET:
-                    raise RuntimeError("key payload has invalid characters")
+                payload = self._scan_key_guarded().strip()
                 self.display.show(screens.busy(self.w, self.h,
                                                "importing into Core…"))
                 return payload
@@ -267,9 +235,20 @@ class Session:
         signer.open_session_xprv(self.rpc, xprv)
         return True
 
+    def _scan_key_guarded(self):
+        """The single guarded reader for camera key payloads: length cap
+        and charset check before anything downstream sees it (PLAN A-11)."""
+        raw = self.qr.scan_key()
+        if len(raw) > MAX_KEY_PAYLOAD:
+            raise RuntimeError("key payload too large, refusing")
+        text = raw.decode("ascii")
+        if not set(text) <= _KEY_CHARSET:
+            raise RuntimeError("key payload has invalid characters")
+        return text
+
     def _seed_codex32_scan(self):
         self.display.show(screens.codex32_scan(self.w, self.h))
-        payload = self.qr.scan_key().decode("ascii")
+        payload = self._scan_key_guarded()
         shares = [ln.strip() for ln in payload.splitlines() if ln.strip()]
         shares = [codex32.validate(sh) for sh in shares]
         return self._codex32_open(shares)
@@ -346,11 +325,12 @@ class Session:
                 return
 
     def _tool_verify(self):
-        """The zero-re-exposure check: checksum only, nothing derived."""
+        """The zero-re-exposure check: checksum only, nothing derived.
+        Entry is by grid; C on an empty grid aborts (it must not fall
+        through to the camera, which would dead-end on hardware)."""
         entered = self._codex32_entry_one()
         if entered is None:
-            payload = self.qr.scan_key().decode("ascii").strip()
-            entered = payload.splitlines()[0]
+            return
         try:
             codex32.validate(entered)
             self.display.show(screens.codex32_verified(
@@ -370,9 +350,12 @@ class Session:
         if not words:
             return
         from bip39_shim import mnemonic_to_seed
-        seed = mnemonic_to_seed(" ".join(words), self.passphrase)[:32]
-        ident = "".join(codex32.CHARSET[b % 32] for b in
-                        hashlib.sha256(b"corky-id" + seed).digest()[:4])
+        # The FULL 64-byte BIP39 seed. Truncating to 32 would encode a
+        # different master key than the words produce, so a restore from
+        # the share would silently open a DIFFERENT WALLET. codex32
+        # (BIP93) encodes 16-64 byte seeds, so no truncation is needed.
+        seed = mnemonic_to_seed(" ".join(words), self.passphrase)
+        ident = codex32.derive_identifier(seed)
         secret = codex32.encode_secret(ident, seed, threshold=0)
         choice = self._pick_split()
         if choice is None:
@@ -380,14 +363,8 @@ class Session:
         if choice == 0:
             outputs = [secret]
         else:
-            need = 32 * 2
-            rand = b""
-            counter = 0
-            while len(rand) < need:
-                rand += _hmac.new(seed, b"corky-split-v1" + bytes([counter]),
-                                  hashlib.sha512).digest()
-                counter += 1
-            outputs = codex32.split(seed, 2, 3, ident, rand[:need])
+            outputs = codex32.split(seed, 2, 3, ident,
+                                    codex32.derive_split_entropy(seed, 2, 3))
         for i, out in enumerate(outputs):
             self.display.show(screens.codex32_share_display(
                 self.w, self.h, out.upper(), i + 1, len(outputs)),
@@ -465,7 +442,6 @@ class Session:
             # an incomplete UR assembly can complete on a later pass.
             if qr_frames is None:
                 qr_frames = self.qr.scan_psbt_frames()
-            advanced = False
             progress_before = assembler.progress
             for frame in qr_frames:
                 try:

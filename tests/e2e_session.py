@@ -397,12 +397,13 @@ def main():
         # Dev frames redact sensitive screens, so the shares are pinned by
         # intercepting the share screen call. FROZEN backup vectors for the
         # canonical mnemonic (computed once, must never drift):
-        F_SECRET = ("ms105js5st6cqh0wu7p5ssjyf4z4ez42ks9jlt3zneju9uuypr2hdda"
-                    "k6tlqsy8akze8npeflj")
+        # FROZEN backup vectors (full 64-byte BIP39 seed — the
+        # 32-byte truncation was the wallet-mismatch bug):
+        F_SECRET = "ms10cjmlst6cqh0wu7p5ssjyf4z4ez42ks9jlt3zneju9uuypr2hddak6tlqe5kkypvufe5ms6zrzqm0v32nvg0dw5e5s7g9d8kx53vkje60r3eq2xjsqkgy2p8lyh6"
         F_SHARES = [
-            "ms125js5ahcchqk58er3w4nyj2rlcd96hxfsjtt053c23n0h5eel6sdhxwcgq3t6v77pudlwk2",
-            "ms125js5c5lcc0v768yg2vyy0e5y005tq7mhhtp22drjw3wkuncr4yuq9hx53r326ut07z8de2",
-            "ms125js5dqjcwesatzfqnyky7jx5ah8cj6u6ztzl0snk8fz68s57rz0j3lrfzyd4yyp4x5re02",
+            "ms12cjmla37uxfewhh3a49daeqdlagwmpdjgv2ue6f97lecs5ppzhx495f3adurg270m57y45z7qe85czv43wzsr0sruvhjq780cfdm0s6zldx8gtcxakjaudx5tvml",
+            "ms12cjmlcmsj0dpwmuqkvd78gg0ynnnaweazdaey3c2e4qk0uxd2a2fypwyfjqtvldl9qq4q60asyekhhcxkferkc7fq0ucel84uaw54h20wcfr544l6s94l5ymkl6e",
+            "ms12cjmldc2gc59wenneyk4mmnh5frzucltpp0v47tu5kgvx8t037g5gtrw0mas44xqqx9x2qpf04uwpa7dmyfgu2y2amnm3n8f9m6zf64pajl6fsmhh3hwtuud85kc",
         ]
         import hal
         import main as corky_main

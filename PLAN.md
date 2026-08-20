@@ -178,8 +178,7 @@
 - Passphrase and typed xprv/descriptor entry have no on-device UI yet
   (dev-mode args only); build both text-entry screens at M2 alongside the
   camera. Testnet subdir map assumes testnet3; revisit if Core defaults to
-  testnet4. README still names the 2.4" ILI9341 as primary — supersede with
-  A-13b wording at next README pass.
+  testnet4.
 
 ## Post-v1 todo
 
@@ -187,8 +186,9 @@
   k-of-n recovery, hand-verifiable checksums; authored by Wuille/O'Connor.
   FractalEncrypt has a full SeedSigner implementation in progress
   (FractalEncrypt/FractalEncrypt_seedsigner, Codex32_Implementation branch).
-  **Deliberately deferred until Fractal publishes — do not front-run his
-  work (Ben, 2026-08-17).** Revisit after his release; his QR share specs
+  **SUPERSEDED by A-18 (Ben lifted the front-run concern 2026-08-18);
+  codex32 is implemented as a v1.1 Core-native mode.** Original note:
+  deferred until Fractal publishes (Ben, 2026-08-17). Revisit after his release; his QR share specs
   would be the compatibility target. BIP93 read in full (2026-08-18):
   codex32 encodes BIP32 MASTER SEEDS (not BIP39 entropy); checksum, split
   and recover are all pen-and-paper (BCH lookup tables). As an input mode

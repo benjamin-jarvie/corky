@@ -20,6 +20,9 @@ Trust statement: every byte in this file is auditable against the BIP93
 text with no dependency beyond the Python standard library.
 """
 
+import hashlib
+import hmac
+
 
 class Codex32Error(ValueError):
     """Any defect in a codex32 string or share set."""
@@ -288,6 +291,28 @@ def recover(shares) -> str:
         raise Codex32Error(f"threshold is {k}; give exactly {k} shares")
     secret_data = ms32_recover([p[0] for p in parsed])
     return validate(ms32_encode(secret_data))
+
+
+def derive_identifier(seed: bytes) -> str:
+    """Deterministic 4-char bech32 identifier for a seed. Layer 1: this
+    computes on secret material, so it lives in the frozen module rather
+    than in the UI (README layer discipline). Stdlib hashing only."""
+    digest = hashlib.sha256(b"corky-id" + seed).digest()[:4]
+    return "".join(CHARSET[b % 32] for b in digest)
+
+
+def derive_split_entropy(seed: bytes, k: int, n: int) -> bytes:
+    """Deterministic split randomness, domain-separated, derived from the
+    seed itself: Corky has no RNG and never generates entropy (PLAN A-18).
+    Shares therefore re-derive identically. Stdlib hashing only."""
+    need = 32 * max(1, k - 1) * max(1, n)
+    out = b""
+    counter = 0
+    while len(out) < need:
+        out += hmac.new(seed, b"corky-split-v1" + bytes([counter]),
+                        hashlib.sha512).digest()
+        counter += 1
+    return out[:need]
 
 
 def split(secret, k: int, n: int, identifier: str, rand_bytes: bytes):

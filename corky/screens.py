@@ -215,7 +215,10 @@ def seed_length(w, h, selected=0):
 
 # ---- codex32 (BIP93) screens — v1.1, map ticket #5 -------------------------
 
-BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from codex32 import CHARSET as BECH32_CHARSET  # single source of truth
 
 
 def codex32_scan(w, h):
