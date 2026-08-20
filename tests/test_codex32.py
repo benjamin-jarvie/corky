@@ -289,6 +289,85 @@ check_raises("bad threshold in encode", encode_secret, "test", bytes(16), 1)
 check_raises("short seed in encode", encode_secret, "test", bytes(15), 0)
 check_raises("insufficient entropy", split, bytes.fromhex(TV3_SEED), 3, 5, "c0rk", b"\x00" * 8)
 
+# ---- Mutation-targeted: the long (512-bit) ENCODE path -----------------
+# TV1-TV4 only re-encode short secrets; TV5 only DECODES. So the long
+# create-checksum path (ms32_create_long_checksum / ms32_long_polymod) was
+# never exercised on the write side. These freeze its exact output.
+#
+# NOTE: re-encoding TV5_SEED does NOT reproduce the BIP93 TV5 string. The
+# 512-bit seed is 515 payload bits; the final 3 bits are pad and BIP93
+# admits many valid paddings (see the TV3/TV4 padding-variant families).
+# encode_secret emits ONE canonical (zero-bit) padding, frozen here.
+ENCLONG = (
+    "ms100c8vsm32zxfguhpchtlupzry9x8gf2tvdw0s3jn54khce6mua7lqpzygsfjd6an"
+    "074rxvcemlh8wu3tk925acdefghjklmnpqrstuvwxy06gct4ax9xtmg9j4ep"
+)
+check("long encode canonical", encode_secret("0c8v", bytes.fromhex(TV5_SEED), 0), ENCLONG)
+check("long encode validates", validate(ENCLONG), ENCLONG)
+check("long encode roundtrip seed", decode_secret(ENCLONG)[1].hex(), TV5_SEED)
+
+# Round-trip every legal seed size, incl the 512-bit long path.
+for nb in (16, 20, 24, 28, 32, 64):
+    _seed = bytes((i * 7 + 1) & 0xFF for i in range(nb))
+    _s = encode_secret("test", _seed, 0)
+    check(f"roundtrip {nb}B validate", validate(_s), _s)
+    check(f"roundtrip {nb}B seed", decode_secret(_s)[1], _seed)
+
+# A corrupted long checksum must fail validate() (detection, never repair).
+_bad_long = ENCLONG[:-1] + ("q" if ENCLONG[-1] != "q" else "p")
+check_raises("corrupt long checksum rejected", validate, _bad_long)
+# Flip one payload char in the long string: checksum must catch it.
+_flip = ENCLONG[:20] + ("a" if ENCLONG[20] != "a" else "c") + ENCLONG[21:]
+check_raises("long payload bit-flip rejected", validate, _flip)
+
+# ---- Mutation-targeted: split symbol-packing (frozen vectors) -----------
+# split() packs 5-bit symbols with shift/add arithmetic. Freeze exact
+# share strings for a fixed seed+id+entropy so packing mutants (LShift,
+# int 5, Add in the pool/head loops) change the output and get killed.
+SPLIT16 = [
+    "ms12c0rkaxgengdfkxuurjw3m8s7nu06qg9mfmyaxt0dmntk",
+    "ms12c0rkcu8vhffmn8yd74020zfazk3px5uqly2ja583nfqa",
+    "ms12c0rkdq3xw9suxtq70cr6fhpf34538f5spdsydauvg40j",
+]
+check("split k2 frozen shares",
+      split(bytes.fromhex("ffeeddccbbaa99887766554433221100"), 2, 3, "c0rk",
+            bytes(range(50, 90))),
+      SPLIT16)
+# Long-secret split: exercises packing on a 512-bit payload; round-trips.
+_long_seed = bytes.fromhex(TV5_SEED)
+_long_shares = split(_long_seed, 3, 5, "0c8v", bytes(range(1, 200)))
+check("split long share count", len(_long_shares), 5)
+check("split long recover",
+      decode_secret(recover([_long_shares[0], _long_shares[2], _long_shares[4]]))[1].hex(),
+      TV5_SEED)
+check("split long determinism",
+      split(_long_seed, 3, 5, "0c8v", bytes(range(1, 200))), _long_shares)
+
+# ---- Mutation-targeted: threshold / n bounds ---------------------------
+# k exactly 2 and exactly 9 are the valid extremes; 1 and 10 must raise.
+_s16 = bytes.fromhex("ffeeddccbbaa99887766554433221100")
+check("k=2 lower bound valid", len(split(_s16, 2, 2, "c0rk", bytes(range(40)))), 2)
+check("k=9 upper bound valid", len(split(_s16, 9, 9, "c0rk", bytes(i&0xFF for i in range(200)))), 9)
+check_raises("k=1 rejected", split, _s16, 1, 3, "c0rk", bytes(i&0xFF for i in range(200)))
+check_raises("k=10 rejected", split, _s16, 10, 10, "c0rk", bytes(i&0xFF for i in range(400)))
+# encode_secret threshold extremes: 2 and 9 valid, 10 invalid.
+check("encode threshold 2 valid", validate(encode_secret("test", _s16, 2))[:4], "ms12")
+check("encode threshold 9 valid", validate(encode_secret("test", _s16, 9))[:4], "ms19")
+check_raises("encode threshold 10 rejected", encode_secret, "test", _s16, 10)
+# n must lie in [k, len(SHARE_INDEXES)]; n<k and n too large both raise.
+check_raises("n<k rejected", split, _s16, 3, 2, "c0rk", bytes(i&0xFF for i in range(200)))
+check_raises("n too large rejected", split, _s16, 2, 99, "c0rk", bytes(i&0xFF for i in range(400)))
+
+# Seed-length bounds: 16 and 64 bytes are the valid extremes; 15 and 65
+# must raise (pins the 16 / 64 constants in encode_secret + _payload_ok).
+check("seed 16B lower bound valid", validate(encode_secret("test", bytes(16), 0))[:2], "ms")
+check("seed 64B upper bound valid", validate(encode_secret("test", bytes(64), 0))[:2], "ms")
+check_raises("seed 15B rejected", encode_secret, "test", bytes(15), 0)
+check_raises("seed 65B rejected", encode_secret, "test", bytes(65), 0)
+# identifier must be exactly 4 chars: 3 and 5 both raise.
+check_raises("identifier 3 chars rejected", encode_secret, "tes", bytes(16), 0)
+check_raises("identifier 5 chars rejected", encode_secret, "tests", bytes(16), 0)
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURES")

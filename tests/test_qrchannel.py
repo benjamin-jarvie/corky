@@ -76,6 +76,36 @@ imgs = qrchannel.frames_to_images(frames[:3])
 assert len(imgs) == 3 and imgs[0].size[0] > 50
 print(f"ok   frames render to PIL images ({imgs[0].size[0]}px)")
 
+# 6. Boundary + validation-return mutation targets.
+#    MAX_FRAGMENT_LEN feeds the encoder's fragment size: a fixed payload
+#    yields a fixed frame count, so an off-by-one on the constant changes it.
+frozen = base64.b64encode(bytes((i * 13 + 7) & 0xFF for i in range(1500))).decode()
+nframes = len(qrchannel.psbt_to_frames(frozen))
+assert nframes == 16, f"frozen frame count changed: {nframes} (MAX_FRAGMENT_LEN off?)"
+print(f"ok   frozen frame count == 16 at MAX_FRAGMENT_LEN={qrchannel.MAX_FRAGMENT_LEN}")
+
+# feed() must return True on completion, and again on every later call.
+one = base64.b64encode(b"psbt\xff" + os.urandom(40)).decode()
+fr = qrchannel.psbt_to_frames(one)
+asm = qrchannel.FrameAssembler()
+assert asm.feed(fr[0]) is True, "feed must return True on completion"
+assert asm.feed(fr[0]) is True, "feed must return True after already complete"
+print("ok   feed() returns True on and after completion")
+
+# MAX_FRAME_CHARS is the hostile-QR guard. A frame one char over the cap
+# must be refused SPECIFICALLY for size, even with a valid prefix/charset.
+over = "ur:crypto-psbt/" + "a" * (qrchannel.MAX_FRAME_CHARS + 1 - len("ur:crypto-psbt/"))
+try:
+    qrchannel.FrameAssembler().feed(over)
+    failures.append("oversized frame accepted")
+    print("FAIL oversized frame accepted")
+except qrchannel.QrChannelError as exc:
+    if "too large" in str(exc):
+        print("ok   frame at MAX_FRAME_CHARS+1 refused for size")
+    else:
+        failures.append(f"oversized frame wrong error: {exc}")
+        print(f"FAIL oversized frame wrong error: {exc}")
+
 if failures:
     sys.exit(1)
 print("\nQR CHANNEL PASS: static, animated, lossy-camera and hostile-input cases")

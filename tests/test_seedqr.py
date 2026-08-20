@@ -30,4 +30,23 @@ for bad in ["123", "9999" + "0000" * 11, "abcd" * 12,
     except seedqr.SeedQrError:
         pass
 print("ok   malformed streams rejected")
+
+# L56 In->NotIn: an entropy-sized byte payload that is ALSO all ASCII
+# digits must be read as COMPACT (16 raw bytes), not misparsed as a digit
+# stream. 16 ASCII digits are 16 bytes -> compact -> a valid mnemonic.
+# Under the mutation this falls through to decode_standard and raises.
+digit_entropy = b"1234567890123456"  # exactly 16 bytes
+assert len(digit_entropy) == 16
+words3 = seedqr.decode(digit_entropy)
+assert len(words3.split()) == 12, words3
+validate_mnemonic(words3)
+print("ok   16 ASCII-digit bytes decode as compact (In branch)")
+
+# A 17-byte payload is not a valid compact entropy length -> must raise.
+try:
+    seedqr.decode(bytes(17))
+    print("FAIL accepted 17-byte entropy"); sys.exit(1)
+except seedqr.SeedQrError:
+    print("ok   17-byte entropy length rejected")
+
 print("\nSEEDQR PASS")
