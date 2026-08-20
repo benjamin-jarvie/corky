@@ -201,7 +201,7 @@ bytes — Core is the only parser, by law
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,168 lines — none of it ships on the device.**
+**Test code: 2,254 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, fourteen scripted device sessions, property/fuzz suites cross-checked against independent
@@ -214,7 +214,10 @@ mainnet spends — ECDSA
 ([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41))
 and a Taproot Schnorr keyspend
 ([`0ee96d29…`](https://mempool.space/tx/0ee96d2995f73768f071954c5b116fcb894847289a94dbe313e6b8615cd9981d)).
-Run it all: [`./run_tests.sh`](run_tests.sh) (`RUN_NODE=1` adds the
+The README's own numbers are tested too:
+[`tests/test_readme_claims.py`](tests/test_readme_claims.py) fails the suite
+if any count above drifts from the tree or a link goes dead. Run it all:
+[`./run_tests.sh`](run_tests.sh) (`RUN_NODE=1` adds the
 bitcoind suites).
 
 **Vendored, not ours: 2,219 lines** in [`hw/vendor/`](hw/vendor/) —
