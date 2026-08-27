@@ -53,3 +53,48 @@ Open question for when parts arrive: underside clearance — whether the hat's
 female header seats over the CM4+heatsink or needs a ~$3 stacking header.
 Mounting holes will NOT line up with the carrier; standoffs or the case
 design carry the mechanical load.
+
+## Underside clearance — RESOLVED on paper (2026-08-27)
+
+**Verdict: buy a stacking header. The standard 11mm HAT spacing does not clear
+the CM4 plus any heatsink.**
+
+Vertical stack, measured from the carrier's top copper:
+
+| Item | Height | Source |
+|---|---|---|
+| CM4 mated on the 1.5mm DF40C socket | **5.08mm** | RPi CM4 datasheet (6.58mm if a 3.0mm DF40HC is fitted) |
+| Waveshare CM4-HEATSINK | +5mm | 55 x 40 x 5mm |
+| Waveshare CM4-HEATSINK-B | +10mm | 55 x 40 x 10mm |
+| Thermal pad | +~0.5mm | typical |
+
+- With the 5mm heatsink: **~10.6mm**. Available: 11.0mm. Gap **~0.4mm**.
+- With the 10mm heatsink: **~15.6mm**. Available: 11.0mm. **Interference 4.6mm.**
+
+The 11.0mm figure is the standard Pi HAT spacing: 2.5mm male header insulator
+on the carrier plus an 8.5mm female socket body on the hat. It is why 11mm
+standoffs are the HAT standard.
+
+A 0.4mm gap is not a pass. That is a bare aluminium heatsink 0.4mm below the
+hat's underside solder joints, with no mechanical constraint holding it there
+(the mounting holes do not line up, see the note above).
+
+**Buy: a 2x20 stacking header with a 16mm body.** That gives 18.5mm clearance:
+7.9mm clear over the 5mm heatsink, 2.9mm over the 10mm one. ~US$3.
+13.5mm bodies also exist and clear the 5mm heatsink only.
+
+### Still unmeasured — check when the parts arrive
+
+1. **Which heatsink is in the bundle.** 5mm or 10mm changes nothing about the
+   decision, but confirm before trusting the 2.9mm margin.
+2. **Is the CM4 inside the hat's footprint?** Near certain (146mm hat over an
+   85mm carrier), but not confirmed from a layout drawing.
+3. **USB-A under the hat.** A full-size USB-A port is 14.5mm tall. If one sits
+   under the pill, even the 16mm stacking header (18.5mm) leaves only 4mm, and
+   the ports become unusable. Waveshare publishes a 3D drawing (CM4-IO-BASE.7z)
+   that settles this.
+4. **The hat's own socket body height.** Assumed the standard 8.5mm. Measure it
+   with calipers; an extra-tall socket already fitted would change the answer.
+
+SPI0 runs at 40MHz. An extra 8mm of header pin is harmless at that speed. Do
+not solve this with a ribbon GPIO extender.
