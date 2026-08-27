@@ -56,8 +56,13 @@ design carry the mechanical load.
 
 ## Underside clearance — RESOLVED on paper (2026-08-27)
 
-**Verdict: buy a stacking header. The standard 11mm HAT spacing does not clear
-the CM4 plus any heatsink.**
+> **SUPERSEDED the same day. Do NOT buy the stacking header.** Ben rejected it
+> on total device thickness. The 16mm header adds 8mm to a stack that must fit
+> a case. See "Thickness budget" below. The clearance arithmetic here stands;
+> the conclusion drawn from it does not.
+
+**Original verdict: buy a stacking header. The standard 11mm HAT spacing does
+not clear the CM4 plus any heatsink.**
 
 Vertical stack, measured from the carrier's top copper:
 
@@ -98,3 +103,62 @@ hat's underside solder joints, with no mechanical constraint holding it there
 
 SPI0 runs at 40MHz. An extra 8mm of header pin is harmless at that speed. Do
 not solve this with a ribbon GPIO extender.
+
+## Thickness budget (2026-08-27) — the header is the wrong fix
+
+Ben's objection: the device has a case, and 8mm of header is 8mm of case.
+Correct. Here is the whole Z stack, carrier bottom to front face.
+
+| Layer | Standard 11mm header | 16mm stacking header |
+|---|---|---|
+| Case floor | 2.0 | 2.0 |
+| Clearance under carrier (bottom-side parts) | 3.0 | 3.0 |
+| Carrier PCB | 1.6 | 1.6 |
+| Header clearance | 11.0 | 18.5 |
+| Hat PCB | 1.6 | 1.6 |
+| 2.8" LCD module above the hat | ~4.0 | ~4.0 |
+| Front face | 1.5 | 1.5 |
+| **Total** | **~24.7mm** | **~32.2mm** |
+
+The same stack on a Pi Zero 2 W is **~24.1mm**. So the CM4 costs 0.6mm over
+the Zero, and the stacking header costs 7.5mm. **The board is not the problem.
+The heatsink is.**
+
+### Decision: drop the bundled heatsink, keep the standard 11mm header
+
+With no heatsink the CM4 tops out at **5.08mm** under an 11.0mm ceiling. That
+is 5.9mm free, and no new part to buy.
+
+Cooling options that fit inside 5.9mm, in order of preference:
+
+1. **Thermal pad to a side plate.** Pad the CM4 to a thin aluminium sheet that
+   runs out under the pill's 60mm overhang, where the carrier ends and the
+   space is free. Costs ~1.5mm over the CM4. Puts the radiating area where
+   there is room.
+2. **A heatsink of 3mm or less**, plus pad. Leaves ~2.4mm clear.
+3. **No cooling at all.** A Pi 4 class SoC with no heatsink idles near 61C and
+   throttles above 81C. Corky idles, then signs for seconds. Throttling costs
+   sign time and nothing else. A sealed case makes this worse, so M0 must log
+   SoC temperature, not only MemAvailable.
+
+Reject the 5mm bundled heatsink. It leaves 0.4mm of air between bare aluminium
+and the hat's underside solder joints, with nothing holding the gap.
+
+### The case is a print, not a purchase
+
+The shop product is `seedsigner-plus-pre-built-with-3d-printed-case`. Depth is
+a parameter in the model, so the enclosure does not fix the budget. It does
+still have to fit a hand.
+
+### Two measurements Ben can take today with calipers
+
+1. **The 2.8" LCD module height above the hat PCB.** Estimated 4.0mm. It is the
+   single largest guess in the table.
+2. **Internal depth of the existing SeedSigner+ case.** It was drawn around a
+   5mm-thick Pi Zero. A ~20mm internal stack almost certainly does not fit, so
+   the case is likely a reprint whichever board wins.
+
+### Rejected: fall back to the Pi Zero 2 W
+
+It saves 0.6mm. It costs the no-radio-by-manufacture property, which is the
+entire rationale of A-15, and it reopens M0's 512MB question. Not worth it.
