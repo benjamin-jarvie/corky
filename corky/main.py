@@ -126,26 +126,27 @@ class Session:
         return halt
 
     def state_home(self):
+        # generate key | load key | tools | power off
         selected = 0
         while True:
             self.display.show(screens.home(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 3
+                selected = (selected - 1) % 4
             elif key == "d":
-                selected = (selected + 1) % 3
-            elif key == "r":       # hardware shortcut straight to tools
-                selected, key = 1, "a"
+                selected = (selected + 1) % 4
             elif key == "c":
                 return
             if key == "a":
-                if selected == 2:
+                if selected == 3:      # power off
                     return
-                opened = (self.state_seed_menu() if selected == 0
-                          else self.state_tools())
+                opened = [self._seed_generate,   # generate key
+                          self.state_seed_menu,  # load key
+                          self.state_tools       # tools
+                          ][selected]()
                 if opened:
-                    # Generation leaves a wallet open in Core: go straight
-                    # on to loading a PSBT rather than back to HOME.
+                    # A key is now loaded in Core: go straight on to loading
+                    # a PSBT rather than back to HOME.
                     self.state_load()
                     return
 
@@ -157,15 +158,14 @@ class Session:
             self.display.show(screens.seed_menu(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 7
+                selected = (selected - 1) % 6
             elif key == "d":
-                selected = (selected + 1) % 7
+                selected = (selected + 1) % 6
             elif key == "b":
                 return False
             elif key == "a":
                 try:
-                    return [self._seed_generate,
-                            self._seed_descriptor, self._seed_xprv,
+                    return [self._seed_descriptor, self._seed_xprv,
                             self._seed_codex32_scan, self._seed_codex32_type,
                             self._seed_seedqr, self._seed_words][selected]()
                 except Exception as exc:
@@ -387,7 +387,7 @@ class Session:
     def state_tools(self) -> bool:
         """Returns True only when a tool left a wallet open in Core."""
         selected = 0
-        tools = [self._tool_verify, self._tool_backup, self._tool_generate]
+        tools = [self._tool_verify, self._tool_backup]
         while True:
             self.display.show(screens.tools_menu(self.w, self.h, selected))
             key = self.buttons.read()
@@ -490,7 +490,7 @@ class Session:
                 break
             elif key in ("b", "c"):
                 return False
-        stop = self._busy("Bitcoin Core is creating a wallet…")
+        stop = self._busy("Bitcoin Core is generating your key…")
         try:
             xprv = signer.generate_wallet(self.rpc)
         finally:

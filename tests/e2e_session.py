@@ -104,7 +104,7 @@ def main():
         # ---- Session A: typed word entry + stick sign ----
         stick = work / "stickA"; stick.mkdir()
         (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
-        script = "a" + "dddddda" + "a" + WORDS_SCRIPT + "a"   # home, menu->words(idx6), length=12, type, sign
+        script = "da" + "ddddda" + "a" + WORDS_SCRIPT + "a"   # home->load, words(idx5), length, type, sign
         r = run_device(datadir, script, work / "framesA", stick=stick)
         assert r.returncode == 0, f"A failed:\n{r.stderr}"
         signed = stick / "hui-signed.psbt"
@@ -126,7 +126,7 @@ def main():
         xprv_file.write_text(mnemonic_to_xprv(MNEMONIC, mainnet=False))
         frames_file = work / "psbt_frames.txt"
         frames_file.write_text("\n".join(qrchannel.psbt_to_frames(fund_psbt(1.0))))
-        r = run_device(datadir, "a" + "dda" + "a" + "a", work / "framesB",
+        r = run_device(datadir, "da" + "da" + "a" + "a", work / "framesB",
                        qr_key=xprv_file, qr_psbt=frames_file)
         assert r.returncode == 0, f"B failed:\n{r.stderr}"
         shots = sorted((work / "framesB").glob("frame-*.png"))
@@ -146,7 +146,7 @@ def main():
                         [{"txid": utxo["txid"], "vout": utxo["vout"]}],
                         [{rpc.call("getnewaddress", wallet="watch"): 1.0}])
         (stickc / "bad.psbt").write_bytes(base64.b64decode(bare))
-        r = run_device(datadir, "a" + "ddddda", work / "framesC",
+        r = run_device(datadir, "da" + "dddda", work / "framesC",
                        stick=stickc, qr_key=seedqr_file)
         assert r.returncode == 0, f"C failed:\n{r.stderr}"
         assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
@@ -179,7 +179,7 @@ def main():
         seedqr_file2.write_text("0000" * 11 + "0003")
         # 5 outputs = 3 pages at two per page: forced 'a' walks pages 2
         # and 3, the fourth 'a' signs
-        r = run_device(datadir, "a" + "ddddda" + "aaa", work / "framesD",
+        r = run_device(datadir, "da" + "dddda" + "aaa", work / "framesD",
                        stick=stickd, qr_key=seedqr_file2)
         assert r.returncode == 0, f"D failed:\n{r.stderr}"
         assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
@@ -194,7 +194,7 @@ def main():
         (stickd2 / "many.psbt").write_bytes(base64.b64decode(many2))
         sq3 = work / "seedqr3.txt"; sq3.write_text("0000" * 11 + "0003")
         # home a, menu->seedqr (a), review with ONE 'a' then quit (c)
-        r = run_device(datadir, "a" + "ddddda" + "ac", work / "framesD2",
+        r = run_device(datadir, "da" + "dddda" + "ac", work / "framesD2",
                        stick=stickd2, qr_key=sq3)
         assert not (stickd2 / "many-signed.psbt").exists(), \
             "D2: PSBT signed with a page unseen — paging gate is broken!"
@@ -216,7 +216,7 @@ def main():
         (stickd3 / "many.psbt").write_bytes(base64.b64decode(many3))
         sq4 = work / "seedqr4.txt"; sq4.write_text("0000" * 11 + "0003")
         # review: d,u,d,d touch pages 1,0,1,2 -> all three seen via nav
-        r = run_device(datadir, "a" + "ddddda" + "dudda", work / "framesD3",
+        r = run_device(datadir, "da" + "dddda" + "dudda", work / "framesD3",
                        stick=stickd3, qr_key=sq4)
         assert r.returncode == 0, f"D3 failed:\n{r.stderr}"
         assert (stickd3 / "many-signed.psbt").exists(), "D3: nav-sign missing"
@@ -227,7 +227,7 @@ def main():
                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickd4 / "many.psbt").write_bytes(base64.b64decode(many4))
         sq5 = work / "seedqr5.txt"; sq5.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "ddddda" + "uua", work / "framesD4",
+        r = run_device(datadir, "da" + "dddda" + "uua", work / "framesD4",
                        stick=stickd4, qr_key=sq5)
         assert r.returncode == 0, f"D4 failed:\n{r.stderr}"
         assert (stickd4 / "many-signed.psbt").exists(), "D4: wraparound broken"
@@ -274,7 +274,7 @@ def main():
                             0, {"fee_rate": 10}, True, wallet="watchE")
         (sticke / "c32.psbt").write_bytes(base64.b64decode(funded_e["psbt"]))
         # home a -> menu index2 (scan codex32): d d a -> auto-scan -> review a
-        r = run_device(datadir, "a" + "ddda" + "a", work / "framesE",
+        r = run_device(datadir, "da" + "dda" + "a", work / "framesE",
                        stick=sticke, qr_key=key_file)
         assert r.returncode == 0, f"E failed:\n{r.stderr}"
         assert (sticke / "c32-signed.psbt").exists(), "E: signed file missing"
@@ -289,7 +289,7 @@ def main():
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickr / "p3.psbt").write_bytes(base64.b64decode(p3))
         sqr = work / "sq_r3.txt"; sqr.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "ddddda" + "a", work / "framesR3",
+        r = run_device(datadir, "da" + "dddda" + "a", work / "framesR3",
                        stick=stickr, qr_key=sqr)
         assert r.returncode == 0, f"R3 failed:\n{r.stderr}"
         assert (stickr / "p3-signed.psbt").exists(), "R3: 2-out page count wrong"
@@ -303,7 +303,7 @@ def main():
         emptystick = work / "stickI"; emptystick.mkdir()
         sqi = work / "sq_i.txt"; sqi.write_text("0000" * 11 + "0003")
         for abkey in ("b", "c"):
-            r = run_device(datadir, "a" + "ddddda" + abkey,
+            r = run_device(datadir, "da" + "dddda" + abkey,
                            work / ("framesI" + abkey),
                            stick=emptystick, qr_key=sqi, qr_psbt=part)
             assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
@@ -319,7 +319,7 @@ def main():
                            0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
         (stickj / "alien.psbt").write_bytes(base64.b64decode(foreign))
         sqj = work / "sq_j.txt"; sqj.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "ddddda" + "a", work / "framesJ",
+        r = run_device(datadir, "da" + "dddda" + "a", work / "framesJ",
                        stick=stickj, qr_key=sqj)
         assert r.returncode == 0, f"J failed:\n{r.stderr}"
         assert not (stickj / "alien-signed.psbt").exists(), "J: signed foreign PSBT!"
@@ -336,9 +336,9 @@ def main():
                       [{rpc.call("getnewaddress", wallet="watchE"): 0.7}],
                       0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
         (stickh / "typed.psbt").write_bytes(base64.b64decode(ph))
-        # menu index 3 = typed codex32; exercise u/l wrap and backspace too
+        # load-key index 3 = typed codex32; exercise nav and backspace too
         entry = "ud" + "lr" + "a" + "b" + grid_keys(H_SECRET[3:]) + "c"
-        r = run_device(datadir, "a" + "dddda" + entry + "a",
+        r = run_device(datadir, "da" + "ddda" + entry + "a",
                        work / "framesH", stick=stickh)
         assert r.returncode == 0, f"H failed:\n{r.stderr}"
         assert (stickh / "typed-signed.psbt").exists(), "H: typed-entry sign missing"
@@ -355,7 +355,7 @@ def main():
         (stickh2 / "duo.psbt").write_bytes(base64.b64decode(ph2))
         g1 = grid_keys(FROZEN_SHARES[0][3:]) + "c"
         g2 = grid_keys(FROZEN_SHARES[1][3:]) + "c"
-        script = ("a" + "dddda"
+        script = ("da" + "ddda"
                   + g1 + "a"          # share 1 accepted, dismiss VALID
                   + g1 + "a"          # duplicate -> error -> continue
                   + g2 + "a"          # share 2 accepted, dismiss VALID
@@ -377,16 +377,16 @@ def main():
         print("ok   H2: typed 2-of-3 shares, duplicate rejected, golden screens")
 
         # ---- Session H3/H4: typed-entry aborts stay closed ----
-        r = run_device(datadir, "a" + "dddda" + "c" + "c", work / "framesH3")
+        r = run_device(datadir, "da" + "ddda" + "c" + "c", work / "framesH3")
         assert r.returncode == 0, f"H3 failed:\n{r.stderr}"
-        assert _frames(work / "framesH3")[-1].read_bytes() == _render(scr.home), \
-            "H3: abort did not land back on the home screen"
+        assert _frames(work / "framesH3")[-1].read_bytes() == _render(scr.home, 1), \
+            "H3: abort did not land back on home with load-key still selected"
         # invalid share -> error -> 'b' declines -> home -> quit
-        r = run_device(datadir, "a" + "dddda" + "aaaa" + "c" + "b" + "c",
+        r = run_device(datadir, "da" + "ddda" + "aaaa" + "c" + "b" + "c",
                        work / "framesH4")
         assert r.returncode == 0, f"H4 failed:\n{r.stderr}"
-        assert _frames(work / "framesH4")[-1].read_bytes() == _render(scr.home), \
-            "H4: error-decline did not land back on the home screen"
+        assert _frames(work / "framesH4")[-1].read_bytes() == _render(scr.home, 1), \
+            "H4: error-decline did not land back on home with load-key selected"
         assert _has(work / "framesH4", _render(
             scr.codex32_error,
             "not a valid codex32 string (checksum or format)"[:48])), \
@@ -507,7 +507,7 @@ def main():
                      for i in range(4)]
             sq = work / ("sq_n" + tag + ".txt")
             sq.write_text("0000" * 11 + "0003")
-            r = run_device(datadir, "a" + "ddddda" + navkeys,
+            r = run_device(datadir, "da" + "dddda" + navkeys,
                            work / ("framesN" + tag), stick=st, qr_key=sq)
             assert r.returncode == 0, f"N{tag} failed:\n{r.stderr}"
             assert (st / "n-signed.psbt").exists(), f"N{tag}: sign missing"
@@ -530,20 +530,20 @@ def main():
         print("ok   N: 4-page review order pinned (nav and forced advance)")
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
-        # r = tools, d,d = third entry, a = select, a = accept the tradeoff,
-        # then one a per screenful of the master xprv (111 chars paginates
-        # into three), a = leave the verify screen, b = abort the PSBT load
-        # loop the generated wallet drops us into.
+        # home selected=0 = generate key, a = select, a = accept the
+        # tradeoff, then one a per screenful of the master xprv (111 chars
+        # paginates into three), a = leave the verify screen, b = abort the
+        # PSBT load loop the generated key drops us into.
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
-                       "r" + "dd" + "a" + "a" + "a" * xprv_pages + "a" + "b",
-                       fg)
+                       "a" + "a" + "a" * xprv_pages + "a" + "b",
+                       fg)   # home->generate key, accept tradeoff, pages, verify, abort load
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
         assert _has(fg, _render(scr.generate_warning)), \
             "G: the tradeoff screen was never shown before generation"
         assert _has(fg, _render(scr.busy,
-                                "Bitcoin Core is creating a wallet…")), \
+                                "Bitcoin Core is generating your key…")), \
             "G: Core was not asked to create the wallet"
         assert not (rpc.wallet_dir / signer.WALLET).exists(), \
             "G: the session wallet was not deleted at teardown"

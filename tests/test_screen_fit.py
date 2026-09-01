@@ -67,9 +67,9 @@ CASES = {
     "seed-entry": lambda w, h: screens.seed_entry(
         w, h, 24, 24, "consider", ("consider", "control", "convince", "cook")),
     "seed-length": lambda w, h: screens.seed_length(w, h),
-    "seed-menu": lambda w, h: screens.seed_menu(w, h, 5),
-    "tools-menu": lambda w, h: screens.tools_menu(w, h, 2),
-    "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is creating a wallet…"),
+    "seed-menu": lambda w, h: screens.seed_menu(w, h, 4),
+    "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
+    "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
     "generate-warning": lambda w, h: screens.generate_warning(w, h),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,
                                                                     "descriptor"),

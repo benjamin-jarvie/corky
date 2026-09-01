@@ -101,19 +101,21 @@ def _frame(w, h, title=None):
     return img, d
 
 
+HOME_OPTIONS = ["generate key", "load key", "tools", "power off"]
+
+
 def home(w, h, selected=0):
-    """Three choices on the d-pad, A activates the gold box. No tagline,
-    no key legend, no status line (Ben, 2026-09-01)."""
+    """Four choices on the d-pad, A activates the gold box. No CORKY text,
+    no legend, no status line. It is a KEY, not a wallet (Ben, 2026-09-01):
+    generate a new one from Core, or load an existing one to sign."""
     img, d = _frame(w, h)
-    d.text((w // 2, int(h * 0.20)), "CORKY", font=_font(int(h * 0.16)),
-           fill=CREAM, anchor="mm")
-    for i, label in enumerate(["open a wallet", "tools", "power off"]):
-        y = int(h * (0.44 + i * 0.155))
+    for i, label in enumerate(HOME_OPTIONS):
+        y = int(h * (0.24 + i * 0.17))
         if i == selected:
-            d.rounded_rectangle([int(w * 0.24), y - int(h * 0.062),
-                                 int(w * 0.76), y + int(h * 0.062)],
+            d.rounded_rectangle([int(w * 0.22), y - int(h * 0.068),
+                                 int(w * 0.78), y + int(h * 0.068)],
                                 radius=4, outline=OCHRE)
-        d.text((w // 2, y), label, font=_font(int(h * 0.065)),
+        d.text((w // 2, y), label, font=_font(int(h * 0.07)),
                fill=CREAM if i == selected else GREY, anchor="mm")
     return img
 
@@ -200,7 +202,6 @@ def busy(w, h, message="checking words, deriving in Core…", phase=0):
 
 
 SEED_MENU_OPTIONS = [
-    ("Generate seed", "Core RNG · BIP32"),
     ("Scan descriptor QR", "pure Core"),
     ("Scan xprv QR", "pure Core"),
     ("Scan codex32", "BIP32-native"),
@@ -212,7 +213,7 @@ SEED_MENU_OPTIONS = [
 
 def seed_menu(w, h, selected=0):
     """Choose the seed input mode (A-14's modes + SeedQR + codex32/A-18)."""
-    img, d = _frame(w, h, "OPEN  WALLET")
+    img, d = _frame(w, h, "LOAD  KEY")
     options = SEED_MENU_OPTIONS
     for i, (label, note) in enumerate(options):
         y = int(h * (0.17 + i * 0.115))
@@ -230,8 +231,7 @@ def tools_menu(w, h, selected=0):
     """Utilities: verify a share, back up a seed, generate one from Core.
     No sub-lines, no footer legend (Ben, 2026-09-01)."""
     img, d = _frame(w, h, "TOOLS")
-    options = ["Verify a codex32 share", "Back up seed as codex32",
-               "Generate a seed (Core RNG)"]
+    options = ["Verify a codex32 share", "Back up seed as codex32"]
     for i, label in enumerate(options):
         y = int(h * (0.30 + i * 0.18))
         if i == selected:
@@ -266,8 +266,9 @@ def generate_warning(w, h, selected=1, scroll=0):
         _fit(d, (w // 2, int(h * (0.36 + row * 0.10))), GENERATE_LINES[i],
              int(h * 0.05), CREAM, "mm", int(w * 0.94))
     if last < len(GENERATE_LINES):
-        d.text((w // 2, int(h * 0.78)), "v", font=_font(int(h * 0.05)),
-               fill=OCHRE, anchor="mm")
+        cx, cy, r = w // 2, int(h * 0.77), int(h * 0.02)
+        d.polygon([(cx - r, cy - r), (cx + r, cy - r), (cx, cy + r)],
+                  fill=OCHRE)
     _actions(d, w, h, ["BACK", "GENERATE"], selected)
     return img
 

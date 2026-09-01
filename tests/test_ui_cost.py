@@ -152,11 +152,11 @@ _real = {n: getattr(screens, n) for n in
          ("home", "seed_menu", "result", "busy", "review", "tools_menu",
           "seed_length")}
 display = named_screens(RecordingDisplay())
-# A -> menu, five D then A -> "Scan SeedQR" (index 5; the through-core
-# modes lead now), which raises like the camera stub does; the script
-# then supplies ONE key to dismiss the error, and C to power off. If the
-# error is not held, the dismissing A falls through and re-opens the menu.
-buttons = ScriptedButtons(["a", "d", "d", "d", "d", "d", "a", "a", "c"])
+# D->load key, A opens it, four D then A -> "Scan SeedQR" (index 4 in the
+# load-key menu), which raises like the camera stub does; the script then
+# supplies ONE key to dismiss the error, and C to power off. If the error
+# is not held, the dismissing A falls through and re-opens the menu.
+buttons = ScriptedButtons(["d", "a", "d", "d", "d", "d", "a", "a", "c"])
 session = corky_main.Session(display, buttons, FakeRpc())
 session.qr = corky_main.CameraQrSource()
 raised = None
