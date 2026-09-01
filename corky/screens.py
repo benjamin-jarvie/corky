@@ -10,6 +10,8 @@ Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
 """
 
+from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
 
 INK = "#1A1714"
@@ -443,22 +445,33 @@ def codex32_verified(w, h, kind="share 2 of 3"):
     return img
 
 
+_LOGO_MASK = None
+
+
+def _logo_mask(target_h):
+    """The brand mark as a binary stencil scaled to target_h pixels tall.
+    Nearest-neighbour keeps it strictly two-tone at any panel size."""
+    global _LOGO_MASK
+    if _LOGO_MASK is None:
+        _LOGO_MASK = Image.open(
+            Path(__file__).resolve().parent.parent
+            / "art" / "bb-logo-mask.png").convert("L")
+    target_w = round(target_h * _LOGO_MASK.width / _LOGO_MASK.height)
+    return _LOGO_MASK.resize((target_w, target_h), Image.NEAREST)
+
+
 def splash(w, h):
     """The first frame the device paints, before bitcoind is up.
 
-    Two tones only (ink ground, cream mark), outline geometry at 3px, and
-    every string measured: it survives a 1-bit render and both panel sizes.
+    Two tones only (ink ground, cream mark) and every string measured, so it
+    survives a 1-bit render and both panel sizes. The mark is the Bitcoin
+    Butlers infinity-hourglass, stenciled from art/bb-logo-mask.png (a binary
+    silhouette extracted from the brand logo's alpha channel).
     """
     img, d = _frame(w, h)
-    # Bow-tie mark: two outline triangles meeting at a knot square.
-    cx, cy = w // 2, int(h * 0.30)
-    half, rise, knot = int(h * 0.17), int(h * 0.13), int(h * 0.035)
-    for sign in (-1, 1):
-        tip = cx + sign * half
-        d.line([(tip, cy - rise), (tip, cy + rise),
-                (cx + sign * knot, cy), (tip, cy - rise)], fill=CREAM, width=3)
-    d.rectangle([cx - knot, cy - knot, cx + knot, cy + knot],
-                outline=CREAM, width=3)
+    cx = w // 2
+    mark = _logo_mask(int(h * 0.40))
+    img.paste(CREAM, (cx - mark.width // 2, int(h * 0.10)), mark)
     _fit(d, (cx, int(h * 0.60)), "B I T C O I N   B U T L E R S",
          int(h * 0.055), CREAM, "mm", int(w * 0.92))
     d.line([(int(w * 0.20), int(h * 0.68)), (int(w * 0.80), int(h * 0.68))],
