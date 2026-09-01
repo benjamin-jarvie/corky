@@ -55,6 +55,41 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     d.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
+def _actions(d, w, h, labels, selected=1):
+    """The bottom action bar (Ben, 2026-09-01): actions are visible,
+    d-pad-toggleable options in one place, never key legends in corners.
+    The gold box marks the active option; A activates it."""
+    size = int(h * 0.05)
+    box_h = int(h * 0.085)
+    gap = int(w * 0.03)
+    widths = [d.textbbox((0, 0), t, font=_font(size))[2] + int(w * 0.06)
+              for t in labels]
+    x = (w - sum(widths) - gap * (len(labels) - 1)) // 2
+    cy = int(h * 0.93)
+    for i, (t, bw) in enumerate(zip(labels, widths)):
+        active = i == selected
+        d.rounded_rectangle([x, cy - box_h // 2, x + bw, cy + box_h // 2],
+                            radius=4, outline=OCHRE if active else GREY)
+        d.text((x + bw // 2, cy), t, font=_font(size),
+               fill=CREAM if active else GREY, anchor="mm")
+        x += bw + gap
+
+
+def _status_circle(img, d, w, h, label, colour):
+    """A smooth status ring, drawn 4x and downsampled: a 3px ellipse at
+    panel size aliases into stair-steps. Sized so the label breathes."""
+    r = int(h * 0.23)
+    cx, cy = w // 2, int(h * 0.32)
+    ss = 4
+    ring = Image.new("L", (2 * r * ss, 2 * r * ss), 0)
+    ImageDraw.Draw(ring).ellipse(
+        [2 * ss, 2 * ss, 2 * r * ss - 2 * ss, 2 * r * ss - 2 * ss],
+        outline=255, width=3 * ss)
+    img.paste(colour, (cx - r, cy - r), ring.resize((2 * r, 2 * r),
+                                                    Image.LANCZOS))
+    _fit(d, (cx, cy), label, int(h * 0.075), colour, "mm", int(r * 1.6))
+
+
 def _frame(w, h, title=None):
     img = Image.new("RGB", (w, h), INK)
     d = ImageDraw.Draw(img)
@@ -66,35 +101,33 @@ def _frame(w, h, title=None):
     return img, d
 
 
-def home(w, h, version="v0"):
+def home(w, h, selected=0):
+    """Three choices on the d-pad, A activates the gold box. No tagline,
+    no key legend, no status line (Ben, 2026-09-01)."""
     img, d = _frame(w, h)
-    d.text((w // 2, int(h * 0.22)), "CORKY", font=_font(int(h * 0.16)),
+    d.text((w // 2, int(h * 0.20)), "CORKY", font=_font(int(h * 0.16)),
            fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.34)), "Core's keys, nothing kept",
-           font=_font(int(h * 0.06)), fill=GREY, anchor="mm")
-    for i, line in enumerate(
-            ["1 · open a wallet (words, QR or typed)",
-             "2 · load a PSBT (QR or USB stick)",
-             "3 · review, sign, hand it back"]):
-        y = int(h * (0.50 + i * 0.12))
-        _fit(d, (int(w * 0.08), y), line, int(h * 0.055), CREAM, "lm",
-             int(w * 0.86))
-    d.text((w // 2, int(h * 0.88)), "A · begin    R · tools    C · off",
-           font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), f"bitcoind ready · session RAM-only · {version}",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    for i, label in enumerate(["open a wallet", "tools", "power off"]):
+        y = int(h * (0.44 + i * 0.155))
+        if i == selected:
+            d.rounded_rectangle([int(w * 0.24), y - int(h * 0.062),
+                                 int(w * 0.76), y + int(h * 0.062)],
+                                radius=4, outline=OCHRE)
+        d.text((w // 2, y), label, font=_font(int(h * 0.065)),
+               fill=CREAM if i == selected else GREY, anchor="mm")
     return img
 
 
 def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
-           page=0, unseen_pages=False):
-    """The screen that matters. outputs: [(address, amount_btc), ...]"""
-    pages = max(1, (len(outputs) + 2) // 3)
+           page=0, unseen_pages=False, actions_sel=1):
+    """The screen that matters. outputs: [(address, amount_btc), ...]
+    Two outputs per page (Ben, 2026-09-01): less going on per frame."""
+    pages = max(1, (len(outputs) + 1) // 2)
     title = ("REVIEW  TRANSACTION" if pages == 1
              else f"REVIEW  ·  OUTPUTS {page + 1}/{pages}")
     img, d = _frame(w, h, title)
     y = int(h * 0.18)
-    for addr, amt in outputs[page * 3:page * 3 + 3]:
+    for addr, amt in outputs[page * 2:page * 2 + 2]:
         short = addr[:14] + "…" + addr[-6:] if len(addr) > 24 else addr
         d.text((int(w * 0.06), y), short, font=_font(int(h * 0.058)),
                fill=CREAM, anchor="lm")
@@ -113,32 +146,24 @@ def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
     d.text((int(w * 0.94), y + int(h * 0.07)), f"{fee_btc:.8f} BTC",
            font=_font(int(h * 0.075)), fill=RED, anchor="rm")
     if unseen_pages:
-        # The sign button refuses until every output has been on screen.
-        # Saying so beats advancing the page for no visible reason. The
-        # fee-trust caveat below STAYS: the refused render is the state
-        # closest to signing.
-        _fit(d, (w // 2, int(h * 0.87)), "see every output before you sign",
+        # SIGN refuses until every output has been on screen. Saying so
+        # beats advancing the page for no visible reason. The fee-trust
+        # caveat below STAYS: this render is the state closest to signing.
+        _fit(d, (w // 2, int(h * 0.76)), "see every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     if warn:
-        _fit(d, (w // 2, int(h * (0.915 if unseen_pages else 0.90))),
+        _fit(d, (w // 2, int(h * 0.83)),
              "fee per coordinator's input amounts",
-             int(h * (0.04 if unseen_pages else 0.045)), GREY, "mm",
-             int(w * 0.92))
-    d.text((int(w * 0.06), int(h * 0.97)), "KEY3 · reject",
-           font=_font(int(h * 0.05)), fill=GREY, anchor="lm")
-    d.text((int(w * 0.94), int(h * 0.97)), "KEY1 · SIGN",
-           font=_font(int(h * 0.05)), fill=CREAM, anchor="rm")
+             int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _actions(d, w, h, ["REJECT", "SIGN"], actions_sel)
     return img
 
 
 def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
     img, d = _frame(w, h)
-    d.ellipse([w // 2 - int(h * 0.14), int(h * 0.22), w // 2 + int(h * 0.14),
-               int(h * 0.22) + int(h * 0.28)],
-              outline=GREEN if ok else RED, width=3)
-    d.text((w // 2, int(h * 0.36)), "SIGNED" if ok else "FAILED",
-           font=_font(int(h * 0.08)), fill=GREEN if ok else RED, anchor="mm")
-    _fit(d, (w // 2, int(h * 0.62)), detail, int(h * 0.055), CREAM, "mm",
+    _status_circle(img, d, w, h, "SIGNED" if ok else "FAILED",
+                   OCHRE if ok else RED)
+    _fit(d, (w // 2, int(h * 0.66)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
     d.text((w // 2, int(h * 0.78)), "power off when done:",
            font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
@@ -155,8 +180,8 @@ def seed_entry(w, h, word_index, total_words, partial, candidates):
         y = int(h * (0.44 + i * 0.11))
         sel = i == 0
         if sel:
-            d.rectangle([int(w * 0.28), y - int(h * 0.048),
-                         int(w * 0.72), y + int(h * 0.048)], outline=OCHRE)
+            d.rounded_rectangle([int(w * 0.28), y - int(h * 0.048),
+                         int(w * 0.72), y + int(h * 0.048)], radius=4, outline=OCHRE)
         d.text((w // 2, y), c, font=_font(int(h * 0.065)),
                fill=CREAM if sel else GREY, anchor="mm")
     d.text((w // 2, int(h * 0.95)), "U/D · letter   A · add   R · words   B · del   C · quit",
@@ -164,16 +189,23 @@ def seed_entry(w, h, word_index, total_words, partial, candidates):
     return img
 
 
-def busy(w, h, message="checking words, deriving in Core…"):
+def busy(w, h, message="checking words, deriving in Core…", phase=0):
+    """The wait frame: the brand mark, turning while Core works. phase
+    advances the rotation; the dev harness renders phase 0 only, the
+    device animates from a thread (main._busy)."""
     img, d = _frame(w, h)
-    d.text((w // 2, int(h * 0.42)), "·  ·  ·", font=_font(int(h * 0.09)),
-           fill=OCHRE, anchor="mm")
-    _fit(d, (w // 2, int(h * 0.58)), message, int(h * 0.055), CREAM, "mm",
+    mark = _logo_mask(int(h * 0.34))
+    if phase:
+        mark = mark.rotate(-phase * 30, expand=False,
+                           resample=Image.BICUBIC)
+    img.paste(CREAM, (w // 2 - mark.width // 2, int(h * 0.16)), mark)
+    _fit(d, (w // 2, int(h * 0.72)), message, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
     return img
 
 
 SEED_MENU_OPTIONS = [
+    ("Generate seed", "Core RNG · BIP32"),
     ("Scan SeedQR", "words via shim"),
     ("Type seed words", "words via shim"),
     ("Scan codex32", "BIP32-native"),
@@ -190,41 +222,33 @@ def seed_menu(w, h, selected=0):
     for i, (label, note) in enumerate(options):
         y = int(h * (0.17 + i * 0.115))
         if i == selected:
-            d.rectangle([int(w * 0.04), y - int(h * 0.055),
-                         int(w * 0.96), y + int(h * 0.055)], outline=OCHRE)
+            d.rounded_rectangle([int(w * 0.04), y - int(h * 0.055),
+                         int(w * 0.96), y + int(h * 0.055)], radius=4, outline=OCHRE)
         d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
                fill=CREAM if i == selected else GREY, anchor="lm")
         d.text((int(w * 0.92), y), note, font=_font(int(h * 0.042)),
                fill=OCHRE if i == selected else GREY, anchor="rm")
-    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 
 
 def tools_menu(w, h, selected=0):
-    """Utilities: verify a share, back up a seed, generate one from Core."""
+    """Utilities: verify a share, back up a seed, generate one from Core.
+    No sub-lines, no footer legend (Ben, 2026-09-01)."""
     img, d = _frame(w, h, "TOOLS")
-    options = [
-        ("Verify a codex32 share", "checksum only, no keys touched"),
-        ("Back up seed as codex32", "words in, string or shares out"),
-        ("Generate a seed (Core RNG)", "opt-in; entropy from Bitcoin Core"),
-    ]
-    for i, (label, note) in enumerate(options):
+    options = ["Verify a codex32 share", "Back up seed as codex32",
+               "Generate a seed (Core RNG)"]
+    for i, label in enumerate(options):
         y = int(h * (0.30 + i * 0.18))
         if i == selected:
-            d.rectangle([int(w * 0.04), y - int(h * 0.065),
-                         int(w * 0.96), y + int(h * 0.065)], outline=OCHRE)
+            d.rounded_rectangle([int(w * 0.04), y - int(h * 0.065),
+                                 int(w * 0.96), y + int(h * 0.065)],
+                                radius=4, outline=OCHRE)
         d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
                fill=CREAM if i == selected else GREY, anchor="lm")
-        d.text((int(w * 0.92), y + int(h * 0.05)), note,
-               font=_font(int(h * 0.04)),
-               fill=OCHRE if i == selected else GREY, anchor="rm")
-    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 
 
-def generate_warning(w, h):
+def generate_warning(w, h, selected=1):
     """Shown before Core-RNG generation (PLAN A-19). States the tradeoff
     before any key material exists, not after."""
     img, d = _frame(w, h, "GENERATE  A  SEED")
@@ -239,12 +263,11 @@ def generate_warning(w, h):
     for i, line in enumerate(lines):
         _fit(d, (w // 2, int(h * (0.38 + i * 0.085))), line,
              int(h * 0.045), CREAM, "mm", int(w * 0.94))
-    d.text((w // 2, int(h * 0.95)), "A · generate in Core    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["BACK", "GENERATE"], selected)
     return img
 
 
-def keymaterial_warning(w, h, kind="descriptor"):
+def keymaterial_warning(w, h, kind="descriptor", selected=1):
     """Shown before accepting an xprv or descriptor (A-14): the QR IS the
     wallet — no passphrase layer protects it."""
     img, d = _frame(w, h, f"SCAN  {kind.upper()}")
@@ -256,8 +279,7 @@ def keymaterial_warning(w, h, kind="descriptor"):
     for i, line in enumerate(lines):
         _fit(d, (w // 2, int(h * (0.46 + i * 0.09))), line,
              int(h * 0.05), CREAM, "mm", int(w * 0.94))
-    d.text((w // 2, int(h * 0.95)), "A · I understand, scan    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["BACK", "SCAN"], selected)
     return img
 
 
@@ -266,12 +288,10 @@ def seed_length(w, h, selected=0):
     for i, label in enumerate(["12 words", "24 words"]):
         y = int(h * (0.35 + i * 0.18))
         if i == selected:
-            d.rectangle([int(w * 0.30), y - int(h * 0.07),
-                         int(w * 0.70), y + int(h * 0.07)], outline=OCHRE)
+            d.rounded_rectangle([int(w * 0.30), y - int(h * 0.07),
+                         int(w * 0.70), y + int(h * 0.07)], radius=4, outline=OCHRE)
         d.text((w // 2, y), label, font=_font(int(h * 0.08)),
                fill=CREAM if i == selected else GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 
 
@@ -294,8 +314,7 @@ def codex32_scan(w, h):
            font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
     d.text((w // 2, int(h * 0.74)), "256-bit shares: type them instead",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "A · type instead    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["BACK", "TYPE INSTEAD"], 1)
     return img
 
 
@@ -318,9 +337,9 @@ def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14):
         cx = x0 + c * cell_w + cell_w // 2
         cy = y0 + r * cell_h + cell_h // 2
         if i == cursor:
-            d.rectangle([cx - cell_w // 2 + 2, cy - cell_h // 2 + 2,
+            d.rounded_rectangle([cx - cell_w // 2 + 2, cy - cell_h // 2 + 2,
                          cx + cell_w // 2 - 2, cy + cell_h // 2 - 2],
-                        outline=OCHRE)
+                        radius=4, outline=OCHRE)
         d.text((cx, cy), ch.upper(), font=_font(int(h * 0.06)),
                fill=CREAM if i == cursor else GREY, anchor="mm")
     d.text((w // 2, int(h * 0.95)),
@@ -340,26 +359,20 @@ def codex32_shares(w, h, have_ids=("A", "C"), k=3):
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     d.text((w // 2, int(h * 0.69)), "duplicates are refused",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "A · add next share    C · abort",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["ABORT", "ADD SHARE"], 1)
     return img
 
 
 def codex32_error(w, h, detail="checksum failed at position 31"):
     img, d = _frame(w, h)
-    r = int(h * 0.19)
-    d.ellipse([w // 2 - r, int(h * 0.13), w // 2 + r, int(h * 0.13) + 2 * r],
-              outline=RED, width=3)
-    d.text((w // 2, int(h * 0.13) + r), "INVALID",
-           font=_font(int(h * 0.07)), fill=RED, anchor="mm")
-    _fit(d, (w // 2, int(h * 0.60)), detail, int(h * 0.055), CREAM, "mm",
+    _status_circle(img, d, w, h, "INVALID", RED)
+    _fit(d, (w // 2, int(h * 0.64)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
-    d.text((w // 2, int(h * 0.70)), "detection only: this device never",
+    d.text((w // 2, int(h * 0.72)), "detection only: this device never",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.77)), "guesses corrections to key material",
+    d.text((w // 2, int(h * 0.78)), "guesses corrections to key material",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "A · re-enter    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["BACK", "RE-ENTER"], 1)
     return img
 
 
@@ -370,18 +383,12 @@ def codex32_split_choice(w, h, selected=0):
     for i, (label, note) in enumerate(options):
         y = int(h * (0.28 + i * 0.17))
         if i == selected:
-            d.rectangle([int(w * 0.06), y - int(h * 0.07),
-                         int(w * 0.94), y + int(h * 0.07)], outline=OCHRE)
+            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.07),
+                         int(w * 0.94), y + int(h * 0.07)], radius=4, outline=OCHRE)
         d.text((int(w * 0.10), y), label, font=_font(int(h * 0.065)),
                fill=CREAM if i == selected else GREY, anchor="lm")
         d.text((int(w * 0.90), y), note, font=_font(int(h * 0.045)),
                fill=OCHRE if i == selected else GREY, anchor="rm")
-    d.text((w // 2, int(h * 0.70)), "some practitioners discourage splitting",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.77)), "seeds; shares are optional, never required",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "UP/DOWN · choose    A · select    B · back",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 
 
@@ -426,13 +433,9 @@ def codex32_share_display(w, h,
         _fit(d, (w // 2, int(h * 0.79)),
              "the codex32 kit worksheets own paper",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    _fit(d, (w // 2, int(h * 0.72)), "checksum re-verifies before you leave",
-         int(h * 0.045), GREY, "mm", int(w * 0.92))
-    nav = "A · next" if page + 1 < pages else "A · I wrote it, verify me"
-    if pages > 1:
-        nav += "    B · back"
-    _fit(d, (w // 2, int(h * 0.95)), nav + "    C · abort",
-         int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _actions(d, w, h,
+             ["ABORT" if page == 0 else "BACK",
+              "NEXT" if page + 1 < pages else "VERIFY"], 1)
     return img
 
 
@@ -446,19 +449,11 @@ def address_lines(address, per_line=22):
 def codex32_verified(w, h, kind="share 2 of 3"):
     """`kind` may carry newlines (see address_lines); each line is fitted."""
     img, d = _frame(w, h)
-    r = int(h * 0.19)
-    d.ellipse([w // 2 - r, int(h * 0.13), w // 2 + r, int(h * 0.13) + 2 * r],
-              outline=OCHRE, width=3)
-    d.text((w // 2, int(h * 0.13) + r), "VALID", font=_font(int(h * 0.07)),
-           fill=OCHRE, anchor="mm")
-    lines = kind.split("\n")
-    for i, line in enumerate(lines):
-        _fit(d, (w // 2, int(h * (0.58 + i * 0.065))), line,
+    _status_circle(img, d, w, h, "VALID", OCHRE)
+    for i, line in enumerate(kind.split("\n")):
+        _fit(d, (w // 2, int(h * (0.64 + i * 0.065))), line,
              int(h * 0.06), CREAM, "mm", int(w * 0.92))
-    tail = int(h * (0.58 + len(lines) * 0.065))
-    _fit(d, (w // 2, max(tail + int(h * 0.03), int(h * 0.86))),
-         "verified without exposing the seed to any other device",
-         int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _actions(d, w, h, ["DONE"], 0)
     return img
 
 
@@ -493,8 +488,6 @@ def splash(w, h):
          int(h * 0.055), CREAM, "mm", int(w * 0.92))
     d.line([(int(w * 0.20), int(h * 0.68)), (int(w * 0.80), int(h * 0.68))],
            fill=CREAM, width=1)
-    _fit(d, (cx, int(h * 0.79)), "CORKY", int(h * 0.10), CREAM, "mm",
+    _fit(d, (cx, int(h * 0.83)), "CORKY", int(h * 0.10), CREAM, "mm",
          int(w * 0.92))
-    _fit(d, (cx, int(h * 0.91)), "Core's keys, nothing kept",
-         int(h * 0.045), CREAM, "mm", int(w * 0.92))
     return img

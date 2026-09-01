@@ -23,6 +23,7 @@ Keys: u/d = up/down, l/r = left/right, a = select, b = back, c = reject.
 import argparse
 import string
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -78,8 +79,9 @@ class DevQrSource:
 
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
-                 passphrase=""):
+                 passphrase="", animate=False):
         self.display = display
+        self.animate = animate
         self.buttons = buttons
         self.rpc = rpc
         self.stick_dir = Path(stick_dir) if stick_dir else None
@@ -99,24 +101,53 @@ class Session:
             except Exception:
                 pass
 
+    def _busy(self, message):
+        """Paint the wait frame; on the device a thread keeps the mark
+        turning until the returned stop() runs. The dev harness paints one
+        static frame so scripted sessions stay deterministic."""
+        self.display.show(screens.busy(self.w, self.h, message))
+        if not self.animate:
+            return lambda: None
+        stop = threading.Event()
+
+        def turn():
+            phase = 1
+            while not stop.wait(0.15):
+                self.display.show(screens.busy(self.w, self.h, message,
+                                               phase))
+                phase += 1
+
+        worker = threading.Thread(target=turn, daemon=True)
+        worker.start()
+
+        def halt():
+            stop.set()
+            worker.join(timeout=1)
+        return halt
+
     def state_home(self):
-        self.display.show(screens.home(self.w, self.h))
+        selected = 0
         while True:
+            self.display.show(screens.home(self.w, self.h, selected))
             key = self.buttons.read()
+            if key == "u":
+                selected = (selected - 1) % 3
+            elif key == "d":
+                selected = (selected + 1) % 3
+            elif key == "r":       # hardware shortcut straight to tools
+                selected, key = 1, "a"
+            elif key == "c":
+                return
             if key == "a":
-                if self.state_seed_menu():
-                    self.state_load()
+                if selected == 2:
                     return
-                self.display.show(screens.home(self.w, self.h))
-            elif key == "r":
-                if self.state_tools():
+                opened = (self.state_seed_menu() if selected == 0
+                          else self.state_tools())
+                if opened:
                     # Generation leaves a wallet open in Core: go straight
                     # on to loading a PSBT rather than back to HOME.
                     self.state_load()
                     return
-                self.display.show(screens.home(self.w, self.h))
-            elif key == "c":
-                return
 
     # -- seed entry: the three A-14 modes plus SeedQR ---------------------
 
@@ -126,14 +157,15 @@ class Session:
             self.display.show(screens.seed_menu(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 6
+                selected = (selected - 1) % 7
             elif key == "d":
-                selected = (selected + 1) % 6
+                selected = (selected + 1) % 7
             elif key == "b":
                 return False
             elif key == "a":
                 try:
-                    return [self._seed_seedqr, self._seed_words,
+                    return [self._seed_generate,
+                            self._seed_seedqr, self._seed_words,
                             self._seed_codex32_scan, self._seed_codex32_type,
                             self._seed_descriptor, self._seed_xprv][selected]()
                 except Exception as exc:
@@ -144,10 +176,17 @@ class Session:
                     self.buttons.read()
                     return False
 
+    def _seed_generate(self):
+        """A-19 from the front door (Ben, 2026-09-01): Core generates, the
+        backup shows, the session stays open. Same flow as the tools entry."""
+        return bool(self._tool_generate())
+
     def _open_words(self, mnemonic):
-        self.display.show(screens.busy(self.w, self.h,
-                                       "checking words, deriving in Core…"))
-        signer.open_session(self.rpc, mnemonic, self.passphrase)
+        stop = self._busy("checking words, deriving in Core…")
+        try:
+            signer.open_session(self.rpc, mnemonic, self.passphrase)
+        finally:
+            stop()
         return True
 
     def _seed_seedqr(self):
@@ -394,16 +433,23 @@ class Session:
         says plainly that software entropy cannot be audited as it runs
         and that cards or dice remain the default.
         """
-        self.display.show(screens.generate_warning(self.w, self.h))
+        sel = 1
         while True:
+            self.display.show(screens.generate_warning(self.w, self.h, sel))
             key = self.buttons.read()
-            if key == "a":
+            if key in ("l", "r", "u", "d"):
+                sel = 1 - sel
+            elif key == "a":
+                if sel == 0:
+                    return False
                 break
-            if key in ("b", "c"):
+            elif key in ("b", "c"):
                 return False
-        self.display.show(screens.busy(self.w, self.h,
-                                       "Bitcoin Core is creating a wallet…"))
-        xprv = signer.generate_wallet(self.rpc)
+        stop = self._busy("Bitcoin Core is creating a wallet…")
+        try:
+            xprv = signer.generate_wallet(self.rpc)
+        finally:
+            stop()
         # The backup IS the master xprv, in Core's own encoding, shown in
         # 4-char groups for transcription. No split option: an xprv is a
         # BIP32 node, not a seed, so codex32 cannot encode it; guardians
@@ -414,7 +460,7 @@ class Session:
         address = self.rpc.call("getnewaddress", wallet=signer.WALLET)
         self.display.show(screens.codex32_verified(
             self.w, self.h,
-            "first address\n" + screens.address_lines(address)))
+            "first address  " + address[:14] + "…" + address[-6:]))
         self.buttons.read()
         return True
 
@@ -436,7 +482,9 @@ class Session:
             if key == "c":
                 return False
             if key in ("b", "u"):
-                i = max(i - 1, 0)
+                if i == 0:
+                    return False    # nothing earlier: BACK is ABORT here
+                i -= 1
             elif key == "a":
                 if i + 1 == len(pages):
                     return True
@@ -541,21 +589,23 @@ class Session:
                 detail="PSBT lacks input data; fee unknown; refused"))
             return
         outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
-        pages = max(1, (len(outs) + 2) // 3)
-        page, seen, refused = 0, {0}, False
+        pages = max(1, (len(outs) + 1) // 2)
+        page, seen, refused, sel = 0, {0}, False, 1
         while True:
             self.display.show(screens.review(
                 self.w, self.h, outs, info["fee_btc"],
                 info["input_count"], input_total_btc=info["input_total_btc"],
-                page=page, unseen_pages=refused))
+                page=page, unseen_pages=refused, actions_sel=sel))
             key = self.buttons.read()
-            if key == "d":
+            if key in ("l", "r"):
+                sel = 1 - sel
+            elif key == "d":
                 page, refused = (page + 1) % pages, False
                 seen.add(page)
             elif key == "u":
                 page, refused = (page - 1) % pages, False
                 seen.add(page)
-            elif key == "a":
+            elif key == "a" and sel == 1:
                 if len(seen) < pages:
                     # Every output must have been on screen before signing.
                     page, refused = (page + 1) % pages, True
@@ -563,14 +613,17 @@ class Session:
                     continue
                 self.state_sign(psbt, source)
                 return
-            elif key == "c":
+            elif key == "c" or (key == "a" and sel == 0):
                 self.display.show(screens.result(
                     self.w, self.h, ok=False, detail="rejected by user"))
                 return
 
     def state_sign(self, psbt, source):
-        self.display.show(screens.busy(self.w, self.h, "signing in Core…"))
-        signed = signer.sign_psbt(self.rpc, psbt)
+        stop = self._busy("signing in Core…")
+        try:
+            signed = signer.sign_psbt(self.rpc, psbt)
+        finally:
+            stop()
         if not signed["complete"]:
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
@@ -612,6 +665,7 @@ def main():
         qr = CameraQrSource()
 
     Session(display, buttons, rpc, stick_dir=args.stick_dir, qr_source=qr,
+            animate=not args.dev,
             passphrase=args.passphrase).run()
 
 

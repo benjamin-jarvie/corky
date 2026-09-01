@@ -53,7 +53,7 @@ OUTPUTS = [(ADDR, 0.03444556), ("bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
 
 CASES = {
     "splash": lambda w, h: screens.splash(w, h),
-    "home": lambda w, h: screens.home(w, h, "v1.1.0"),
+    "home": lambda w, h: screens.home(w, h, 1),
     "review-1page": lambda w, h: screens.review(w, h, OUTPUTS[:2], 0.0000851, 3,
                                                 input_total_btc=21.3),
     "review-paged": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851, 9,
