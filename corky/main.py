@@ -137,8 +137,11 @@ class Session:
                             self._seed_codex32_scan, self._seed_codex32_type,
                             self._seed_descriptor, self._seed_xprv][selected]()
                 except Exception as exc:
+                    # Hold the message: without a key wait the home screen
+                    # repaints immediately and the user sees only a flicker.
                     self.display.show(screens.result(
                         self.w, self.h, ok=False, detail=str(exc)[:60]))
+                    self.buttons.read()
                     return False
 
     def _open_words(self, mnemonic):
@@ -374,10 +377,7 @@ class Session:
             outputs = codex32.split(seed, 2, 3, ident,
                                     codex32.derive_split_entropy(seed, 2, 3))
         for i, out in enumerate(outputs):
-            self.display.show(screens.codex32_share_display(
-                self.w, self.h, out.upper(), i + 1, len(outputs)),
-                sensitive=True)
-            if self.buttons.read() == "c":
+            if not self._show_backup(out.upper(), i + 1, len(outputs)):
                 return
         self.display.show(screens.result(
             self.w, self.h, ok=True,
@@ -408,15 +408,30 @@ class Session:
         # 4-char groups for transcription. No split option: an xprv is a
         # BIP32 node, not a seed, so codex32 cannot encode it; guardians
         # of an xprv backup use Kaitiaki or the kit's practices instead.
-        self.display.show(screens.codex32_share_display(
-            self.w, self.h, xprv, 1, 1), sensitive=True)
-        if self.buttons.read() == "c":
+        if not self._show_backup(xprv, 1, 1):
             signer.close_session(self.rpc)
             return False
         address = self.rpc.call("getnewaddress", wallet=signer.WALLET)
         self.display.show(screens.codex32_verified(
-            self.w, self.h, f"first address {address}"))
+            self.w, self.h,
+            "first address\n" + screens.address_lines(address)))
         self.buttons.read()
+        return True
+
+    def _show_backup(self, text, index, total):
+        """Show one backup string across as many screenfuls as it needs.
+
+        A 127-character codex32 secret and Core's 111-character master xprv
+        both overrun one screen; drawing them as one column asked the user to
+        transcribe characters that were never on the panel. Returns False if
+        the user aborts with C."""
+        pages = screens.share_pages(text)
+        for i, page in enumerate(pages):
+            self.display.show(screens.codex32_share_display(
+                self.w, self.h, page, index, total,
+                page=i, pages=len(pages)), sensitive=True)
+            if self.buttons.read() == "c":
+                return False
         return True
 
     def _pick_split(self):
@@ -519,23 +534,23 @@ class Session:
             return
         outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
         pages = max(1, (len(outs) + 2) // 3)
-        page, seen = 0, {0}
+        page, seen, refused = 0, {0}, False
         while True:
             self.display.show(screens.review(
                 self.w, self.h, outs, info["fee_btc"],
                 info["input_count"], input_total_btc=info["input_total_btc"],
-                page=page))
+                page=page, unseen_pages=refused))
             key = self.buttons.read()
             if key == "d":
-                page = (page + 1) % pages
+                page, refused = (page + 1) % pages, False
                 seen.add(page)
             elif key == "u":
-                page = (page - 1) % pages
+                page, refused = (page - 1) % pages, False
                 seen.add(page)
             elif key == "a":
                 if len(seen) < pages:
                     # Every output must have been on screen before signing.
-                    page = (page + 1) % pages
+                    page, refused = (page + 1) % pages, True
                     seen.add(page)
                     continue
                 self.state_sign(psbt, source)
@@ -568,7 +583,9 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dev", action="store_true")
-    ap.add_argument("--datadir", required=True)
+    ap.add_argument("--splash", action="store_true",
+                    help="paint the brand frame and exit (runs before bitcoind)")
+    ap.add_argument("--datadir", default="")   # required unless --splash
     ap.add_argument("--chain", default="main")
     ap.add_argument("--script", default="")
     ap.add_argument("--stick-dir")
@@ -577,6 +594,16 @@ def main():
     ap.add_argument("--passphrase", default="")
     ap.add_argument("--frames-dir", default="frames")
     args = ap.parse_args()
+
+    if args.splash:
+        # Ordered before bitcoind, so the panel carries the brand for the
+        # whole boot instead of staying dark until the session starts.
+        display = (hal.DevDisplay(args.frames_dir) if args.dev
+                   else hal.DeviceDisplay())
+        display.show(screens.splash(display.width, display.height))
+        return
+    if not args.datadir:
+        ap.error("--datadir is required for a signing session")
 
     rpc = signer.Rpc(args.datadir, chain=args.chain)
     if args.dev:

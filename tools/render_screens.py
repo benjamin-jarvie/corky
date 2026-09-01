@@ -17,6 +17,7 @@ DEMO_OUTPUTS = [
 
 for w, h, tag in [(320, 240, "ili9341"), (240, 240, "st7789")]:
     for name, img in {
+        "0-splash": screens.splash(w, h),
         "1-home": screens.home(w, h),
         "2-seed-entry": screens.seed_entry(w, h, 7, 12, "mo", ("moment", "monitor", "monkey", "month")),
         "3-busy": screens.busy(w, h),

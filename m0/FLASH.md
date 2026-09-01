@@ -17,6 +17,9 @@ Your part is about 20 minutes of hands-on time. The Pi does the rest.
 SSH in (`ssh <user>@corky.local`), then:
 
 ```bash
+sudo swapoff -a   # RPi OS enables swap by default; swap falsifies both
+                  # gate numbers and the gate refuses to run with it on.
+                  # Reverts at reboot.
 sudo apt update && sudo apt install -y python3
 # Bitcoin Core, official aarch64 binary (31.1 = the version all Corky tests ran against on the Mac):
 cd /tmp

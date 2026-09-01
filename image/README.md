@@ -4,8 +4,11 @@ Dev-image build, two steps, both scripted:
 
 1. Flash Raspberry Pi OS Lite **64-bit** (per `PINS`) with Raspberry Pi
    Imager — enable SSH and set a user in Imager's settings.
-2. `./image/prepare-sd.sh` with the SD still mounted, then boot the Pi on
-   an Ethernet cable and run `sudo bash /boot/firmware/corky-provision.sh`.
+2. `./image/prepare-sd.sh` with the SD still mounted, then boot the Pi
+   on the network and run `sudo bash /boot/firmware/corky-provision.sh`.
+   Network per board: the CM4 carrier has an Ethernet jack, use the
+   cable. The Zero 2 W has no Ethernet port: set WiFi in Imager's
+   settings before flashing, as m0/FLASH.md says.
 
 The result is the **dev image**: Corky at `/opt/corky`, verified Core
 binary, ramdisk datadir at `/run/corky`, SPI enabled, `corky.service`

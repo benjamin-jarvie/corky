@@ -35,9 +35,10 @@ bitcoind --version | head -1
 
 echo "== 2/5 system packages"
 apt-get update -qq
+# libzbar0: pyzbar (in PIP_PINS) dlopens it at import; pip cannot provide it.
 apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev \
-    python3-picamera2 python3-zbar python3-pip 2>/dev/null \
-  || apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev python3-pip
+    python3-picamera2 python3-zbar libzbar0 python3-pip 2>/dev/null \
+  || apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev libzbar0 python3-pip
 # shellcheck disable=SC2086
 python3 -m pip install --quiet --break-system-packages $PIP_PINS
 
@@ -57,6 +58,10 @@ install -m 644 /opt/corky/m0/bitcoin.conf /etc/corky-bitcoin.conf
 echo "== 5/5 systemd units (installed, NOT enabled on the dev image)"
 install -m 644 "$BOOT/corky.service" /etc/systemd/system/corky.service
 install -m 644 "$BOOT/corky-bitcoind.service" /etc/systemd/system/corky-bitcoind.service
+install -m 644 "$BOOT/corky-splash.service" /etc/systemd/system/corky-splash.service
+# The USB PSBT channel's mount point. Mounting the stick here is the
+# operator's step; until it is mounted the directory is simply empty.
+mkdir -p /mnt/usb
 systemctl daemon-reload
 echo "   enable boot-to-corky with: sudo systemctl enable --now corky"
 

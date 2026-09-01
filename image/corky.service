@@ -1,12 +1,13 @@
 [Unit]
 Description=Corky signing session
 Requires=corky-bitcoind.service
-After=corky-bitcoind.service
+Wants=corky-splash.service
+After=corky-splash.service corky-bitcoind.service
 RequiresMountsFor=/run/corky
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --datadir=/run/corky
+ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --datadir=/run/corky --stick-dir=/mnt/usb
 Restart=on-failure
 RestartSec=2
 User=root

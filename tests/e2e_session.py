@@ -409,10 +409,21 @@ def main():
         import main as corky_main
         rec = []
         orig_sd = scr.codex32_share_display
+        # A 127-char codex32 string is three screenfuls now (share_pages),
+        # so the recorder captures every page and the scripts acknowledge
+        # each one.
         scr.codex32_share_display = (
-            lambda w, h, share, index, total:
-            (rec.append((share, index, total)) or orig_sd(w, h, share,
-                                                          index, total)))
+            lambda w, h, share, index, total, page=0, pages=1:
+            (rec.append((share, index, total)) or orig_sd(
+                w, h, share, index, total, page=page, pages=pages)))
+
+        def _pages(text):
+            return scr.share_pages(text.upper())
+
+        def _recorded(text, index, total):
+            return [(p, index, total) for p in _pages(text)]
+
+        PER = len(_pages(F_SECRET))
         try:
             def backup_run(script, tag):
                 d = work / ("framesF" + tag)
@@ -421,19 +432,23 @@ def main():
                 sess._tool_backup()
                 return d
             rec.clear()
-            fd = backup_run("a" + WORDS_SCRIPT + "a" + "a" + "a", "1")
-            assert rec == [(F_SECRET.upper(), 1, 1)], f"F1 drifted: {rec}"
+            fd = backup_run("a" + WORDS_SCRIPT + "a" + "a" * PER + "a", "1")
+            assert rec == _recorded(F_SECRET, 1, 1), f"F1 drifted: {rec}"
             rec.clear()
-            fd = backup_run("a" + WORDS_SCRIPT + "da" + "aaa" + "a", "2")
-            assert rec == [(sh.upper(), i + 1, 3)
-                           for i, sh in enumerate(F_SHARES)], f"F2 drifted: {rec}"
+            fd = backup_run("a" + WORDS_SCRIPT + "da" + "a" * (3 * PER) + "a",
+                            "2")
+            assert rec == [entry for i, sh in enumerate(F_SHARES)
+                           for entry in _recorded(sh, i + 1, 3)], \
+                f"F2 drifted: {rec}"
             assert _frames(fd)[-1].read_bytes() == _render(
                 scr.result, ok=True,
                 detail="transcribed; kit worksheets own paper"), \
                 "F2: final frame is not the exact backup-done screen"
             for i, sh in enumerate(F_SHARES):
-                assert not _has(fd, _render(orig_sd, sh.upper(), i + 1, 3)), \
-                    "F2: SENSITIVE share screen leaked to a dev frame"
+                for n, page in enumerate(_pages(sh)):
+                    assert not _has(fd, _render(orig_sd, page, i + 1, 3,
+                                                page=n, pages=PER)), \
+                        "F2: SENSITIVE share screen leaked to a dev frame"
             rec.clear()
             backup_run("a" + WORDS_SCRIPT + "b", "3")   # abort at split choice
             assert rec == [], "F3: aborted backup still showed a share"
@@ -482,9 +497,13 @@ def main():
             signer.close_session(rpc)
             outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
             assert (len(outs) + 2) // 3 == 3, "N: expected exactly 3 pages"
-            pages = [_render(scr.review, outs, info["fee_btc"],
-                             info["input_count"],
-                             input_total_btc=info["input_total_btc"], page=i)
+            # Each page has two renders now: the plain one, and the one
+            # that says why SIGN was refused (unseen pages remain).
+            pages = [[_render(scr.review, outs, info["fee_btc"],
+                              info["input_count"],
+                              input_total_btc=info["input_total_btc"],
+                              page=i, unseen_pages=refused)
+                      for refused in (False, True)]
                      for i in range(3)]
             sq = work / ("sq_n" + tag + ".txt")
             sq.write_text("0000" * 11 + "0003")
@@ -495,8 +514,8 @@ def main():
             seq = []
             for f in _frames(work / ("framesN" + tag)):
                 raw = f.read_bytes()
-                for i, pg in enumerate(pages):
-                    if raw == pg:
+                for i, variants in enumerate(pages):
+                    if raw in variants:
                         seq.append(i)
             return seq
         # navigate d,d,u,u then sign: displayed pages must be 0,1,2,1,0
@@ -509,10 +528,13 @@ def main():
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
         # r = tools, d,d = third entry, a = select, a = accept the tradeoff,
-        # a = wrote down the master xprv, a = leave the verify screen,
-        # b = abort the PSBT load loop the generated wallet drops us into.
+        # then one a per screenful of the master xprv (111 chars paginates
+        # into three), a = leave the verify screen, b = abort the PSBT load
+        # loop the generated wallet drops us into.
         fg = work / "framesG"
-        r = run_device(datadir, "r" + "dd" + "a" + "a" + "a" + "a" + "b",
+        xprv_pages = 3
+        r = run_device(datadir,
+                       "r" + "dd" + "a" + "a" + "a" * xprv_pages + "a" + "b",
                        fg)
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
         assert _has(fg, _render(scr.generate_warning)), \

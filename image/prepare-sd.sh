@@ -4,7 +4,8 @@
 # enable SSH + set a user in Imager's settings).
 #
 # Copies the provisioning payload onto the SD's boot partition so the Pi
-# can finish its own setup over the Ethernet cable.
+# can finish its own setup over the network (CM4 carrier: Ethernet cable;
+# Zero 2 W: WiFi set in Imager, the board has no Ethernet port).
 #
 # Usage: ./image/prepare-sd.sh [/Volumes/bootfs]
 set -euo pipefail
@@ -22,8 +23,10 @@ cp "$REPO/image/PINS" "$BOOT/corky-PINS"
 cp "$REPO/image/provision.sh" "$BOOT/corky-provision.sh"
 cp "$REPO/image/corky.service" "$BOOT/corky.service"
 cp "$REPO/image/corky-bitcoind.service" "$BOOT/corky-bitcoind.service"
+cp "$REPO/image/corky-splash.service" "$BOOT/corky-splash.service"
 
 echo "-- done. Next:"
-echo "   1. Eject, insert into the Pi, connect Ethernet, power on."
+echo "   1. Eject, insert into the Pi, power on. Network: CM4 carrier ="
+echo "      Ethernet cable; Zero 2 W = WiFi from Imager (no Ethernet port)."
 echo "   2. ssh <user>@corky.local"
 echo "   3. sudo bash /boot/firmware/corky-provision.sh"

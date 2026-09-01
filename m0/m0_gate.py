@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -55,10 +56,46 @@ def mem_available_mb():
     return None
 
 
+def swap_active_mb():
+    """Active swap in MB. Under swap, peak RSS reads low and MemAvailable
+    reads high, so no verdict is possible (ticket 01,
+    docs/wayfinder/zero2w-m0-fixes)."""
+    swaps = Path("/proc/swaps")
+    if not swaps.exists():
+        return 0  # not Linux: dev run, no verdict either way
+    total = 0
+    for line in swaps.read_text().splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 3:
+            total += int(parts[2])  # size column is KB
+    return total // 1024
+
+
+def _watch_low_water(stop, box):
+    """Sample MemAvailable every 200ms: the true low point falls between
+    RPC calls, so two spot samples are not enough (ticket 02)."""
+    while not stop.wait(0.2):
+        m = mem_available_mb()
+        if m is not None and (box[0] is None or m < box[0]):
+            box[0] = m
+
+
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--inputs", type=int, default=250)
     n = args.parse_args().inputs
+
+    swap = swap_active_mb()
+    if swap:
+        print(f"M0 INVALID: {swap}MB of swap is active. Swap makes RSS read"
+              " low and MemAvailable read high; no verdict is possible.")
+        print("Fix: sudo swapoff -a   (reverts at reboot), then re-run.")
+        sys.exit(2)
+
+    stop_sampler = threading.Event()
+    low_box = [None]  # MemAvailable floor at 200ms resolution
+    threading.Thread(target=_watch_low_water,
+                     args=(stop_sampler, low_box), daemon=True).start()
 
     datadir = tempfile.mkdtemp(prefix="corky-m0-")
     t0 = time.time()
@@ -116,9 +153,10 @@ def main():
         report["fee shown (rBTC)"] = review["fee_btc"]
         report["peak bitcoind RSS (MB)"] = vm_hwm_mb(daemon.pid)
         mem_now = mem_available_mb()
+        floors = (low_box[0], low_water, mem_now)
         report["MemAvailable low-water (MB)"] = (
-            min(x for x in (low_water, mem_now) if x is not None)
-            if (low_water or mem_now) else "n/a (not Linux)")
+            min(x for x in floors if x is not None)
+            if any(x is not None for x in floors) else "n/a (not Linux)")
 
         print("\nM0 GATE REPORT")
         for k, v in report.items():
@@ -132,6 +170,7 @@ def main():
             print(f"\nM0 (dev run): signing works; RSS now ~{rss}MB. "
                   "Run on the Pi for the real verdict.")
     finally:
+        stop_sampler.set()
         try:
             rpc.call("stop")
             daemon.wait(timeout=60)

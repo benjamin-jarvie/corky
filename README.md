@@ -2,9 +2,11 @@
 
 **Core's keys, nothing kept.**
 
-Corky is a stateless, air-gapped Bitcoin signing device built from SeedSigner
-hardware (a radio-free Raspberry Pi CM4, camera, and the SeedSigner+ display
-hat; a Pi Zero 2 W pocket build exists too) with one difference that is
+Corky is a stateless, air-gapped Bitcoin signing device built from DIY
+general-purpose hardware, in the same tradition as SeedSigner (which uses a
+radio-free Raspberry Pi Zero 1.3, or a Zero 2 W). Corky's primary build is a
+radio-free Raspberry Pi CM4 Lite, a camera, and the SeedSigner+ display
+hat; a Pi Zero 2 W pocket build exists too. Corky has one difference that is
 the whole point: the wallet brain is **Bitcoin Core itself**, running wallet-only
 and offline. Key derivation, PSBT parsing, fee computation and transaction
 signing are done by the same reviewed C++ code that runs the Bitcoin network's
@@ -138,13 +140,19 @@ code in existence. These are opposite philosophies and neither wins outright.
 If "least code" is your definition of a signer, use SeedSigner; it is a good
 one. Corky exists for people whose definition is "Core's code".
 
-**Radios: absent on the primary build, present on the pocket build.** The
-CM4 Lite (v1 hardware, PLAN A-15) is manufactured without wireless
-silicon, so there is nothing to disable. The Pi Zero 2 W pocket build is
-different: it carries WiFi and Bluetooth on the die, disabled in firmware
-with the drivers blacklisted, and the build docs describe removing the
-wireless front-end component for hardware-level assurance. On that build,
-call the device radio-disabled, not air-gapped-by-physics.
+**Radios: the CM4 has none, the Zero 2 W build removes them by hand.** The
+CM4 Lite (v1 hardware, PLAN A-15) was chosen because it is manufactured
+without wireless silicon: nothing to disable, nothing to remove. The Pi
+Zero 2 W pocket build carries WiFi and Bluetooth hardware on the board,
+and the build instruction is to remove that hardware: desolder the
+wireless front-end component before the device signs anything real. That
+is soldering work (iron or hot-air station). If you will not solder,
+build the CM4 version. The image also disables the radios in firmware
+and blacklists the drivers, and the release image ships with no network
+stack; these are backup layers and they do not replace removal. The
+claim has two tiers. Front-end removal makes the device radio-removed.
+Removing the whole wireless chip as well earns the claim "air-gapped by
+physics", the same property the CM4 build has by manufacture.
 
 **No secure element, no PIN.** Same position as SeedSigner: statelessness is
 the substitute. The device holds nothing worth extracting; the seed lives on
@@ -265,11 +273,11 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 828 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 897 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (468) ·
-[`corky/screens.py`](corky/screens.py) (311) ·
+[`corky/main.py`](corky/main.py) (483) ·
+[`corky/screens.py`](corky/screens.py) (365) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
 **Layer 3 — never touches secrets at all. 246 lines.**
@@ -279,11 +287,11 @@ secret material during entry but performs no cryptography on it.
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,428 lines** (2,011 with blanks/comments).
+**Total functional code: 1,497 lines** (2,130 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,382 lines — none of it ships on the device.**
+**Test code: 2,645 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent

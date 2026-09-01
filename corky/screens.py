@@ -1,9 +1,10 @@
 """Corky's screens as pure PIL renders.
 
 Resolution-independent: every screen takes (width, height) and lays out from
-proportions, so the same code drives the 2.4" ILI9341 (320x240) and the 1.3"
-ST7789 (240x240). On-device, frames go to the vendored drivers' show_image();
-on a dev machine they save as PNGs for review (see tools/render_screens.py).
+proportions, so the same code drives the primary 2.8" ST7789 (320x240) and the
+1.3" ST7789 (240x240). On-device, frames go to the vendored drivers'
+show_image(); on a dev machine they save as PNGs for review (see
+tools/render_screens.py).
 
 Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
@@ -21,6 +22,23 @@ OCHRE = "#C8912F"
 
 def _font(size):
     return ImageFont.load_default(size=size)
+
+
+def _fit(d, xy, text, size, fill, anchor, maxw):
+    """Draw text at `size`, shrinking until it fits `maxw`.
+
+    The panel has no scrollbar: a string wider than the canvas is simply not
+    there. Every screen that renders content it did not choose itself (an
+    address, an error string, a wrapped warning) goes through here, so a
+    longer string degrades in size instead of vanishing off the edge.
+    """
+    while size > 6:
+        font = _font(size)
+        box = d.textbbox(xy, text, font=font, anchor=anchor)
+        if box[2] - box[0] <= maxw:
+            break
+        size -= 1
+    d.text(xy, text, font=_font(size), fill=fill, anchor=anchor)
 
 
 def _frame(w, h, title=None):
@@ -41,12 +59,12 @@ def home(w, h, version="v0"):
     d.text((w // 2, int(h * 0.34)), "Core's keys, nothing kept",
            font=_font(int(h * 0.06)), fill=GREY, anchor="mm")
     for i, line in enumerate(
-            ["1 · open a wallet (words, SeedQR, xprv, descriptor)",
+            ["1 · open a wallet (words, QR or typed)",
              "2 · load a PSBT (QR or USB stick)",
              "3 · review, sign, hand it back"]):
         y = int(h * (0.50 + i * 0.12))
-        d.text((int(w * 0.08), y), line, font=_font(int(h * 0.055)),
-               fill=CREAM, anchor="lm")
+        _fit(d, (int(w * 0.08), y), line, int(h * 0.055), CREAM, "lm",
+             int(w * 0.86))
     d.text((w // 2, int(h * 0.88)), "A · begin    R · tools    C · off",
            font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
     d.text((w // 2, int(h * 0.95)), f"bitcoind ready · session RAM-only · {version}",
@@ -54,7 +72,8 @@ def home(w, h, version="v0"):
     return img
 
 
-def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True, page=0):
+def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
+           page=0, unseen_pages=False):
     """The screen that matters. outputs: [(address, amount_btc), ...]"""
     pages = max(1, (len(outputs) + 2) // 3)
     title = ("REVIEW  TRANSACTION" if pages == 1
@@ -79,10 +98,15 @@ def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
            font=_font(int(h * 0.055)), fill=GREY, anchor="lm")
     d.text((int(w * 0.94), y + int(h * 0.07)), f"{fee_btc:.8f} BTC",
            font=_font(int(h * 0.075)), fill=RED, anchor="rm")
-    if warn:
-        d.text((w // 2, int(h * 0.90)),
-               "fee per coordinator's input amounts",
-               font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    if unseen_pages:
+        # The sign button refuses until every output has been on screen.
+        # Saying so beats advancing the page for no visible reason.
+        _fit(d, (w // 2, int(h * 0.90)), "see every output before you sign",
+             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    elif warn:
+        _fit(d, (w // 2, int(h * 0.90)),
+             "fee per coordinator's input amounts",
+             int(h * 0.045), GREY, "mm", int(w * 0.92))
     d.text((int(w * 0.06), int(h * 0.97)), "KEY3 · reject",
            font=_font(int(h * 0.05)), fill=GREY, anchor="lm")
     d.text((int(w * 0.94), int(h * 0.97)), "KEY1 · SIGN",
@@ -97,8 +121,8 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
               outline=GREEN if ok else RED, width=3)
     d.text((w // 2, int(h * 0.36)), "SIGNED" if ok else "FAILED",
            font=_font(int(h * 0.08)), fill=GREEN if ok else RED, anchor="mm")
-    d.text((w // 2, int(h * 0.62)), detail, font=_font(int(h * 0.055)),
-           fill=CREAM, anchor="mm")
+    _fit(d, (w // 2, int(h * 0.62)), detail, int(h * 0.055), CREAM, "mm",
+         int(w * 0.92))
     d.text((w // 2, int(h * 0.78)), "power off when done —",
            font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
     d.text((w // 2, int(h * 0.85)), "nothing is kept",
@@ -127,8 +151,8 @@ def busy(w, h, message="checking words, deriving in Core…"):
     img, d = _frame(w, h)
     d.text((w // 2, int(h * 0.42)), "●  ●  ●", font=_font(int(h * 0.09)),
            fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.58)), message, font=_font(int(h * 0.055)),
-           fill=CREAM, anchor="mm")
+    _fit(d, (w // 2, int(h * 0.58)), message, int(h * 0.055), CREAM, "mm",
+         int(w * 0.92))
     return img
 
 
@@ -187,8 +211,8 @@ def generate_warning(w, h):
     """Shown before Core-RNG generation (PLAN A-19). States the tradeoff
     before any key material exists, not after."""
     img, d = _frame(w, h, "GENERATE  A  SEED")
-    d.text((w // 2, int(h * 0.24)), "Entropy comes from Bitcoin Core.",
-           font=_font(int(h * 0.068)), fill=OCHRE, anchor="mm")
+    _fit(d, (w // 2, int(h * 0.24)), "Entropy comes from Bitcoin Core.",
+         int(h * 0.068), OCHRE, "mm", int(w * 0.94))
     lines = ["Core's own RNG makes this key, not Corky and not a vendor.",
              "It is software. You cannot audit it as it runs.",
              "Cards or dice stay the verifiable option, and the default.",
@@ -196,8 +220,8 @@ def generate_warning(w, h):
              "Core cannot make BIP39 words. Corky will not invent them.",
              "Your backup is a codex32 string, or k-of-n shares."]
     for i, line in enumerate(lines):
-        d.text((w // 2, int(h * (0.38 + i * 0.085))), line,
-               font=_font(int(h * 0.045)), fill=CREAM, anchor="mm")
+        _fit(d, (w // 2, int(h * (0.38 + i * 0.085))), line,
+             int(h * 0.045), CREAM, "mm", int(w * 0.94))
     d.text((w // 2, int(h * 0.95)), "A · generate in Core    B · back",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
@@ -213,8 +237,8 @@ def keymaterial_warning(w, h, kind="descriptor"):
              "Anyone holding this code holds the funds.",
              "Scan it in private."]
     for i, line in enumerate(lines):
-        d.text((w // 2, int(h * (0.46 + i * 0.09))), line,
-               font=_font(int(h * 0.05)), fill=CREAM, anchor="mm")
+        _fit(d, (w // 2, int(h * (0.46 + i * 0.09))), line,
+             int(h * 0.05), CREAM, "mm", int(w * 0.94))
     d.text((w // 2, int(h * 0.95)), "A · I understand, scan    B · back",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
@@ -311,8 +335,8 @@ def codex32_error(w, h, detail="checksum failed at position 31"):
               outline=RED, width=3)
     d.text((w // 2, int(h * 0.13) + r), "INVALID",
            font=_font(int(h * 0.07)), fill=RED, anchor="mm")
-    d.text((w // 2, int(h * 0.60)), detail,
-           font=_font(int(h * 0.055)), fill=CREAM, anchor="mm")
+    _fit(d, (w // 2, int(h * 0.60)), detail, int(h * 0.055), CREAM, "mm",
+         int(w * 0.92))
     d.text((w // 2, int(h * 0.70)), "detection only: this device never",
            font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     d.text((w // 2, int(h * 0.77)), "guesses corrections to key material",
@@ -344,35 +368,103 @@ def codex32_split_choice(w, h, selected=0):
     return img
 
 
+GROUPS_PER_ROW = 3          # 4-char groups across one line
+ROWS_PER_PAGE = 4           # rows between the title and the footer note
+CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
+
+
+def share_pages(text):
+    """Split a backup string into screenfuls, in order, losing nothing.
+
+    A 64-byte BIP39 seed encodes to a 127-character codex32 secret and Core's
+    master xprv is 111 characters; both are three screenfuls. Drawing them as
+    one column ran the last third off the bottom of the panel, so the user was
+    asked to transcribe characters that never rendered.
+    """
+    return [text[i:i + CHARS_PER_PAGE]
+            for i in range(0, max(len(text), 1), CHARS_PER_PAGE)]
+
+
 def codex32_share_display(w, h,
                           share="MS12NAMEA320ZYXRPP5QSRJG",
-                          index=1, total=3):
-    img, d = _frame(w, h, f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN")
+                          index=1, total=3, page=0, pages=1):
+    """One screenful of a backup string. `share` is already one page's worth
+    (see share_pages); `page`/`pages` drive the position line."""
+    title = f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN"
+    if pages > 1:
+        title = f"SHARE  {index}/{total}  ·  PART  {page + 1}/{pages}"
+    img, d = _frame(w, h, title)
     groups = [share[i:i + 4] for i in range(0, len(share), 4)]
-    for row in range(0, len(groups), 3):
-        y = int(h * (0.26 + (row // 3) * 0.13))
-        d.text((w // 2, y), "  ".join(groups[row:row + 3]),
-               font=_font(int(h * 0.075)), fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.72)), "checksum re-verifies before you leave",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.79)), "the codex32 kit worksheets own paper",
-           font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "A · I wrote it, verify me    C · abort",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    for row_start in range(0, len(groups), GROUPS_PER_ROW):
+        y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
+        _fit(d, (w // 2, y),
+             "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
+             int(h * 0.075), CREAM, "mm", int(w * 0.92))
+    if pages > 1:
+        _fit(d, (w // 2, int(h * 0.79)),
+             f"characters {page * CHARS_PER_PAGE + 1}"
+             f"-{page * CHARS_PER_PAGE + len(share)} of this share",
+             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    else:
+        _fit(d, (w // 2, int(h * 0.79)),
+             "the codex32 kit worksheets own paper",
+             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    _fit(d, (w // 2, int(h * 0.72)), "checksum re-verifies before you leave",
+         int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _fit(d, (w // 2, int(h * 0.95)),
+         "A · next" if page + 1 < pages else "A · I wrote it, verify me",
+         int(h * 0.045), GREY, "mm", int(w * 0.92))
     return img
 
 
+def address_lines(address, per_line=22):
+    """An address broken across lines that fit the panel. Returned as one
+    string with newlines so callers stay simple."""
+    return "\n".join(address[i:i + per_line]
+                      for i in range(0, len(address), per_line))
+
+
 def codex32_verified(w, h, kind="share 2 of 3"):
+    """`kind` may carry newlines (see address_lines); each line is fitted."""
     img, d = _frame(w, h)
     r = int(h * 0.19)
     d.ellipse([w // 2 - r, int(h * 0.13), w // 2 + r, int(h * 0.13) + 2 * r],
               outline=OCHRE, width=3)
     d.text((w // 2, int(h * 0.13) + r), "VALID", font=_font(int(h * 0.07)),
            fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.58)), kind, font=_font(int(h * 0.06)),
-           fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.72)), "verified without exposing the seed",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.79)), "to any other device",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    lines = kind.split("\n")
+    for i, line in enumerate(lines):
+        _fit(d, (w // 2, int(h * (0.58 + i * 0.065))), line,
+             int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    tail = int(h * (0.58 + len(lines) * 0.065))
+    _fit(d, (w // 2, max(tail + int(h * 0.03), int(h * 0.86))),
+         "verified without exposing the seed to any other device",
+         int(h * 0.045), GREY, "mm", int(w * 0.92))
+    return img
+
+
+def splash(w, h):
+    """The first frame the device paints, before bitcoind is up.
+
+    Two tones only (ink ground, cream mark), outline geometry at 3px, and
+    every string measured: it survives a 1-bit render and both panel sizes.
+    """
+    img, d = _frame(w, h)
+    # Bow-tie mark: two outline triangles meeting at a knot square.
+    cx, cy = w // 2, int(h * 0.30)
+    half, rise, knot = int(h * 0.17), int(h * 0.13), int(h * 0.035)
+    for sign in (-1, 1):
+        tip = cx + sign * half
+        d.line([(tip, cy - rise), (tip, cy + rise),
+                (cx + sign * knot, cy), (tip, cy - rise)], fill=CREAM, width=3)
+    d.rectangle([cx - knot, cy - knot, cx + knot, cy + knot],
+                outline=CREAM, width=3)
+    _fit(d, (cx, int(h * 0.60)), "B I T C O I N   B U T L E R S",
+         int(h * 0.055), CREAM, "mm", int(w * 0.92))
+    d.line([(int(w * 0.20), int(h * 0.68)), (int(w * 0.80), int(h * 0.68))],
+           fill=CREAM, width=1)
+    _fit(d, (cx, int(h * 0.79)), "CORKY", int(h * 0.10), CREAM, "mm",
+         int(w * 0.92))
+    _fit(d, (cx, int(h * 0.91)), "Core's keys, nothing kept",
+         int(h * 0.045), CREAM, "mm", int(w * 0.92))
     return img
