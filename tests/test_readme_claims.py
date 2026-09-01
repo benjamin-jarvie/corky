@@ -39,7 +39,8 @@ def code_lines(path):
 README = (ROOT / "README.md").read_text()
 
 LAYER1 = ["shim/bip39_shim.py", "corky/codex32.py", "corky/seedqr.py"]
-LAYER2 = ["corky/main.py", "corky/screens.py", "corky/hal.py"]
+LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
+          "corky/hal.py"]
 LAYER3 = ["corky/signer.py", "corky/filechannel.py", "corky/qrchannel.py"]
 
 def claimed(pattern, label):

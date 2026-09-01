@@ -423,16 +423,24 @@ class Session:
 
         A 127-character codex32 secret and Core's 111-character master xprv
         both overrun one screen; drawing them as one column asked the user to
-        transcribe characters that were never on the panel. Returns False if
-        the user aborts with C."""
+        transcribe characters that were never on the panel. A advances and
+        finishes on the last page, B or UP re-shows the previous page for
+        checking against paper, C aborts. Returns False on abort."""
         pages = screens.share_pages(text)
-        for i, page in enumerate(pages):
+        i = 0
+        while True:
             self.display.show(screens.codex32_share_display(
-                self.w, self.h, page, index, total,
+                self.w, self.h, pages[i], index, total,
                 page=i, pages=len(pages)), sensitive=True)
-            if self.buttons.read() == "c":
+            key = self.buttons.read()
+            if key == "c":
                 return False
-        return True
+            if key in ("b", "u"):
+                i = max(i - 1, 0)
+            elif key == "a":
+                if i + 1 == len(pages):
+                    return True
+                i += 1
 
     def _pick_split(self):
         selected = 0
@@ -583,9 +591,7 @@ class Session:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dev", action="store_true")
-    ap.add_argument("--splash", action="store_true",
-                    help="paint the brand frame and exit (runs before bitcoind)")
-    ap.add_argument("--datadir", default="")   # required unless --splash
+    ap.add_argument("--datadir", required=True)
     ap.add_argument("--chain", default="main")
     ap.add_argument("--script", default="")
     ap.add_argument("--stick-dir")
@@ -594,16 +600,6 @@ def main():
     ap.add_argument("--passphrase", default="")
     ap.add_argument("--frames-dir", default="frames")
     args = ap.parse_args()
-
-    if args.splash:
-        # Ordered before bitcoind, so the panel carries the brand for the
-        # whole boot instead of staying dark until the session starts.
-        display = (hal.DevDisplay(args.frames_dir) if args.dev
-                   else hal.DeviceDisplay())
-        display.show(screens.splash(display.width, display.height))
-        return
-    if not args.datadir:
-        ap.error("--datadir is required for a signing session")
 
     rpc = signer.Rpc(args.datadir, chain=args.chain)
     if args.dev:

@@ -2,11 +2,13 @@
 Description=Corky brand splash
 Before=corky-bitcoind.service
 DefaultDependencies=no
-After=local-fs.target
+# sysinit.target orders after systemd-udevd: the SPI device node must
+# exist before the ST7789 driver opens it.
+After=sysinit.target local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --splash
+ExecStart=/usr/bin/python3 /opt/corky/corky/splash.py
 RemainAfterExit=yes
 User=root
 

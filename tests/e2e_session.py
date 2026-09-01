@@ -516,14 +516,16 @@ def main():
                 raw = f.read_bytes()
                 for i, variants in enumerate(pages):
                     if raw in variants:
-                        seq.append(i)
+                        # (page, refused): variants[1] carries the banner.
+                        seq.append((i, variants.index(raw) == 1))
             return seq
-        # navigate d,d,u,u then sign: displayed pages must be 0,1,2,1,0
-        assert paged_run("1", "dduua") == [0, 1, 2, 1, 0], \
-            "N1: page navigation order drifted"
-        # forced advance a,a,a: gate walks 0,1,2 in order before signing
-        assert paged_run("2", "aaa") == [0, 1, 2], \
-            "N2: forced-advance page order drifted"
+        # navigate d,d,u,u then sign: five plain renders, never the banner
+        assert paged_run("1", "dduua") == [(0, False), (1, False), (2, False),
+                                           (1, False), (0, False)], \
+            "N1: page navigation order or refusal state drifted"
+        # forced advance a,a,a: each unseen page must carry the banner
+        assert paged_run("2", "aaa") == [(0, False), (1, True), (2, True)], \
+            "N2: forced advance must show the refusal banner on unseen pages"
         print("ok   N: 3-page review order pinned (nav and forced advance)")
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --

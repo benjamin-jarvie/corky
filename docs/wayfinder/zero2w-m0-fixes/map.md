@@ -26,16 +26,16 @@ radio policy the way Ben decided it.
 
 ## Decisions so far
 
-- [01 Swap invalidates the gate](tickets/01-swap-invalidates-the-gate.md) —
+- [01 Swap invalidates the gate](tickets/01-swap-invalidates-the-gate.md):
   gate exits 2 on active swap; FLASH.md opens with `sudo swapoff -a`.
-- [02 MemAvailable needs a sampler thread](tickets/02-memavailable-sampler.md) —
+- [02 MemAvailable needs a sampler thread](tickets/02-memavailable-sampler.md):
   200ms daemon-thread floor merged with the two spot samples.
-- [03 Image docs say Ethernet](tickets/03-network-line-per-board.md) —
+- [03 Image docs say Ethernet](tickets/03-network-line-per-board.md):
   per-board network line in image/README.md and prepare-sd.sh; CM4
   carrier RJ45 confirmed against the Waveshare wiki.
-- [04 pyzbar needs libzbar0](tickets/04-libzbar0-missing.md) — libzbar0 on
+- [04 pyzbar needs libzbar0](tickets/04-libzbar0-missing.md): libzbar0 on
   both apt lines; pip cannot provide a shared library.
-- [05 README radios paragraph](tickets/05-radios-paragraph.md) — removal
+- [05 README radios paragraph](tickets/05-radios-paragraph.md): removal
   is the instruction, soldering named; CM4 stated as the no-solder build;
   firmware disable demoted to backup layer. Amended: two-tier claim
   ladder (front-end off = radio-removed; whole chip off = air-gapped by

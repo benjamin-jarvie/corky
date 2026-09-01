@@ -68,7 +68,8 @@ def swap_active_mb():
         parts = line.split()
         if len(parts) >= 3:
             total += int(parts[2])  # size column is KB
-    return total // 1024
+    # Ceiling division: 1KB of active swap must still trip the guard.
+    return (total + 1023) // 1024
 
 
 def _watch_low_water(stop, box):

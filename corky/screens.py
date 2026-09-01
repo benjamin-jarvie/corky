@@ -10,6 +10,7 @@ Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
 """
 
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -22,6 +23,7 @@ GREY = "#B8B2A6"
 OCHRE = "#C8912F"
 
 
+@lru_cache(maxsize=None)
 def _font(size):
     return ImageFont.load_default(size=size)
 
@@ -32,15 +34,25 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     The panel has no scrollbar: a string wider than the canvas is simply not
     there. Every screen that renders content it did not choose itself (an
     address, an error string, a wrapped warning) goes through here, so a
-    longer string degrades in size instead of vanishing off the edge.
+    longer string degrades in size instead of vanishing off the edge. If the
+    floor size still overflows, the tail is cut to a visible ellipsis; backup
+    key material never reaches that path (share_pages sizes each page, and
+    test_screen_fit pins every string inside the canvas).
     """
-    while size > 6:
+    while True:
         font = _font(size)
         box = d.textbbox(xy, text, font=font, anchor=anchor)
-        if box[2] - box[0] <= maxw:
+        if box[2] - box[0] <= maxw or size <= 6:
             break
         size -= 1
-    d.text(xy, text, font=_font(size), fill=fill, anchor=anchor)
+    if box[2] - box[0] > maxw:
+        while len(text) > 1:
+            text = text[:-1]
+            box = d.textbbox(xy, text + "…", font=font, anchor=anchor)
+            if box[2] - box[0] <= maxw:
+                break
+        text += "…"
+    d.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
 def _frame(w, h, title=None):
@@ -102,13 +114,16 @@ def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
            font=_font(int(h * 0.075)), fill=RED, anchor="rm")
     if unseen_pages:
         # The sign button refuses until every output has been on screen.
-        # Saying so beats advancing the page for no visible reason.
-        _fit(d, (w // 2, int(h * 0.90)), "see every output before you sign",
+        # Saying so beats advancing the page for no visible reason. The
+        # fee-trust caveat below STAYS: the refused render is the state
+        # closest to signing.
+        _fit(d, (w // 2, int(h * 0.87)), "see every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    elif warn:
-        _fit(d, (w // 2, int(h * 0.90)),
+    if warn:
+        _fit(d, (w // 2, int(h * (0.915 if unseen_pages else 0.90))),
              "fee per coordinator's input amounts",
-             int(h * 0.045), GREY, "mm", int(w * 0.92))
+             int(h * (0.04 if unseen_pages else 0.045)), GREY, "mm",
+             int(w * 0.92))
     d.text((int(w * 0.06), int(h * 0.97)), "KEY3 · reject",
            font=_font(int(h * 0.05)), fill=GREY, anchor="lm")
     d.text((int(w * 0.94), int(h * 0.97)), "KEY1 · SIGN",
@@ -413,8 +428,10 @@ def codex32_share_display(w, h,
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     _fit(d, (w // 2, int(h * 0.72)), "checksum re-verifies before you leave",
          int(h * 0.045), GREY, "mm", int(w * 0.92))
-    _fit(d, (w // 2, int(h * 0.95)),
-         "A · next" if page + 1 < pages else "A · I wrote it, verify me",
+    nav = "A · next" if page + 1 < pages else "A · I wrote it, verify me"
+    if pages > 1:
+        nav += "    B · back"
+    _fit(d, (w // 2, int(h * 0.95)), nav + "    C · abort",
          int(h * 0.045), GREY, "mm", int(w * 0.92))
     return img
 

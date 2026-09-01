@@ -94,17 +94,19 @@ class SplashDisplay:
         painted.append(image)
 
 
+import splash as corky_splash  # noqa: E402  (dedicated boot entrypoint)
+
 real_argv = sys.argv
-real_dev_display = corky_main.hal.DevDisplay
+real_dev_display = corky_splash.hal.DevDisplay
 real_splash = screens.splash
 try:
-    sys.argv = ["main.py", "--dev", "--splash", "--frames-dir", "unused"]
-    corky_main.hal.DevDisplay = lambda _path: SplashDisplay()
+    sys.argv = ["splash.py", "--dev", "--frames-dir", "unused"]
+    corky_splash.hal.DevDisplay = lambda _path: SplashDisplay()
     screens.splash = lambda w, h: ("splash", w, h)
-    corky_main.main()
+    corky_splash.main()
 finally:
     sys.argv = real_argv
-    corky_main.hal.DevDisplay = real_dev_display
+    corky_splash.hal.DevDisplay = real_dev_display
     screens.splash = real_splash
 
 if painted != [("splash", 320, 240)]:
