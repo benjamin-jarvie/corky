@@ -538,7 +538,7 @@ class Session:
             # the device cannot show is a transaction it must not sign).
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
-                detail="PSBT lacks input data; fee unknown — refused"))
+                detail="PSBT lacks input data; fee unknown; refused"))
             return
         outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
         pages = max(1, (len(outs) + 2) // 3)

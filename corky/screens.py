@@ -140,7 +140,7 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
            font=_font(int(h * 0.08)), fill=GREEN if ok else RED, anchor="mm")
     _fit(d, (w // 2, int(h * 0.62)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
-    d.text((w // 2, int(h * 0.78)), "power off when done —",
+    d.text((w // 2, int(h * 0.78)), "power off when done:",
            font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
     d.text((w // 2, int(h * 0.85)), "nothing is kept",
            font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
@@ -166,7 +166,7 @@ def seed_entry(w, h, word_index, total_words, partial, candidates):
 
 def busy(w, h, message="checking words, deriving in Core…"):
     img, d = _frame(w, h)
-    d.text((w // 2, int(h * 0.42)), "●  ●  ●", font=_font(int(h * 0.09)),
+    d.text((w // 2, int(h * 0.42)), "·  ·  ·", font=_font(int(h * 0.09)),
            fill=OCHRE, anchor="mm")
     _fit(d, (w // 2, int(h * 0.58)), message, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))

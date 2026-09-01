@@ -160,7 +160,7 @@ def main():
         last = sorted((work / "framesC").glob("frame-*.png"))[-1]
         buf = io.BytesIO()
         scr.result(320, 240, ok=False,
-                   detail="PSBT lacks input data; fee unknown — refused"
+                   detail="PSBT lacks input data; fee unknown; refused"
                    ).save(buf, format="PNG")
         assert last.read_bytes() == buf.getvalue(), \
             "C: final frame is not the exact refusal screen (visual lie?)"
