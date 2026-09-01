@@ -80,5 +80,5 @@ class DeviceButtons:
                 if self._gpio.input(pin) == self._gpio.LOW:
                     while self._gpio.input(pin) == self._gpio.LOW:
                         time.sleep(0.01)      # wait for release (debounce)
-                    return "a" if key == "press" else key
+                    return "p" if key == "press" else key
             time.sleep(0.02)

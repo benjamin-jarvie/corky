@@ -165,9 +165,9 @@ class Session:
             elif key == "a":
                 try:
                     return [self._seed_generate,
-                            self._seed_seedqr, self._seed_words,
+                            self._seed_descriptor, self._seed_xprv,
                             self._seed_codex32_scan, self._seed_codex32_type,
-                            self._seed_descriptor, self._seed_xprv][selected]()
+                            self._seed_seedqr, self._seed_words][selected]()
                 except Exception as exc:
                     # Hold the message: without a key wait the home screen
                     # repaints immediately and the user sees only a flicker.
@@ -302,20 +302,30 @@ class Session:
     def _seed_codex32_type(self):
         shares = []
         need = None
+        self._retry_share = None
         while need is None or len(shares) < need:
             self.display.show(screens.codex32_shares(
                 self.w, self.h,
                 tuple(sh[8].upper() for sh in shares), need or "?"))
-            entered = self._codex32_entry_one()
+            entered = self._codex32_entry_one(self._retry_share)
+            self._retry_share = None
             if entered is None:
                 return False
             try:
                 sh = codex32.validate(entered)
-                if sh in shares:
-                    raise codex32.Codex32Error("duplicate share")
             except codex32.Codex32Error as exc:
+                # Bad checksum or format: offer edit-in-place on the same
+                # string (A re-enters keeping it, B/C abort).
                 self.display.show(screens.codex32_error(
                     self.w, self.h, str(exc)[:48]))
+                if self.buttons.read() != "a":
+                    return False
+                self._retry_share = entered
+                continue
+            if sh in shares:
+                # A valid but already-held share: retype fresh, not edit.
+                self.display.show(screens.codex32_error(
+                    self.w, self.h, "duplicate share"))
                 if self.buttons.read() != "a":
                     return False
                 continue
@@ -329,13 +339,21 @@ class Session:
             self.buttons.read()
         return self._codex32_open(shares)
 
-    def _codex32_entry_one(self):
-        """Grid entry: d-pad moves the 4x8 cursor, A picks, B deletes,
-        C finishes (empty = abort)."""
-        entered, cursor = "ms1", 0
+    def _codex32_entry_one(self, prefill=None):
+        """Grid entry with an editable caret.
+
+        U/D move the grid row, L/R move the CARET along the typed string
+        (the character shown in gold). A writes the grid letter at the caret
+        and advances, so fresh typing at the end appends and a caret parked
+        mid-string overwrites one character in place. B deletes at the caret,
+        C finishes (empty = abort). `prefill` re-opens a rejected share so
+        only the wrong character is fixed, not all of it retyped. The 'ms1'
+        prefix is fixed and the caret never enters it."""
+        entered = prefill if prefill else "ms1"
+        caret, cursor = len(entered), 0
         while True:
             self.display.show(screens.codex32_entry(
-                self.w, self.h, entered, cursor), sensitive=True)
+                self.w, self.h, entered, cursor, caret), sensitive=True)
             key = self.buttons.read()
             if key == "u":
                 cursor = (cursor - 8) % 32
@@ -345,10 +363,24 @@ class Session:
                 cursor = (cursor - 1) % 32
             elif key == "r":
                 cursor = (cursor + 1) % 32
+            elif key == "p":
+                # Center-press walks the edit caret left, wrapping past the
+                # start back to the append slot: reach any character to fix
+                # it with the grid, using one key.
+                caret = len(entered) if caret <= 3 else caret - 1
             elif key == "a":
-                entered += screens.BECH32_CHARSET[cursor]
+                ch = screens.BECH32_CHARSET[cursor]
+                if caret == len(entered):
+                    entered += ch
+                else:
+                    entered = entered[:caret] + ch + entered[caret + 1:]
+                caret += 1
             elif key == "b":
-                entered = entered[:-1] if len(entered) > 3 else entered
+                if caret < len(entered):
+                    entered = entered[:caret] + entered[caret + 1:]
+                elif len(entered) > 3:
+                    entered = entered[:-1]
+                    caret = len(entered)
             elif key == "c":
                 return entered if len(entered) > 3 else None
 
@@ -378,17 +410,24 @@ class Session:
         """The zero-re-exposure check: checksum only, nothing derived.
         Entry is by grid; C on an empty grid aborts (it must not fall
         through to the camera, which would dead-end on hardware)."""
-        entered = self._codex32_entry_one()
-        if entered is None:
-            return
-        try:
-            codex32.validate(entered)
-            self.display.show(screens.codex32_verified(
-                self.w, self.h, "checksum valid"))
-        except codex32.Codex32Error as exc:
-            self.display.show(screens.codex32_error(
-                self.w, self.h, str(exc)[:48]))
-        self.buttons.read()
+        prefill = None
+        while True:
+            entered = self._codex32_entry_one(prefill)
+            if entered is None:
+                return
+            try:
+                codex32.validate(entered)
+                self.display.show(screens.codex32_verified(
+                    self.w, self.h, "checksum valid"))
+                self.buttons.read()
+                return
+            except codex32.Codex32Error as exc:
+                self.display.show(screens.codex32_error(
+                    self.w, self.h, str(exc)[:48]))
+                # A re-enters keeping the string (RE-ENTER), B/C abort.
+                if self.buttons.read() != "a":
+                    return
+                prefill = entered
 
     def _tool_backup(self):
         """Words in -> codex32 out (one string, or a 2-of-3 split).
@@ -433,12 +472,18 @@ class Session:
         says plainly that software entropy cannot be audited as it runs
         and that cards or dice remain the default.
         """
-        sel = 1
+        sel, scroll = 1, 0
+        max_scroll = len(screens.GENERATE_LINES) - screens.GEN_VISIBLE
         while True:
-            self.display.show(screens.generate_warning(self.w, self.h, sel))
+            self.display.show(screens.generate_warning(
+                self.w, self.h, sel, scroll))
             key = self.buttons.read()
-            if key in ("l", "r", "u", "d"):
+            if key in ("l", "r"):
                 sel = 1 - sel
+            elif key == "d":
+                scroll = min(scroll + 1, max_scroll)
+            elif key == "u":
+                scroll = max(scroll - 1, 0)
             elif key == "a":
                 if sel == 0:
                     return False

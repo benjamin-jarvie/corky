@@ -113,11 +113,15 @@ finally:
     for name, method in draw_methods.items():
         setattr(ImageDraw.ImageDraw, name, method)
 
-unexpected = set(used_splash_colours) - {screens.CREAM}
+# Ben (2026-09-01): the splash names the brand, "Bitcoin Butlers" in gold.
+# It is no longer monochrome; it must still use only brand tokens, never a
+# stray colour.
+allowed = {screens.CREAM, screens.OCHRE, screens.GREY}
+unexpected = set(used_splash_colours) - allowed
 if unexpected:
-    bad(f"splash requests non-monochrome foreground colours: {unexpected}")
+    bad(f"splash requests non-brand foreground colours: {unexpected}")
 else:
-    ok("splash requests one foreground tone and is monochrome-safe")
+    ok("splash requests only brand tokens (cream, gold, grey)")
 
 # The backup screens carry strings the flows really produce: a 127-character
 # codex32 secret (64-byte BIP39 seed) and Core's 111-character master xprv.

@@ -126,35 +126,32 @@ def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
     title = ("REVIEW  TRANSACTION" if pages == 1
              else f"REVIEW  ·  OUTPUTS {page + 1}/{pages}")
     img, d = _frame(w, h, title)
-    y = int(h * 0.18)
+    y = int(h * 0.20)
     for addr, amt in outputs[page * 2:page * 2 + 2]:
-        short = addr[:14] + "…" + addr[-6:] if len(addr) > 24 else addr
-        d.text((int(w * 0.06), y), short, font=_font(int(h * 0.058)),
+        # SeedSigner-style short truncation so address and amount share
+        # one line: first 8, ellipsis, last 4.
+        short = addr[:8] + "…" + addr[-4:] if len(addr) > 13 else addr
+        d.text((int(w * 0.06), y), short, font=_font(int(h * 0.055)),
                fill=CREAM, anchor="lm")
-        d.text((int(w * 0.94), y + int(h * 0.065)), f"{amt:.8f} BTC",
-               font=_font(int(h * 0.065)), fill=CREAM, anchor="rm")
-        y += int(h * 0.155)
+        d.text((int(w * 0.94), y), f"{amt:.8f}", font=_font(int(h * 0.055)),
+               fill=CREAM, anchor="rm")
+        y += int(h * 0.115)
     if pages > 1:
-        d.text((int(w * 0.06), y), "UP/DOWN · more outputs",
-               font=_font(int(h * 0.05)), fill=OCHRE, anchor="lm")
-        y += int(h * 0.09)
-    d.line([(int(w * 0.06), y), (int(w * 0.94), y)], fill=GREY, width=1)
-    total = (f"in {input_total_btc:.8f}" if input_total_btc is not None
-             else f"{input_count} inputs")
-    d.text((int(w * 0.06), y + int(h * 0.07)), f"FEE  ({total})",
-           font=_font(int(h * 0.055)), fill=GREY, anchor="lm")
-    d.text((int(w * 0.94), y + int(h * 0.07)), f"{fee_btc:.8f} BTC",
+        d.text((w // 2, y + int(h * 0.01)), "UP/DOWN · more outputs",
+               font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
+    ky = int(h * 0.58)
+    d.line([(int(w * 0.06), ky), (int(w * 0.94), ky)], fill=GREY, width=1)
+    d.text((int(w * 0.06), ky + int(h * 0.075)), "FEE",
+           font=_font(int(h * 0.06)), fill=GREY, anchor="lm")
+    d.text((int(w * 0.94), ky + int(h * 0.075)), f"{fee_btc:.8f} BTC",
            font=_font(int(h * 0.075)), fill=RED, anchor="rm")
+    if input_total_btc is not None:
+        d.text((int(w * 0.94), ky + int(h * 0.17)),
+               f"inputs {input_total_btc:.8f} BTC",
+               font=_font(int(h * 0.045)), fill=GREY, anchor="rm")
     if unseen_pages:
-        # SIGN refuses until every output has been on screen. Saying so
-        # beats advancing the page for no visible reason. The fee-trust
-        # caveat below STAYS: this render is the state closest to signing.
-        _fit(d, (w // 2, int(h * 0.76)), "see every output before you sign",
+        _fit(d, (w // 2, int(h * 0.80)), "see every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    if warn:
-        _fit(d, (w // 2, int(h * 0.83)),
-             "fee per coordinator's input amounts",
-             int(h * 0.045), GREY, "mm", int(w * 0.92))
     _actions(d, w, h, ["REJECT", "SIGN"], actions_sel)
     return img
 
@@ -163,12 +160,8 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
     img, d = _frame(w, h)
     _status_circle(img, d, w, h, "SIGNED" if ok else "FAILED",
                    OCHRE if ok else RED)
-    _fit(d, (w // 2, int(h * 0.66)), detail, int(h * 0.055), CREAM, "mm",
+    _fit(d, (w // 2, int(h * 0.68)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
-    d.text((w // 2, int(h * 0.78)), "power off when done:",
-           font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.85)), "nothing is kept",
-           font=_font(int(h * 0.05)), fill=GREY, anchor="mm")
     return img
 
 
@@ -184,8 +177,6 @@ def seed_entry(w, h, word_index, total_words, partial, candidates):
                          int(w * 0.72), y + int(h * 0.048)], radius=4, outline=OCHRE)
         d.text((w // 2, y), c, font=_font(int(h * 0.065)),
                fill=CREAM if sel else GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)), "U/D · letter   A · add   R · words   B · del   C · quit",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
     return img
 
 
@@ -194,11 +185,15 @@ def busy(w, h, message="checking words, deriving in Core…", phase=0):
     advances the rotation; the dev harness renders phase 0 only, the
     device animates from a thread (main._busy)."""
     img, d = _frame(w, h)
-    mark = _logo_mask(int(h * 0.34))
-    if phase:
-        mark = mark.rotate(-phase * 30, expand=False,
-                           resample=Image.BICUBIC)
-    img.paste(CREAM, (w // 2 - mark.width // 2, int(h * 0.16)), mark)
+    r, ss = int(h * 0.16), 4
+    cx, cy = w // 2, int(h * 0.34)
+    arc = Image.new("L", (2 * r * ss, 2 * r * ss), 0)
+    start = (phase * 45) % 360
+    ImageDraw.Draw(arc).arc([2 * ss, 2 * ss, 2 * r * ss - 2 * ss,
+                             2 * r * ss - 2 * ss],
+                            start, start + 270, fill=255, width=3 * ss)
+    img.paste(OCHRE, (cx - r, cy - r),
+              arc.resize((2 * r, 2 * r), Image.LANCZOS))
     _fit(d, (w // 2, int(h * 0.72)), message, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
     return img
@@ -206,12 +201,12 @@ def busy(w, h, message="checking words, deriving in Core…", phase=0):
 
 SEED_MENU_OPTIONS = [
     ("Generate seed", "Core RNG · BIP32"),
-    ("Scan SeedQR", "words via shim"),
-    ("Type seed words", "words via shim"),
-    ("Scan codex32", "BIP32-native"),
-    ("Type codex32 share(s)", "BIP32-native"),
     ("Scan descriptor QR", "pure Core"),
     ("Scan xprv QR", "pure Core"),
+    ("Scan codex32", "BIP32-native"),
+    ("Type codex32 share(s)", "BIP32-native"),
+    ("Scan SeedQR", "words via Corky"),
+    ("Type seed words", "words via Corky"),
 ]
 
 
@@ -248,21 +243,31 @@ def tools_menu(w, h, selected=0):
     return img
 
 
-def generate_warning(w, h, selected=1):
-    """Shown before Core-RNG generation (PLAN A-19). States the tradeoff
-    before any key material exists, not after."""
+GENERATE_LINES = [
+    "Core's own RNG makes this key, not Corky and not a vendor.",
+    "It is software. You cannot audit it as it runs.",
+    "Cards or dice stay the verifiable option, and the default.",
+    "Choose this if you trust Core's RNG more than any other.",
+    "Core cannot make BIP39 words. Corky will not invent them.",
+    "Your backup is a codex32 string, or k-of-n shares.",
+]
+GEN_VISIBLE = 4   # body lines on screen at once; U/D scroll the rest
+
+
+def generate_warning(w, h, selected=1, scroll=0):
+    """Shown before Core-RNG generation (PLAN A-19). The body scrolls with
+    U/D so the font stays readable; L/R toggle the action; more below is
+    marked with a down chevron."""
     img, d = _frame(w, h, "GENERATE  A  SEED")
-    _fit(d, (w // 2, int(h * 0.24)), "Entropy comes from Bitcoin Core.",
-         int(h * 0.068), OCHRE, "mm", int(w * 0.94))
-    lines = ["Core's own RNG makes this key, not Corky and not a vendor.",
-             "It is software. You cannot audit it as it runs.",
-             "Cards or dice stay the verifiable option, and the default.",
-             "Choose this if you trust Core's RNG more than any other.",
-             "Core cannot make BIP39 words. Corky will not invent them.",
-             "Your backup is a codex32 string, or k-of-n shares."]
-    for i, line in enumerate(lines):
-        _fit(d, (w // 2, int(h * (0.38 + i * 0.085))), line,
-             int(h * 0.045), CREAM, "mm", int(w * 0.94))
+    _fit(d, (w // 2, int(h * 0.22)), "Entropy comes from Bitcoin Core.",
+         int(h * 0.065), OCHRE, "mm", int(w * 0.94))
+    last = min(scroll + GEN_VISIBLE, len(GENERATE_LINES))
+    for row, i in enumerate(range(scroll, last)):
+        _fit(d, (w // 2, int(h * (0.36 + row * 0.10))), GENERATE_LINES[i],
+             int(h * 0.05), CREAM, "mm", int(w * 0.94))
+    if last < len(GENERATE_LINES):
+        d.text((w // 2, int(h * 0.78)), "v", font=_font(int(h * 0.05)),
+               fill=OCHRE, anchor="mm")
     _actions(d, w, h, ["BACK", "GENERATE"], selected)
     return img
 
@@ -318,20 +323,30 @@ def codex32_scan(w, h):
     return img
 
 
-def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14):
-    """bech32 charset as a 4x8 grid; d-pad moves, A picks, B deletes.
-    The string echo shows the last chars; checksum judges at the end."""
+def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14, caret=None):
+    """bech32 charset as a 4x8 grid; d-pad moves, A writes at the caret.
+    The echo shows a window of the string around the caret (the character
+    being written or edited), highlighted, so a long share still shows the
+    part you are working on. No legend: the grid is the instruction."""
     img, d = _frame(w, h, "TYPE  SHARE")
-    # Echo in 4-char groups with gaps, matching the write-it-down screen,
-    # so what you type reads like what you wrote.
-    tail = entered[-16:]
-    grouped = " ".join(tail[i:i + 4] for i in range(0, len(tail), 4))
-    d.text((w // 2, int(h * 0.17)), grouped + "_",
-           font=_font(int(h * 0.065)), fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.245)), f"{len(entered)} chars",
+    if caret is None:
+        caret = len(entered)
+    # A 16-char window that keeps the caret in view on a long share.
+    start = max(0, min(caret - 8, len(entered) - 16))
+    end = min(start + 16, len(entered))
+    size = int(h * 0.07)
+    xs = w // 2 - (end - start) * int(w * 0.028)
+    for i in range(start, end + 1):
+        ch = entered[i] if i < len(entered) else "_"
+        edit = i == caret
+        _fit(d, (xs, int(h * 0.17)), ch.upper(), size,
+             OCHRE if edit else CREAM, "mm", int(w * 0.06))
+        xs += int(w * 0.056)
+    d.text((w // 2, int(h * 0.255)),
+           f"{len(entered)} chars · pos {caret - 2}",
            font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
-    cell_w, cell_h = w // 9, int(h * 0.115)
-    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.32)
+    cell_w, cell_h = w // 9, int(h * 0.13)
+    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.34)
     for i, ch in enumerate(BECH32_CHARSET):
         r, c = divmod(i, 8)
         cx = x0 + c * cell_w + cell_w // 2
@@ -342,9 +357,6 @@ def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14):
                         radius=4, outline=OCHRE)
         d.text((cx, cy), ch.upper(), font=_font(int(h * 0.06)),
                fill=CREAM if i == cursor else GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.95)),
-           "d-pad · move    A · pick    B · delete    C · done",
-           font=_font(int(h * 0.042)), fill=GREY, anchor="mm")
     return img
 
 
@@ -482,12 +494,10 @@ def splash(w, h):
     """
     img, d = _frame(w, h)
     cx = w // 2
-    mark = _logo_mask(int(h * 0.40))
-    img.paste(CREAM, (cx - mark.width // 2, int(h * 0.10)), mark)
-    _fit(d, (cx, int(h * 0.60)), "B I T C O I N   B U T L E R S",
-         int(h * 0.055), CREAM, "mm", int(w * 0.92))
-    d.line([(int(w * 0.20), int(h * 0.68)), (int(w * 0.80), int(h * 0.68))],
-           fill=CREAM, width=1)
-    _fit(d, (cx, int(h * 0.83)), "CORKY", int(h * 0.10), CREAM, "mm",
+    _fit(d, (cx, int(h * 0.30)), "BITCOIN BUTLERS",
+         int(h * 0.075), OCHRE, "mm", int(w * 0.90))
+    _fit(d, (cx, int(h * 0.42)), "presents",
+         int(h * 0.05), GREY, "mm", int(w * 0.90))
+    _fit(d, (cx, int(h * 0.62)), "CORKY", int(h * 0.15), CREAM, "mm",
          int(w * 0.92))
     return img

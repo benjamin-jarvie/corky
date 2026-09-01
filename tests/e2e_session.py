@@ -104,7 +104,7 @@ def main():
         # ---- Session A: typed word entry + stick sign ----
         stick = work / "stickA"; stick.mkdir()
         (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
-        script = "a" + "dda" + "a" + WORDS_SCRIPT + "a"   # home, menu->words, length=12, type, sign
+        script = "a" + "dddddda" + "a" + WORDS_SCRIPT + "a"   # home, menu->words(idx6), length=12, type, sign
         r = run_device(datadir, script, work / "framesA", stick=stick)
         assert r.returncode == 0, f"A failed:\n{r.stderr}"
         signed = stick / "hui-signed.psbt"
@@ -126,7 +126,7 @@ def main():
         xprv_file.write_text(mnemonic_to_xprv(MNEMONIC, mainnet=False))
         frames_file = work / "psbt_frames.txt"
         frames_file.write_text("\n".join(qrchannel.psbt_to_frames(fund_psbt(1.0))))
-        r = run_device(datadir, "a" + "dddddda" + "a" + "a", work / "framesB",
+        r = run_device(datadir, "a" + "dda" + "a" + "a", work / "framesB",
                        qr_key=xprv_file, qr_psbt=frames_file)
         assert r.returncode == 0, f"B failed:\n{r.stderr}"
         shots = sorted((work / "framesB").glob("frame-*.png"))
@@ -146,7 +146,7 @@ def main():
                         [{"txid": utxo["txid"], "vout": utxo["vout"]}],
                         [{rpc.call("getnewaddress", wallet="watch"): 1.0}])
         (stickc / "bad.psbt").write_bytes(base64.b64decode(bare))
-        r = run_device(datadir, "ada", work / "framesC",
+        r = run_device(datadir, "a" + "ddddda", work / "framesC",
                        stick=stickc, qr_key=seedqr_file)
         assert r.returncode == 0, f"C failed:\n{r.stderr}"
         assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
@@ -179,7 +179,7 @@ def main():
         seedqr_file2.write_text("0000" * 11 + "0003")
         # 5 outputs = 3 pages at two per page: forced 'a' walks pages 2
         # and 3, the fourth 'a' signs
-        r = run_device(datadir, "a" + "da" + "aaa", work / "framesD",
+        r = run_device(datadir, "a" + "ddddda" + "aaa", work / "framesD",
                        stick=stickd, qr_key=seedqr_file2)
         assert r.returncode == 0, f"D failed:\n{r.stderr}"
         assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
@@ -194,7 +194,7 @@ def main():
         (stickd2 / "many.psbt").write_bytes(base64.b64decode(many2))
         sq3 = work / "seedqr3.txt"; sq3.write_text("0000" * 11 + "0003")
         # home a, menu->seedqr (a), review with ONE 'a' then quit (c)
-        r = run_device(datadir, "a" + "da" + "ac", work / "framesD2",
+        r = run_device(datadir, "a" + "ddddda" + "ac", work / "framesD2",
                        stick=stickd2, qr_key=sq3)
         assert not (stickd2 / "many-signed.psbt").exists(), \
             "D2: PSBT signed with a page unseen — paging gate is broken!"
@@ -216,7 +216,7 @@ def main():
         (stickd3 / "many.psbt").write_bytes(base64.b64decode(many3))
         sq4 = work / "seedqr4.txt"; sq4.write_text("0000" * 11 + "0003")
         # review: d,u,d,d touch pages 1,0,1,2 -> all three seen via nav
-        r = run_device(datadir, "a" + "da" + "dudda", work / "framesD3",
+        r = run_device(datadir, "a" + "ddddda" + "dudda", work / "framesD3",
                        stick=stickd3, qr_key=sq4)
         assert r.returncode == 0, f"D3 failed:\n{r.stderr}"
         assert (stickd3 / "many-signed.psbt").exists(), "D3: nav-sign missing"
@@ -227,7 +227,7 @@ def main():
                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickd4 / "many.psbt").write_bytes(base64.b64decode(many4))
         sq5 = work / "seedqr5.txt"; sq5.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "da" + "uua", work / "framesD4",
+        r = run_device(datadir, "a" + "ddddda" + "uua", work / "framesD4",
                        stick=stickd4, qr_key=sq5)
         assert r.returncode == 0, f"D4 failed:\n{r.stderr}"
         assert (stickd4 / "many-signed.psbt").exists(), "D4: wraparound broken"
@@ -289,7 +289,7 @@ def main():
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickr / "p3.psbt").write_bytes(base64.b64decode(p3))
         sqr = work / "sq_r3.txt"; sqr.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "da" + "a", work / "framesR3",
+        r = run_device(datadir, "a" + "ddddda" + "a", work / "framesR3",
                        stick=stickr, qr_key=sqr)
         assert r.returncode == 0, f"R3 failed:\n{r.stderr}"
         assert (stickr / "p3-signed.psbt").exists(), "R3: 2-out page count wrong"
@@ -303,7 +303,7 @@ def main():
         emptystick = work / "stickI"; emptystick.mkdir()
         sqi = work / "sq_i.txt"; sqi.write_text("0000" * 11 + "0003")
         for abkey in ("b", "c"):
-            r = run_device(datadir, "a" + "da" + abkey,
+            r = run_device(datadir, "a" + "ddddda" + abkey,
                            work / ("framesI" + abkey),
                            stick=emptystick, qr_key=sqi, qr_psbt=part)
             assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
@@ -319,7 +319,7 @@ def main():
                            0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
         (stickj / "alien.psbt").write_bytes(base64.b64decode(foreign))
         sqj = work / "sq_j.txt"; sqj.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "da" + "a", work / "framesJ",
+        r = run_device(datadir, "a" + "ddddda" + "a", work / "framesJ",
                        stick=stickj, qr_key=sqj)
         assert r.returncode == 0, f"J failed:\n{r.stderr}"
         assert not (stickj / "alien-signed.psbt").exists(), "J: signed foreign PSBT!"
@@ -507,7 +507,7 @@ def main():
                      for i in range(4)]
             sq = work / ("sq_n" + tag + ".txt")
             sq.write_text("0000" * 11 + "0003")
-            r = run_device(datadir, "a" + "da" + navkeys,
+            r = run_device(datadir, "a" + "ddddda" + navkeys,
                            work / ("framesN" + tag), stick=st, qr_key=sq)
             assert r.returncode == 0, f"N{tag} failed:\n{r.stderr}"
             assert (st / "n-signed.psbt").exists(), f"N{tag}: sign missing"
