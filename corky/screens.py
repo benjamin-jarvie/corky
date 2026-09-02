@@ -406,25 +406,49 @@ _sys.path.insert(0, str(_Path(__file__).resolve().parent))
 from codex32 import CHARSET as BECH32_CHARSET  # single source of truth
 
 
-TEXT_CHARSET = ("abcdefghijklmnopqrstuvwxyz0123456789"
-                "ACDEFGHJKLMNPQRSTUVWXYZ/'[]#")   # 64 cells, 8x8
+# One alphabet per job. A single 64-cell set could not serve all three:
+# base58 drops B, I, O and 0 (so an xprv needs its own), descriptors need
+# brackets and a star, and a BIP39 passphrase is arbitrary text that may
+# contain B, I, O or a space. Grids page when they do not fit 32 cells.
+CELLS_PER_PAGE = 32          # 8 columns x 4 rows, above the action bar
+BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
+          "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l
+DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
+PASSPHRASE_CHARSET = "".join(chr(c) for c in range(32, 127))  # 95, incl space
+
+CHARSETS = {"xprv": BASE58,
+            "descriptor": DESCRIPTOR_CHARSET,
+            "passphrase": PASSPHRASE_CHARSET}
 
 
-def text_entry(w, h, title, text, cursor=0, hint="", secret=False):
-    """Free text on an 8x8 grid: passphrases (S2) and typed xprv or
+def charset_pages(name):
+    """The charset for a job, split into screenfuls."""
+    cs = CHARSETS[name]
+    return [cs[i:i + CELLS_PER_PAGE]
+            for i in range(0, len(cs), CELLS_PER_PAGE)]
+
+
+def text_entry(w, h, title, text, cursor=0, charset="passphrase", page=0,
+               secret=False, actions_sel=1):
+    """Text on a paged 8x4 grid: passphrases (S2) and typed xprv or
     descriptor strings (S3). `secret=True` masks the echo, since a
-    passphrase is shoulder-surfable and does not checksum."""
+    passphrase is shoulder-surfable and does not checksum. `cursor` indexes
+    the CURRENT page. The action bar is selectable, so CANCEL really
+    cancels."""
     img, d = _frame(w, h, title)
-    shown = ("*" * len(text)) if secret else text[-28:]
-    _fit(d, (w // 2, int(h * 0.15)), (shown or "") + "_",
+    shown = ("*" * len(text)) if secret else text[-30:]
+    _fit(d, (w // 2, int(h * 0.16)), (shown or "") + "_",
          int(h * 0.06), CREAM, "mm", int(w * 0.92))
-    if hint:
-        _fit(d, (w // 2, int(h * 0.225)), hint, int(h * 0.04), GREY, "mm",
-             int(w * 0.92))
-    # 8 rows must clear the action bar at 0.93h, so the pitch is tight.
-    cell_w, cell_h = w // 9, int(h * 0.074)
-    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.265)
-    for i, ch in enumerate(TEXT_CHARSET):
+    pages = charset_pages(charset)
+    page = max(0, min(page, len(pages) - 1))
+    cells = pages[page]
+    if len(pages) > 1:
+        _fit(d, (w // 2, int(h * 0.235)),
+             f"page {page + 1}/{len(pages)}   L/R past the end turns the page",
+             int(h * 0.038), GREY, "mm", int(w * 0.92))
+    cell_w, cell_h = w // 9, int(h * 0.135)
+    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.29)
+    for i, ch in enumerate(cells):
         r, c = divmod(i, 8)
         gx = x0 + c * cell_w + cell_w // 2
         gy = y0 + r * cell_h + cell_h // 2
@@ -432,9 +456,10 @@ def text_entry(w, h, title, text, cursor=0, hint="", secret=False):
             d.rounded_rectangle([gx - cell_w // 2 + 2, gy - cell_h // 2 + 2,
                                  gx + cell_w // 2 - 2, gy + cell_h // 2 - 2],
                                 radius=4, outline=OCHRE)
-        d.text((gx, gy), ch, font=_font(int(h * 0.05)),
-               fill=CREAM if i == cursor else GREY, anchor="mm")
-    _actions(d, w, h, ["CANCEL", "DONE"], 1)
+        label = "space" if ch == " " else ch
+        _fit(d, (gx, gy), label, int(h * 0.055),
+             CREAM if i == cursor else GREY, "mm", cell_w - 2)
+    _actions(d, w, h, ["CANCEL", "DONE"], actions_sel)
     return img
 
 

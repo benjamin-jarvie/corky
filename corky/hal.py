@@ -30,7 +30,8 @@ class ScriptExhausted(Exception):
 
 class DevButtons:
     """Reads single-letter commands from a script string (or any iterable).
-    Keys: u/d/l/r = d-pad, a = select/KEY1, b = back/KEY2, c = reject/KEY3."""
+    Keys: u/d/l/r = d-pad, p = centre press, a = select/KEY1,
+    b = back or delete/KEY2, c = abort/KEY3."""
 
     def __init__(self, script):
         self._script = iter(script)

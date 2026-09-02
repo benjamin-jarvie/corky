@@ -57,10 +57,10 @@ not a requirement.
 |---|---|
 | Joystick up / down | Move the selection; page through review outputs |
 | Joystick left / right | Move within a grid row; toggle the bottom action bar |
-| Joystick press | Pick the top candidate word; move the edit caret in codex32 entry |
+| Joystick press | Pick the top candidate word; move the edit caret in codex32 entry; finish text entry |
 | KEY1 (A) | Select / activate the highlighted option |
-| KEY2 (B) | Delete a character; step back one word; back one page |
-| KEY3 (C) | Abort the current flow |
+| KEY2 (B) | Delete a character; step back one word; back one page; back to home from review |
+| KEY3 (C) | Abort the current flow. Two documented exceptions: in codex32 grid entry C finishes the share, and in text entry C moves focus to the CANCEL / DONE bar |
 
 The same map applies to the CM4 build and the Zero 2 W pocket build: the
 CM4 carrier presents the standard Raspberry Pi 40-pin GPIO header, so BOARD

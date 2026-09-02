@@ -231,7 +231,8 @@ steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out 
 a PSBT file on a USB stick in the OTG port; and — once the M3 RAM-resident
 image lands — the boot microSD itself, SeedSigner-OS style (the whole OS runs
 from RAM, so the card can be pulled and used as the PSBT sled). QR is the
-tightest channel (photons only); the file channels have no size limit. All
+tightest channel (photons only); the file channels cap a PSBT at 4MB
+(`filechannel.MAX_PSBT_BYTES`). All
 three carry only PSBTs, and only Bitcoin Core ever parses them. If 512MB
 cannot hold the RAM-resident image, v1 ships QR + USB and the microSD channel
 waits for a bigger board (the fallback is written down in PLAN.md A-12).
@@ -273,11 +274,11 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1196 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1232 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (662) ·
-[`corky/screens.py`](corky/screens.py) (472) ·
+[`corky/main.py`](corky/main.py) (682) ·
+[`corky/screens.py`](corky/screens.py) (488) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
@@ -288,14 +289,14 @@ secret material during entry but performs no cryptography on it.
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,812 lines** (2,622 with blanks/comments).
+**Total functional code: 1,848 lines** (2,689 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,686 lines — none of it ships on the device.**
+**Test code: 2,739 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, 10 scripted device sessions, property/fuzz suites cross-checked against independent
+checks, 12 scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never

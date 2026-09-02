@@ -460,10 +460,10 @@ def main():
                 sess._tool_backup()
                 return d
             rec.clear()
-            fd = backup_run("a" + WORDS_SCRIPT + "a" + "a" * PER + "a", "1")
+            fd = backup_run("a" + WORDS_SCRIPT + "a" + "a" + "a" * PER + "a", "1")
             assert rec == _recorded(F_SECRET, 1, 1), f"F1 drifted: {rec}"
             rec.clear()
-            fd = backup_run("a" + WORDS_SCRIPT + "da" + "a" * (3 * PER) + "a",
+            fd = backup_run("a" + WORDS_SCRIPT + "a" + "da" + "a" * (3 * PER) + "a",
                             "2")
             assert rec == [entry for i, sh in enumerate(F_SHARES)
                            for entry in _recorded(sh, i + 1, 3)], \
@@ -478,10 +478,10 @@ def main():
                                                 page=n, pages=PER)), \
                         "F2: SENSITIVE share screen leaked to a dev frame"
             rec.clear()
-            backup_run("a" + WORDS_SCRIPT + "b", "3")   # abort at split choice
+            backup_run("a" + WORDS_SCRIPT + "a" + "b", "3")  # abort at split choice
             assert rec == [], "F3: aborted backup still showed a share"
             rec.clear()
-            fd = backup_run("a" + WORDS_SCRIPT + "da" + "c", "4")  # C aborts
+            fd = backup_run("a" + WORDS_SCRIPT + "a" + "da" + "c", "4")  # C aborts
             assert len(rec) == 1, "F4: C after share 1 did not stop the flow"
             assert not _has(fd, _render(
                 scr.result, ok=True,
@@ -568,9 +568,38 @@ def main():
             return r.stdout.strip()
 
         import screens as _scr
-        zi = _scr.TEXT_CHARSET.index("z")
-        # grid starts at 0; walk right zi times, type it, centre-press done
-        pass_keys = "r" * zi + "a" + "p"
+
+        def text_keys(charset, want):
+            """Keys that type `want` on the paged text grid, computed by
+            walking the same rules main._text_entry uses."""
+            pages = _scr.charset_pages(charset)
+            page, cur, out = 0, 0, []
+            for ch in want:
+                tp = next(i for i, pg in enumerate(pages) if ch in pg)
+                ti = pages[tp].index(ch)
+                while page < tp:                  # r past the end pages on
+                    n = len(pages[page])
+                    while cur < n - 1:
+                        out.append("r"); cur += 1
+                    out.append("r"); page += 1; cur = 0
+                while page > tp:                  # l past the start pages back
+                    while cur > 0:
+                        out.append("l"); cur -= 1
+                    out.append("l"); page -= 1; cur = len(pages[page]) - 1
+                n = len(pages[page])
+                while cur + 8 <= ti:
+                    out.append("d"); cur = min(n - 1, cur + 8)
+                while cur - 8 >= ti:
+                    out.append("u"); cur = max(0, cur - 8)
+                while cur < ti:
+                    out.append("r"); cur += 1
+                while cur > ti:
+                    out.append("l"); cur -= 1
+                out.append("a")
+            out.append("p")                            # centre press = done
+            return "".join(out)
+
+        pass_keys = text_keys("passphrase", "z")
         addrs = {}
         for tag, pkeys in (("none", "a"), ("with", "ra" + pass_keys)):
             fp = work / ("framesP" + tag)
@@ -586,6 +615,43 @@ def main():
                                                        mainnet=False), \
             "P: passphrase does not change the derived key"
         print("ok   P: passphrase entry runs end to end and changes the key")
+
+        # ---- Session T: typed xprv and typed descriptor (S3) ----
+        # The audit's S3 asked for key material that can be TYPED, for a
+        # build with no camera. Both modes were shipped once with a charset
+        # that could not express them (no 'B', no brackets), so these type a
+        # REAL xprv and a REAL descriptor character by character.
+        stickt = word = None
+        typed_xprv = mnemonic_to_xprv(MNEMONIC, mainnet=False)
+        assert not {c for c in typed_xprv
+                    if c not in _scr.CHARSETS["xprv"]}, \
+            "T: a real xprv contains characters the xprv grid cannot type"
+        stickt = work / "stickT"; stickt.mkdir()
+        pt = rpc.call("walletcreatefundedpsbt", [],
+                      [{rpc.call("getnewaddress", wallet="watch"): 0.3}],
+                      0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
+        (stickt / "typed.psbt").write_bytes(base64.b64decode(pt))
+        # load key -> "Type xprv" is index 3 -> type it -> sign -> power off
+        r = run_device(datadir,
+                       "a" + "ddda" + text_keys("xprv", typed_xprv)
+                       + "a" + "ra",   # sign, then POWER OFF
+                       work / "framesT", stick=stickt)
+        assert r.returncode == 0, f"T failed:\n{r.stderr}"
+        assert (stickt / "typed-signed.psbt").exists(), \
+            "T: typed xprv did not open a key that could sign"
+        print("ok   T: a real xprv typed on the grid opens the key and signs")
+
+        # The descriptor grid must express a real Core PRIVATE descriptor,
+        # so ask Core for one from a throwaway wallet that holds keys.
+        rpc.call("createwallet", "desccheck")
+        _d = rpc.call("listdescriptors", True,
+                      wallet="desccheck")["descriptors"]
+        _missing = {c for desc in _d for c in desc["desc"]
+                    if c not in _scr.CHARSETS["descriptor"]}
+        rpc.call("unloadwallet", "desccheck")
+        assert not _missing, \
+            f"T: real Core descriptors need characters the grid lacks: {_missing}"
+        print("ok   T: the descriptor grid can express a real Core descriptor")
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
         # home selected=0 = generate key, a = select, a = accept the

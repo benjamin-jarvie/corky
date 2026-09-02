@@ -1,9 +1,14 @@
 """Corky's session state machine: the program the device boots into.
 
 States:
-  HOME -> SEED MENU (A-14's modes: SeedQR / word entry / descriptor / xprv)
-       -> wallet open in Core -> LOAD PSBT (file channel or QR)
-       -> REVIEW -> sign -> RESULT -> power off.
+  HOME (2x2: load key / key generation / tools / settings)
+    -> LOAD KEY (A-14's modes: descriptor, xprv, codex32, SeedQR, words;
+       scanned or typed) or KEY GENERATION (A-19)
+    -> key open in Core -> LOAD PSBT (file channel or QR)
+    -> REVIEW -> sign -> RESULT, which offers SIGN ANOTHER (back to LOAD
+       PSBT with the same key) or POWER OFF. Back from LOAD PSBT or REVIEW
+       returns to HOME with the key still loaded.
+  Power off lives in SETTINGS (PLAN A-15c).
 
 Every screen comes from screens.py, every wallet operation from signer.py,
 every transfer from qrchannel/filechannel. This module holds no crypto and
@@ -16,8 +21,11 @@ without hardware.
 Dev mode:
     python3 corky/main.py --dev --datadir <dir> --chain regtest \
         --script "<keys>" [--stick-dir DIR] [--qr-psbt FILE]
-        [--qr-key FILE] [--passphrase STR] [--frames-dir DIR]
-Keys: u/d = up/down, l/r = left/right, a = select, b = back, c = reject.
+        [--qr-key FILE] [--frames-dir DIR]
+Keys (PLAN A-15c, eight controls): u/d/l/r = d-pad, p = centre press,
+a = select/KEY1, b = back or delete/KEY2, c = abort/KEY3. The passphrase
+is asked for on screen, never passed as an argument, so it cannot appear
+in a process listing.
 """
 
 import argparse
@@ -257,30 +265,59 @@ class Session:
             elif key == "b":
                 return None
 
-    def _text_entry(self, title, hint="", secret=False):
-        """Drive the 8x8 text grid. u/d/l/r move, A types, B deletes,
-        centre-press or C finishes, and an empty result is a cancel."""
-        text, cur = "", 0
-        n = len(screens.TEXT_CHARSET)
+    def _text_entry(self, title, charset, secret=False):
+        """Drive the paged text grid for one alphabet.
+
+        u/d/l/r move the cursor; l and r at a row edge turn the page, so
+        every character is reachable. A types the highlighted character, B
+        deletes one, centre-press finishes. C moves to the action bar,
+        where CANCEL really cancels and DONE commits. Returns None on
+        cancel, which is distinct from the empty string.
+        """
+        pages = screens.charset_pages(charset)
+        text, cur, page, sel = "", 0, 0, None
         while True:
             self.display.show(screens.text_entry(
-                self.w, self.h, title, text, cur, hint, secret),
-                sensitive=True)
+                self.w, self.h, title, text, cur, charset, page, secret,
+                actions_sel=1 if sel is None else sel), sensitive=True)
             key = self.buttons.read()
+            n = len(pages[page])
+            if sel is not None:            # focus is on the action bar
+                if key in ("l", "r"):
+                    sel = 1 - sel
+                elif key == "a":
+                    return text if sel == 1 else None
+                elif key in ("b", "c"):
+                    sel = None
+                continue
+            # The grid is one strip read left to right: l/r step one cell
+            # and cross rows, u/d jump a row, and a page turns only at the
+            # strip's ends. Anything cleverer desynchronises the user's
+            # mental model from the cursor.
             if key == "u":
-                cur = (cur - 8) % n
+                cur = max(0, cur - 8)
             elif key == "d":
-                cur = (cur + 8) % n
+                cur = min(n - 1, cur + 8)
             elif key == "l":
-                cur = (cur - 1) % n
+                if cur == 0 and page > 0:
+                    page -= 1
+                    cur = len(pages[page]) - 1
+                else:
+                    cur = max(0, cur - 1)
             elif key == "r":
-                cur = (cur + 1) % n
+                if cur == n - 1 and page + 1 < len(pages):
+                    page += 1
+                    cur = 0
+                else:
+                    cur = min(n - 1, cur + 1)
             elif key == "a":
-                text += screens.TEXT_CHARSET[cur]
+                text += pages[page][cur]
             elif key == "b":
                 text = text[:-1]
-            elif key in ("p", "c"):
-                return text or None
+            elif key == "p":
+                return text
+            elif key == "c":
+                sel = 1              # jump to the action bar
 
     def _ask_passphrase(self):
         """S2: offer a BIP39 passphrase before deriving. Returns the
@@ -297,7 +334,8 @@ class Session:
             elif key == "a":
                 if sel == 0:
                     return ""
-                return self._text_entry("PASSPHRASE", secret=True) or ""
+                return self._text_entry("PASSPHRASE", "passphrase",
+                                        secret=True) or ""
 
     def _keymaterial(self, kind):
         """Warning screen (A-14: the QR IS the wallet), then scan."""
@@ -322,7 +360,7 @@ class Session:
     def _seed_descriptor_typed(self):
         """S3: a descriptor typed on the grid, for a camera-less build or a
         descriptor that never existed as a QR."""
-        text = self._text_entry("PRIVATE  DESCRIPTOR")
+        text = self._text_entry("PRIVATE  DESCRIPTOR", "descriptor")
         if not text:
             return False
         stop = self._busy("importing into Core…")
@@ -334,7 +372,7 @@ class Session:
 
     def _seed_xprv_typed(self):
         """S3: an xprv typed on the grid."""
-        text = self._text_entry("BIP32  EXTENDED  PRIVATE  KEY")
+        text = self._text_entry("BIP32  EXTENDED  PRIVATE  KEY", "xprv")
         if not text:
             return False
         stop = self._busy("importing into Core…")
@@ -534,7 +572,10 @@ class Session:
         # different master key than the words produce, so a restore from
         # the share would silently open a DIFFERENT WALLET. codex32
         # (BIP93) encodes 16-64 byte seeds, so no truncation is needed.
-        seed = mnemonic_to_seed(" ".join(words), self.passphrase)
+        # The passphrase is part of the seed: backing up without asking
+        # would encode a DIFFERENT wallet than the words plus passphrase
+        # open. Ask here too, exactly as the load path does.
+        seed = mnemonic_to_seed(" ".join(words), self._ask_passphrase())
         ident = codex32.derive_identifier(seed)
         secret = codex32.encode_secret(ident, seed, threshold=0)
         choice = self._pick_split()
@@ -760,6 +801,8 @@ class Session:
                     seen.add(page)
                     continue
                 return self.state_sign(psbt, source)
+            elif key == "b":
+                return TO_HOME       # back to home, key still loaded (D7)
             elif key == "c" or (key == "a" and sel == 0):
                 self.display.show(screens.result(
                     self.w, self.h, ok=False, detail="rejected by user"))
@@ -845,7 +888,6 @@ def main():
     ap.add_argument("--stick-dir")
     ap.add_argument("--qr-psbt", help="dev: file of UR frames, one per line")
     ap.add_argument("--qr-key", help="dev: file with SeedQR digits/xprv/descriptor")
-    ap.add_argument("--passphrase", default="")
     ap.add_argument("--frames-dir", default="frames")
     args = ap.parse_args()
 
@@ -860,8 +902,7 @@ def main():
         qr = CameraQrSource()
 
     Session(display, buttons, rpc, stick_dir=args.stick_dir, qr_source=qr,
-            animate=not args.dev,
-            passphrase=args.passphrase).run()
+            animate=not args.dev).run()
 
 
 if __name__ == "__main__":
