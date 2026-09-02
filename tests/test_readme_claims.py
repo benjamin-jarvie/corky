@@ -111,7 +111,11 @@ if not broken:
 
 # Prose figures the README asserts about the test campaign.
 import subprocess
-sess = len(re.findall(r'print\("ok   [A-Z]:', (ROOT / "tests" / "e2e_session.py").read_text()))
+# Count the session markers themselves. The old rule matched only
+# `print("ok   X:` with a single-letter label, so it silently ignored
+# sessions named D3, H3/H4, R3 or T2 and undercounted by a third.
+sess = len(re.findall(r"^\s*# ---- Session ",
+                      (ROOT / "tests" / "e2e_session.py").read_text(), re.M))
 c = claimed(r"([\d]+) scripted device sessions", "device sessions")
 if c is not None:
     ok(f"device sessions: {c} == {sess}") if c == sess else \

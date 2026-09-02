@@ -52,6 +52,12 @@ def grid_keys(payload):
     return "".join(out)
 
 
+def _pub(rpc, desc):
+    """The watch-only form of a private descriptor, checksummed by Core."""
+    info = rpc.call("getdescriptorinfo", desc, stdin=True)
+    return info["descriptor"]
+
+
 def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
     cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
            f"--datadir={datadir}", "--chain=regtest", f"--script={script}",
@@ -648,9 +654,53 @@ def main():
                       wallet="desccheck")["descriptors"]
         _missing = {c for desc in _d for c in desc["desc"]
                     if c not in _scr.CHARSETS["descriptor"]}
-        rpc.call("unloadwallet", "desccheck")
         assert not _missing, \
             f"T: real Core descriptors need characters the grid lacks: {_missing}"
+
+        # ...and typing one must actually open a key that signs. This is the
+        # end-to-end shape whose absence let the original S3 charset bug
+        # ship: a charset assertion alone would have passed it too.
+        rpc.call("unloadwallet", "desccheck")
+        # Corky's OWN private wpkh receive descriptor, in Core's own form
+        # (origin in brackets, checksummed), read straight back out of a
+        # session opened from the test mnemonic.
+        signer.open_session(rpc, MNEMONIC)
+        _privs = rpc.call("listdescriptors", True,
+                          wallet=signer.WALLET)["descriptors"]
+        _priv = next(d["desc"] for d in _privs
+                     if d["desc"].startswith("wpkh(")
+                     and not d.get("internal"))
+        signer.close_session(rpc)
+        assert not {c for c in _priv
+                    if c not in _scr.CHARSETS["descriptor"]}, \
+            "T2: Corky's own private descriptor is not typeable on the grid"
+
+        # Fund the first address of that exact descriptor, so the typed
+        # descriptor alone is enough to sign.
+        # The public form keeps the hardened origin, so only the private
+        # descriptor can derive. stdin keeps it out of the process list.
+        _a0 = rpc.call("deriveaddresses", _priv, [0, 0], stdin=True)[0]
+        rpc.call("generatetoaddress", 101, _a0)
+        _utxo = next(u for u in rpc.call("listunspent", 1, 9999, [_a0],
+                                         wallet="watch")
+                     if u["spendable"] or True)
+        stickt2 = work / "stickT2"; stickt2.mkdir()
+        _p2 = rpc.call("walletcreatefundedpsbt",
+                       [{"txid": _utxo["txid"], "vout": _utxo["vout"]}],
+                       [{rpc.call("getnewaddress", wallet="watch"): 1.0}],
+                       0, {"fee_rate": 10, "add_inputs": False}, True,
+                       wallet="watch")["psbt"]
+        (stickt2 / "desc.psbt").write_bytes(base64.b64decode(_p2))
+        # load key -> "Type descriptor" is index 2 -> type it -> sign
+        r = run_device(datadir,
+                       "a" + "dda" + text_keys("descriptor", _priv)
+                       + "a" + "ra",
+                       work / "framesT2", stick=stickt2)
+        assert r.returncode == 0, f"T2 failed:\n{r.stderr}"
+        assert (stickt2 / "desc-signed.psbt").exists(), \
+            "T2: a typed descriptor did not open a key that could sign"
+        print("ok   T2: a real Core descriptor typed on the grid opens a "
+              "key and signs")
         print("ok   T: the descriptor grid can express a real Core descriptor")
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
