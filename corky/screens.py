@@ -460,10 +460,15 @@ def codex32_scan(w, h):
                 outline=GREY)
     d.text((w // 2, int(h * 0.40)), "QR", font=_font(int(h * 0.09)),
            fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.66)), "Codex32QR/v1-48 · 128-bit shares",
-           font=_font(int(h * 0.05)), fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.74)), "256-bit shares: type them instead",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    # BIP93 does not define a QR format or namespace: the QR just holds the
+    # codex32 string, uppercase (BIP93: "SHOULD use the uppercase form"), and
+    # 128-bit shares fit in 48 characters. Do not imply a named standard.
+    _fit(d, (w // 2, int(h * 0.66)), "plain codex32 text, uppercase",
+         int(h * 0.05), OCHRE, "mm", int(w * 0.92))
+    _fit(d, (w // 2, int(h * 0.735)), "one share per QR, or one per line",
+         int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _fit(d, (w // 2, int(h * 0.80)), "256-bit shares: type them instead",
+         int(h * 0.045), GREY, "mm", int(w * 0.92))
     _actions(d, w, h, ["BACK", "TYPE INSTEAD"], 1)
     return img
 
