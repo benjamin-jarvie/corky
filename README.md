@@ -274,26 +274,26 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1232 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1268 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (682) ·
+[`corky/main.py`](corky/main.py) (718) ·
 [`corky/screens.py`](corky/screens.py) (488) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 262 lines.**
-[`corky/signer.py`](corky/signer.py) (146) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 288 lines.**
+[`corky/signer.py`](corky/signer.py) (160) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
-[`corky/qrchannel.py`](corky/qrchannel.py) (71) move PSBTs as opaque
+[`corky/qrchannel.py`](corky/qrchannel.py) (83) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,848 lines** (2,690 with blanks/comments).
+**Total functional code: 1,910 lines** (2,827 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,954 lines — none of it ships on the device.**
+**Test code: 3,226 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent
@@ -325,8 +325,10 @@ in that directory's NOTICE); no other glyphs ship.
 rules that came out of the 2026-09-02 two-axis review, after a feature shipped
 in a state where it could not work past a fully green suite: every input
 surface needs a real-data round-trip test, the shipping branch must be the one
-under test, and a cost or count claim must come from a measurement. Open
-defects are in [ISSUES.md](ISSUES.md).
+under test, a cost or count claim must come from a measurement, and
+"needs hardware" is a claim that needs checking before anything is deferred
+on it. [ISSUES.md](ISSUES.md) records what those rules have caught so far, and
+lists what is still open: audit items D17 and D18, on error reporting.
 
 ## Audit record
 

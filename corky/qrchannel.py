@@ -86,19 +86,40 @@ class FrameAssembler:
         return self._decoder.estimated_percent_complete()
 
 
-def frames_to_images(frames, box_size=4, border=2):
+def frames_to_images(frames, box_size=4, border=2, panel=None):
     """Render UR frames as PIL images for the display (lazy import so this
-    module stays importable without Pillow/qrcode, e.g. in logic tests)."""
+    module stays importable without Pillow/qrcode, e.g. in logic tests).
+
+    panel=(w, h) LOWERS box_size when the frames would not fit that panel.
+    Frame length drives the QR version, so one tuning change to
+    MAX_FRAGMENT_LEN can push a frame past the panel, where fit_to_panel used
+    to crop it into a code no scanner can read (I-1). box_size stays the
+    ceiling, so frames that already fit render exactly as before; only frames
+    that would overflow get smaller modules.
+
+    One box_size applies to the WHOLE set, taken from the biggest frame in
+    it. Frames differ in version, so a per-frame size would change the image
+    size during the animation while a scanner is still reading it.
+    """
     import qrcode
-    images = []
+    codes = []
     for f in frames:
         qr = qrcode.QRCode(box_size=box_size, border=border,
                            error_correction=qrcode.constants.ERROR_CORRECT_L)
         qr.add_data(f.upper())   # alphanumeric mode: denser QR for UR strings
         qr.make(fit=True)
-        images.append(qr.make_image(fill_color="black",
-                                    back_color="white").convert("RGB"))
-    return images
+        codes.append(qr)
+    if panel:
+        span = max(qr.modules_count + 2 * border for qr in codes)
+        box_size = min(box_size, min(panel) // span)
+        if box_size < 1:
+            raise QrChannelError(
+                f"a {span}-module QR does not fit a {min(panel)}px panel at "
+                "one pixel per module; lower MAX_FRAGMENT_LEN")
+        for qr in codes:
+            qr.box_size = box_size
+    return [qr.make_image(fill_color="black",
+                          back_color="white").convert("RGB") for qr in codes]
 
 
 def fit_to_panel(img, w, h):
@@ -111,7 +132,13 @@ def fit_to_panel(img, w, h):
     survives.
     """
     from PIL import Image
-    factor = max(1, min(w // img.width, h // img.height))
+    if img.width > w or img.height > h:
+        # Cropping a QR silently destroys it: the panel still shows something
+        # QR-shaped and no scanner will ever read it. Refuse instead, and let
+        # frames_to_images(panel=...) size the modules so this cannot arise.
+        raise QrChannelError(
+            f"a {img.width}x{img.height} QR does not fit a {w}x{h} panel")
+    factor = min(w // img.width, h // img.height)
     scaled = img.resize((img.width * factor, img.height * factor),
                         Image.NEAREST)
     panel = Image.new("RGB", (w, h), "white")

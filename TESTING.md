@@ -105,6 +105,22 @@ rules, and fails if the cost drifts. When a UI changes, that model must
 change with it: after D4 it still modelled the dial for a while, so it
 reported a confident 546 for a device that no longer worked that way.
 
+## Rule 7: "needs hardware" is a claim, and it needs checking
+
+I-1 (a cropped QR) and I-2 (POWER OFF that did not power off) sat in
+`ISSUES.md` under "wait for M1, neither can be proven without hardware".
+Neither needed hardware. I-1 is panel geometry, provable with two integers.
+I-2 is a teardown sequence where only the final `systemctl poweroff` touches
+the board, and that one call fakes cleanly.
+
+Before you write "no test without hardware", name the exact line that needs
+the board. If the answer is one syscall, fake that syscall and test the
+rest. Fake it as the device would fail, not as the fake is convenient: the
+first version of the I-2 test faked a missing `systemctl` as exit code 1,
+so it passed over a `FileNotFoundError` that made the whole fallback dead
+code.
+
 ## What is still thin
 
-See `ISSUES.md`, items I-3 to I-6.
+`ISSUES.md` records I-1 to I-6 as fixed and D17/D18 as open. The standing
+milestone work (M0 to M3) genuinely does need the board.

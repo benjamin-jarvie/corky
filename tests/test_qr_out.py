@@ -7,6 +7,7 @@ must survive, and a multi-frame animation must repeat at a steady rate.
 
 Run: python3 tests/test_qr_out.py
 """
+import base64
 import sys
 import threading
 import time
@@ -85,13 +86,123 @@ if scaled_w != scaled_h:
 else:
     ok("a square QR stays square on a 4:3 panel")
 
-# Known open defect I-1: an oversized QR is cropped rather than downscaled.
-# This test PINS the current behaviour so the fix is visible when it lands.
+# --- I-1: an oversized QR must never be cropped ---------------------------
+#
+# Cropping leaves the panel showing something QR-shaped that no scanner can
+# read, and nothing on the device says so. fit_to_panel refuses; the real
+# guard is frames_to_images(panel=...), which sizes the modules so an
+# oversized frame cannot be produced in the first place.
+
 big = Image.new("RGB", (400, 400), "white")
-big_out = qrchannel.fit_to_panel(big, PANEL_W, PANEL_H)
-if big_out.size == (PANEL_W, PANEL_H) and big.width > PANEL_W:
-    ok("KNOWN GAP I-1: an oversized QR is still cropped, not downscaled "
-       "(see ISSUES.md)")
+try:
+    qrchannel.fit_to_panel(big, PANEL_W, PANEL_H)
+    bad("fit_to_panel cropped a 400x400 QR instead of refusing it (I-1)")
+except qrchannel.QrChannelError:
+    ok("fit_to_panel refuses an oversized QR rather than cropping it (I-1)")
+
+# The cliff measured before the fix: 336 characters renders a version-10 QR
+# at 244px, which overflows a 240px panel. Sweep fragment lengths well past
+# it, on BOTH panels, and require every frame to fit.
+psbt_b64 = base64.b64encode(bytes(range(256)) * 16).decode()
+for panel in ((320, 240), (240, 240)):          # SeedSigner+ hat, pocket hat
+    for mfl in (100, 150, 200, 400):
+        parts = qrchannel.psbt_to_frames(psbt_b64, max_fragment_len=mfl)
+        longest = max(len(f) for f in parts)
+        imgs = qrchannel.frames_to_images(parts, panel=panel)
+        over = [i.size for i in imgs if i.width > panel[0] or i.height > panel[1]]
+        if over:
+            bad(f"panel {panel}, fragment {mfl} ({longest} chars): "
+                f"frames overflow the panel: {set(over)}")
+            continue
+        # One size for the whole set: a set that changes size mid-animation
+        # makes a scanner re-acquire on every frame.
+        if len({i.size for i in imgs}) != 1:
+            bad(f"panel {panel}, fragment {mfl}: the animation changes size "
+                f"between frames: {sorted({i.size for i in imgs})}")
+            continue
+        # And each one must survive the real display path.
+        fitted = {qrchannel.fit_to_panel(i, *panel).size for i in imgs}
+        if fitted != {panel}:
+            bad(f"panel {panel}, fragment {mfl}: fit_to_panel gave {fitted}")
+        else:
+            ok(f"panel {panel[0]}x{panel[1]}, fragment {mfl} "
+               f"({longest} chars): every frame fits at {imgs[0].width}px")
+
+# box_size stays the CEILING. A frame that already fits must render exactly
+# as it did before the fix, because changing what the coordinator sees is
+# not provable without a scanner in front of the panel (audit D11/D12).
+for mfl in (100, 150):
+    parts = qrchannel.psbt_to_frames(psbt_b64, max_fragment_len=mfl)
+    sized = qrchannel.frames_to_images(parts, panel=(PANEL_W, PANEL_H))[0]
+    fixed = qrchannel.frames_to_images(parts)[0]
+    fits = fixed.height <= PANEL_H
+    if fits and sized.size != fixed.size:
+        bad(f"fragment {mfl} already fitted at {fixed.size} and panel sizing "
+            f"changed it to {sized.size}")
+    elif not fits and sized.height > PANEL_H:
+        bad(f"fragment {mfl} did not fit at {fixed.size} and panel sizing "
+            f"left it at {sized.size}")
+    else:
+        ok(f"fragment {mfl}: {fixed.size[0]}px -> {sized.size[0]}px "
+           f"({'unchanged, it already fitted' if fits else 'shrunk to fit'})")
+
+
+# --- the signature must survive a QR that cannot be shown -----------------
+#
+# fit_to_panel and frames_to_images both raise now. state_sign runs them
+# AFTER signing, so an uncaught raise would unwind past the result screen
+# and throw a good signature away (the shape of audit D18).
+
+class _Rpc:
+    chain = "regtest"
+
+    def call(self, *a, **k):
+        return ""
+
+
+class _Display:
+    width, height = PANEL_W, PANEL_H
+
+    def show(self, image, sensitive=False):
+        pass
+
+
+class _Buttons:
+    def read(self):
+        return "a"
+
+
+boom = corky_main.Session(_Display(), _Buttons(), _Rpc())
+boom.animate = False
+real_frames = qrchannel.frames_to_images
+
+
+def _raise(*a, **k):
+    raise qrchannel.QrChannelError("frame does not fit the panel")
+
+
+qrchannel.frames_to_images = _raise
+try:
+    import signer as _signer
+    real_sign = _signer.sign_psbt
+    _fake = base64.b64encode(b"psbt\xff" + bytes(range(256))).decode()
+    _signer.sign_psbt = lambda rpc, psbt: {"complete": True, "psbt": _fake}
+    try:
+        outcome = boom.state_sign(_fake, None)
+    finally:
+        _signer.sign_psbt = real_sign
+except qrchannel.QrChannelError:
+    bad("state_sign let QrChannelError unwind after a successful sign: "
+        "the signature is lost and no screen says so")
+    outcome = None
+finally:
+    qrchannel.frames_to_images = real_frames
+
+if outcome == corky_main.TO_HOME:
+    ok("a QR that cannot be shown reports the failure and keeps the session, "
+       "rather than throwing the signature away")
+elif outcome is not None:
+    bad(f"state_sign returned {outcome!r} after an unshowable QR")
 
 
 # --- D12: the animation repeats, is paced, and a key stops it -------------

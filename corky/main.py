@@ -29,6 +29,7 @@ in a process listing.
 """
 
 import argparse
+import subprocess
 import sys
 import threading
 import time
@@ -87,12 +88,34 @@ class DevQrSource:
 # What a PSBT run reports back to the home screen.
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
+# How the board is halted. Under systemd the poweroff is the whole teardown:
+# it stops corky-bitcoind.service by that unit's own ExecStop, which runs
+# bitcoin-cli stop and waits up to TimeoutStopSec=30. FALLBACK_HALT_CMD and
+# an explicit node stop cover a board that runs Corky without systemd.
+HALT_CMD = ["systemctl", "poweroff"]
+FALLBACK_HALT_CMD = ["halt", "-p"]
+
+
+def _run(cmd):
+    """Run a command and report success. A missing binary is a failure, not
+    an exception: subprocess.run(check=False) suppresses a non-zero exit but
+    still raises FileNotFoundError, which is exactly the no-systemd case the
+    fallback exists for."""
+    try:
+        return subprocess.run(cmd, check=False).returncode == 0
+    except OSError:
+        return False
+
 
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
-                 passphrase="", animate=False):
+                 passphrase="", animate=False, on_device=False):
         self.display = display
         self.animate = animate
+        # on_device gates the two real effects of POWER OFF. The dev harness
+        # shares one bitcoind across every scripted session, so a session
+        # that stopped the node would fail every session after it.
+        self.on_device = on_device
         self.buttons = buttons
         self.rpc = rpc
         self.stick_dir = Path(stick_dir) if stick_dir else None
@@ -111,6 +134,58 @@ class Session:
                 signer.close_session(self.rpc)
             except Exception:
                 pass
+        # state_home only returns when the user chose POWER OFF, on the
+        # result screen or in settings. A crash raises instead, and systemd
+        # restarts the unit, so the device must NOT halt on that path.
+        self.power_off()
+
+    def power_off(self):
+        """Cover the screen, then halt the board and its node (I-2).
+
+        Leaving Python is not a power off. bitcoind keeps running under its
+        own unit, /run/corky stays mounted, and the ST7789 holds its last
+        frame, so the operator reads POWER OFF on a device that is still
+        live and still holding a wallet-shaped ramdisk.
+
+        Under systemd the poweroff is the whole teardown, so this does not
+        stop the node itself: corky-bitcoind.service does that in its own
+        ExecStop, in shutdown order, with a 30 second timeout. Without
+        systemd nothing else will, so the fallback stops the node first.
+
+        The ramdisk is NOT wiped here. close_session already deletes the
+        wallet directory, which is the only secret-bearing path under
+        /run/corky, and the rest is a wallet-only node's own state. The
+        tmpfs itself dies with power. Cold-boot RAM remanence stays an M3
+        question.
+
+        If the board is still running after both attempts, the screen says
+        so. A device that reads POWER OFF while it is live is the whole
+        defect (audit D16), and a silent failure repeats it (D17).
+        """
+        if not self.on_device:
+            return
+        # Cover the result screen FIRST. The panel keeps its last frame with
+        # no power of its own, so whatever is on it when the board dies is
+        # what the next person to pick it up reads. The result screen shows
+        # an address and an amount; this frame shows neither.
+        stop = self._busy("powering off…")
+        try:
+            if _run(HALT_CMD):
+                return          # shutdown started; systemd stops the node
+            # No systemd. Nothing else will stop bitcoind, and halting over
+            # a live writer can tear a wallet on any build that is not
+            # fully RAM-resident.
+            node_down = signer.stop_node(self.rpc)
+            halted = _run(FALLBACK_HALT_CMD)
+        finally:
+            stop()
+        if halted and node_down:
+            return
+        detail = ("halt failed; remove power" if not halted
+                  else "bitcoind still running; remove power")
+        self.display.show(screens.result(self.w, self.h, ok=False,
+                                         detail=detail))
+        self.buttons.read()
 
     def _busy(self, message):
         """Paint the wait frame; on the device a thread keeps the mark
@@ -826,7 +901,17 @@ class Session:
             detail = f"{out.name} written"
         else:
             frames = qrchannel.psbt_to_frames(signed["psbt"])
-            self._show_qr_loop(frames)
+            try:
+                self._show_qr_loop(frames)
+            except qrchannel.QrChannelError as exc:
+                # The PSBT IS signed. Losing the run here would unwind past
+                # the result screen and throw the signature away, so say
+                # what happened and offer the file channel instead.
+                self.display.show(screens.result(
+                    self.w, self.h, ok=False,
+                    detail=f"signed, but not shown: {exc}"))
+                self.buttons.read()
+                return TO_HOME
             detail = f"shown as {len(frames)} QR frames"
         return self._state_signed(detail)
 
@@ -839,7 +924,8 @@ class Session:
         a static QR, so it is shown once and waits for a key.
         """
         images = [qrchannel.fit_to_panel(img, self.w, self.h)
-                  for img in qrchannel.frames_to_images(frames)]
+                  for img in qrchannel.frames_to_images(
+                      frames, panel=(self.w, self.h))]
         if len(images) == 1:
             self.display.show(images[0])
             self.buttons.read()
@@ -902,7 +988,7 @@ def main():
         qr = CameraQrSource()
 
     Session(display, buttons, rpc, stick_dir=args.stick_dir, qr_source=qr,
-            animate=not args.dev).run()
+            animate=not args.dev, on_device=not args.dev).run()
 
 
 if __name__ == "__main__":

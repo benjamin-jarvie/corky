@@ -16,6 +16,7 @@ import hashlib
 import hmac
 import json
 import shutil
+import time
 from decimal import Decimal
 import subprocess
 import sys
@@ -253,3 +254,26 @@ def close_session(rpc):
     ramdisk and power-off is the real teardown; deleting here keeps every
     environment (and every test) as stateless as the hardware."""
     _drop_wallet(rpc, WALLET)
+
+
+def stop_node(rpc, timeout=30.0, poll=0.2):
+    """Ask bitcoind to shut down, and wait until it stops answering.
+
+    POWER OFF must leave nothing running (I-2). bitcoind holds the ramdisk
+    datadir open, so a halt during a write can tear wallet.dat on any build
+    that is not fully RAM-resident. Returns True if the node has gone, False
+    if it outlived the timeout. The caller must show the False case: a
+    device that says it is off while its node runs is audit defect D16.
+    """
+    try:
+        rpc.call("stop")
+    except RuntimeError:
+        return True                    # already down, or never came up
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            rpc.call("uptime")
+        except RuntimeError:
+            return True                # RPC refused: the node has gone
+        time.sleep(poll)
+    return False

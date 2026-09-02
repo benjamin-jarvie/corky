@@ -6,39 +6,106 @@ Fixed items leave this file and live in the git history instead.
 Last reviewed 2026-09-02, after the two-axis review of `e9ca1ab..4f23599`.
 Testing rules that came out of that review: [TESTING.md](TESTING.md).
 
-## Deferred by decision (Ben, 2026-09-02): fix at M1
+> Ben reversed the M1 deferral on 2026-09-02, after the evidence below was
+> measured and shown. The reason recorded for the deferral ("neither can be
+> proven without hardware") was wrong for both items, which is why
+> [TESTING.md](TESTING.md) now carries rule 7.
 
-These two are real defects. They wait for M1, when a camera and a real
-scanner sit in front of the panel, because neither can be proven without
-that hardware.
+## Fixed 2026-09-02
 
-### I-1 `fit_to_panel` crops an oversized QR instead of scaling it down
+### I-1 `fit_to_panel` cropped an oversized QR instead of refusing it
 
-`corky/qrchannel.py`. The scale factor is `max(1, min(w // img.width, h //
-img.height))`. The `max(1, ...)` floor means a QR larger than the panel is
-pasted at full size and clipped, which destroys the quiet zone and makes the
-code unreadable.
+**Fixed.** `corky/qrchannel.py`. The scale factor was `max(1, min(w //
+img.width, h // img.height))`. The `max(1, ...)` floor pasted a QR larger
+than the panel at full size and clipped it, so the panel showed something
+QR-shaped that no scanner could read, with no warning.
 
-Today every frame is about 212 pixels against a 320x240 panel, so the factor
-is always 1. Audit item D11 asked for "scaled by an integer factor". That
-half of D11 is therefore inert: only the letterboxing runs.
+Measured before the fix, on the 240px-high panel: a 336-character frame
+renders a version-10 QR at 244px and lost 52% of its area. Frames were 255
+characters at 212px, so the cliff was 79 characters away, held back only by
+`MAX_FRAGMENT_LEN = 100`. Raising it to 150, a reasonable "fewer frames"
+tune, crossed it.
 
-Fix: add a downscale path for the oversized case, or cap the fragment size so
-frames can never exceed the panel. Verify against a real scanner at M1.
-Related: `MAX_FRAGMENT_LEN` in `corky/qrchannel.py`.
+Fix: `frames_to_images(panel=(w, h))` LOWERS `box_size` for the whole frame
+set when the frames would not fit. `box_size` stays the ceiling, so a frame
+that already fits renders exactly as before and the coordinator sees no
+change at today's settings; only a frame that would overflow gets smaller
+modules. `fit_to_panel` raises `QrChannelError` instead of cropping, and
+`state_sign` catches it, because that raise happens after the PSBT is
+signed and an unwind would throw the signature away. `tests/test_qr_out.py`
+sweeps fragment lengths 100 to 400 on both panels, and pins that a fitting
+frame is unchanged.
 
-### I-2 POWER OFF does not power the device off
+The ticket offered two fixes: "add a downscale path for the oversized case,
+or cap the fragment size". This takes the second, applied to the module
+size rather than the fragment length, which caps the pixels directly.
+Downscaling was rejected: a non-integer downscale gives non-square modules,
+which is the defect D11 named in the first place.
 
-`corky/main.py`, `_state_signed` and `state_settings`. Both return control to
-Python. Nothing calls a system shutdown and nothing stops `bitcoind`.
+D11 also asked for the letterbox to sit "on the ink ground". It is white
+instead, and `corky/qrchannel.py` records why: a QR needs a light quiet
+zone, and an ink surround removes it. D11 is wrong on that word.
 
-The audit raised this as D16 against the old single-shot result screen. The
-new SIGN ANOTHER / POWER OFF bar and the settings menu repeat it, so the
-device now offers the choice on two screens and honours it on neither.
+### I-2 POWER OFF did not power the device off
 
-Fix: POWER OFF should stop `bitcoind` (`bitcoin-cli stop`), unmount or wipe
-the ramdisk datadir, then halt. The release image must also make halt safe
-with a read-only root (M3).
+**Fixed.** `corky/main.py`. Both `_state_signed` and `state_settings`
+returned control to Python, which exited 0. `image/corky.service` has
+`Restart=on-failure`, so systemd stopped there; `image/corky-bitcoind.service`
+is a separate unit and was untouched. bitcoind kept running, `/run/corky`
+stayed mounted, and the ST7789 held the signed-result screen, with its
+address and amount, on a device the operator believed was off.
+
+Fix: `Session.power_off` covers the result screen, then runs `systemctl
+poweroff`. systemd stops the node through `corky-bitcoind.service`'s own
+`ExecStop`, which runs `bitcoin-cli stop` and waits up to
+`TimeoutStopSec=30`, so the session does not stop the node a second time.
+If `systemctl` is missing or fails, meaning no systemd, the session calls
+the new `signer.stop_node` and then `halt -p`.
+
+If the board is still running after both attempts, the panel says so and
+waits for a key. A silent failure would repeat D16 on the failure path.
+
+A crash still propagates without halting, so systemd can restart the unit.
+`tests/test_poweroff.py` runs the real body, with `animate` and `on_device`
+set as `main()` sets them, and fakes only the two halt commands. The halt
+itself is confirmed on hardware at M0 (Trello BB-20).
+
+The ticket's middle step, "unmount or wipe the ramdisk datadir", is
+delegated, not done here, and `Session.power_off` says so: `close_session`
+already deletes the wallet directory, which is the only secret-bearing path
+under `/run/corky`, and the tmpfs dies with power. Cold-boot RAM remanence
+stays an M3 question.
+
+Two claims in the first version of this fix were wrong and are corrected
+above. `Requires=` does NOT propagate a stop when a unit exits on its own;
+`systemd.unit(5)` gives that behaviour to `BindsTo=`. And
+`subprocess.run(check=False)` still raises `FileNotFoundError`, so the
+no-systemd fallback could never have run. Both were found by the two-axis
+review of this commit, not by the suite.
+
+## Open
+
+Raised by the 2026-08-18 audit, never closed, and NOT closed here. Listed
+because the previous version of this file claimed nothing was open.
+
+### D17 Teardown failure is silent
+
+`corky/main.py`, `Session.run`, and `signer._drop_wallet`. `run` catches and
+discards every exception from `close_session`, and `_drop_wallet` deletes
+the wallet directory with `ignore_errors=True`. No screen reports that the
+unload or the delete failed. The power-off path now reports its own
+failures, but the wallet teardown before it still does not.
+
+### D18 Load, review and signing errors bypass UI recovery
+
+`corky/main.py`. The menu catch blocks cover seed and tool setup only.
+`state_load` does not catch `FileChannelError` or filesystem errors, and
+`state_review` does not catch RPC failures. Those exceptions unwind the
+process instead of painting a held error, and with `Restart=on-failure` a
+bad USB file causes a restart loop until the file is removed.
+
+`state_sign`'s QR path is the one case fixed here, because the raise that
+this commit added would otherwise have discarded a good signature.
 
 ## Test gaps found by the same review
 
@@ -46,6 +113,11 @@ The review found that new input surfaces shipped without a test that feeds
 them real data. All four are now closed; the rules they produced live in
 [TESTING.md](TESTING.md). They stay listed here until the next review round
 confirms them, because a gap that closes quietly tends to reopen quietly.
+
+I-1 and I-2 were themselves recorded as hardware-blocked, which was wrong:
+both were software defects with deterministic tests, and both are fixed
+above. Nothing in this file waits on hardware except the standing
+milestones below.
 
 ### I-3 `fit_to_panel` has no test
 

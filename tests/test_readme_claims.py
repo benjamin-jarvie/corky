@@ -79,6 +79,15 @@ for f in LAYER1 + LAYER2 + LAYER3:
         bad(f"{name}: README says {hits}, actual {actual}")
 
 # Total functional
+# The raw total was unpinned until 2026-09-02 and had drifted by 95 lines
+# while the functional total stayed exact (TESTING.md rule 4).
+raw = sum(len((ROOT / f).read_text().splitlines())
+          for f in LAYER1 + LAYER2 + LAYER3)
+rc = claimed(r"\(([\d,]+) with blanks/comments\)", "raw total")
+if rc is not None:
+    ok(f"raw total: {rc} == {raw}") if rc == raw else \
+        bad(f"raw total: README {rc}, actual {raw}")
+
 total = sum(code_lines(ROOT / f) for f in LAYER1 + LAYER2 + LAYER3)
 c = claimed(r"\*\*Total functional code: ([\d,]+) lines\*\*", "total functional")
 if c is not None:
