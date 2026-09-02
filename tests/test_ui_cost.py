@@ -62,7 +62,7 @@ def named_screens(display):
     """Paint names instead of images, so a session's screen order is
     assertable without rendering."""
     for name in ("home", "seed_menu", "result", "busy", "review",
-                 "tools_menu", "seed_length"):
+                 "tools_menu", "seed_length", "settings_menu"):
         setattr(screens, name,
                 (lambda n: lambda *a, **k: n)(name))
     return display
@@ -150,13 +150,14 @@ else:
 # --- D6: a failing seed mode must hold its message ------------------------
 _real = {n: getattr(screens, n) for n in
          ("home", "seed_menu", "result", "busy", "review", "tools_menu",
-          "seed_length")}
+          "seed_length", "settings_menu")}
 display = named_screens(RecordingDisplay())
-# D->load key, A opens it, four D then A -> "Scan SeedQR" (index 4 in the
-# load-key menu), which raises like the camera stub does; the script then
-# supplies ONE key to dismiss the error, and C to power off. If the error
-# is not held, the dismissing A falls through and re-opens the menu.
-buttons = ScriptedButtons(["d", "a", "d", "d", "d", "d", "a", "a", "c"])
+# A opens load key (top-left tile), four D then A -> "Scan SeedQR" (index 4
+# in the load-key menu), which raises like the camera stub does; ONE key
+# dismisses the error, then D,R,A,A goes home -> settings -> power off. If
+# the error is not held, the dismissing A falls through and re-opens the menu.
+buttons = ScriptedButtons(["a", "d", "d", "d", "d", "a", "a",
+                           "d", "r", "a", "a"])
 session = corky_main.Session(display, buttons, FakeRpc())
 session.qr = corky_main.CameraQrSource()
 raised = None
@@ -171,7 +172,8 @@ painted = display.painted
 if raised is not None:
     bad(f"the error was not held; the session ran off its script: {raised}")
 elif not (painted[0] == "home" and "busy" in painted
-          and painted[-2:] == ["result", "home"]
+          and "result" in painted
+          and painted[painted.index("result") + 1] == "home"
           and painted.count("seed_menu") >= 1):
     bad(f"unexpected screen order after a failing seed mode: {painted}")
 else:

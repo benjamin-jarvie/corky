@@ -126,29 +126,55 @@ class Session:
         return halt
 
     def state_home(self):
-        # generate key | load key | tools | power off
-        selected = 0
+        # 2x2 tiles: load key | key generation / tools | settings.
+        # Power off lives inside settings (Ben, 2026-09-01).
+        row = col = 0
         while True:
+            selected = row * 2 + col
             self.display.show(screens.home(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 4
+                row = (row - 1) % 2
             elif key == "d":
-                selected = (selected + 1) % 4
-            elif key == "c":
-                return
-            if key == "a":
-                if selected == 3:      # power off
-                    return
-                opened = [self._seed_generate,   # generate key
-                          self.state_seed_menu,  # load key
-                          self.state_tools       # tools
+                row = (row + 1) % 2
+            elif key == "l":
+                col = (col - 1) % 2
+            elif key == "r":
+                col = (col + 1) % 2
+            elif key == "a":
+                if selected == 3:          # settings
+                    if self.state_settings():
+                        return             # settings chose power off
+                    continue
+                opened = [self.state_seed_menu,  # 0 load key
+                          self._seed_generate,   # 1 key generation
+                          self.state_tools       # 2 tools
                           ][selected]()
                 if opened:
                     # A key is now loaded in Core: go straight on to loading
                     # a PSBT rather than back to HOME.
                     self.state_load()
                     return
+
+    def state_settings(self) -> bool:
+        """Settings menu. Returns True if the user chose power off (the
+        session ends), False on back. About is informational."""
+        selected = 0
+        while True:
+            self.display.show(screens.settings_menu(self.w, self.h, selected))
+            key = self.buttons.read()
+            if key == "u":
+                selected = (selected - 1) % 2
+            elif key == "d":
+                selected = (selected + 1) % 2
+            elif key == "b":
+                return False
+            elif key == "a":
+                if selected == 0:          # power off
+                    return True
+                # about: show, then any key returns to the settings menu
+                self.display.show(screens.about(self.w, self.h))
+                self.buttons.read()
 
     # -- seed entry: the three A-14 modes plus SeedQR ---------------------
 

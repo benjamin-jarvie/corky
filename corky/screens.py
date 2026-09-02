@@ -28,6 +28,24 @@ def _font(size):
     return ImageFont.load_default(size=size)
 
 
+_ICON_TTF = (Path(__file__).resolve().parent.parent
+             / "hw" / "vendor" / "fonts" / "fa-solid-subset.ttf")
+
+
+@lru_cache(maxsize=None)
+def _iconfont(size):
+    return ImageFont.truetype(str(_ICON_TTF), size)
+
+
+# Font Awesome Free Solid codepoints (see hw/vendor/fonts/NOTICE.md).
+ICON = {"load": "\uf019", "key": "\uf084", "tools": "\uf7d9",
+        "gear": "\uf013", "power": "\uf011", "about": "\uf05a"}
+
+
+def _icon(d, cx, cy, size, name, col):
+    d.text((cx, cy), ICON[name], font=_iconfont(size), fill=col, anchor="mm")
+
+
 def _fit(d, xy, text, size, fill, anchor, maxw):
     """Draw text at `size`, shrinking until it fits `maxw`.
 
@@ -101,23 +119,67 @@ def _frame(w, h, title=None):
     return img, d
 
 
-HOME_OPTIONS = ["generate key", "load key", "tools", "power off"]
+# order: load key, key generation, tools, settings (Ben, 2026-09-01)
+HOME_TILES = [("load key", "load"), ("key generation", "key"),
+              ("tools", "tools"), ("settings", "gear")]
 
 
 def home(w, h, selected=0):
-    """Four choices on the d-pad, A activates the gold box. No CORKY text,
-    no legend, no status line. It is a KEY, not a wallet (Ben, 2026-09-01):
-    generate a new one from Core, or load an existing one to sign."""
-    img, d = _frame(w, h)
-    for i, label in enumerate(HOME_OPTIONS):
-        y = int(h * (0.24 + i * 0.17))
-        if i == selected:
-            d.rounded_rectangle([int(w * 0.22), y - int(h * 0.068),
-                                 int(w * 0.78), y + int(h * 0.068)],
-                                radius=4, outline=OCHRE)
-        d.text((w // 2, y), label, font=_font(int(h * 0.07)),
-               fill=CREAM if i == selected else GREY, anchor="mm")
+    """SeedSigner-style 2x2 home: four tiles, each a Font Awesome icon and a
+    title. Load key first, key generation second, tools, settings (which
+    holds power off). No CORKY text. It is a KEY, not a wallet."""
+    img = Image.new("RGB", (w, h), INK)
+    d = ImageDraw.Draw(img)
+    mx, my, gap = int(w * 0.06), int(h * 0.09), int(w * 0.04)
+    bw = (w - 2 * mx - gap) // 2
+    bh = (h - 2 * my - gap) // 2
+    for i, (label, icon) in enumerate(HOME_TILES):
+        r, c = divmod(i, 2)
+        x = mx + c * (bw + gap)
+        y = my + r * (bh + gap)
+        active = i == selected
+        d.rounded_rectangle([x, y, x + bw, y + bh], radius=6,
+                            outline=OCHRE if active else "#3A352E",
+                            width=2 if active else 1)
+        _icon(d, x + bw // 2, y + int(bh * 0.36), int(bh * 0.44), icon,
+              CREAM if active else GREY)
+        d.text((x + bw // 2, y + int(bh * 0.80)), label,
+               font=_font(int(h * 0.05)),
+               fill=CREAM if active else GREY, anchor="mm")
     return img
+
+
+def settings_menu(w, h, selected=0):
+    """Settings holds power off, and grows over time. No legend."""
+    img, d = _frame(w, h, "SETTINGS")
+    icons = ["power", "about"]
+    for i, label in enumerate(SETTINGS_OPTIONS):
+        y = int(h * (0.34 + i * 0.20))
+        active = i == selected
+        if active:
+            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.075),
+                                 int(w * 0.94), y + int(h * 0.075)],
+                                radius=4, outline=OCHRE)
+        _icon(d, int(w * 0.14), y, int(h * 0.06), icons[i],
+              CREAM if active else GREY)
+        d.text((int(w * 0.24), y), label, font=_font(int(h * 0.062)),
+               fill=CREAM if active else GREY, anchor="lm")
+    return img
+
+
+def about(w, h):
+    img, d = _frame(w, h, "ABOUT")
+    d.text((w // 2, int(h * 0.34)), "CORKY", font=_font(int(h * 0.11)),
+           fill=CREAM, anchor="mm")
+    _fit(d, (w // 2, int(h * 0.52)), "Core's keys, nothing kept",
+         int(h * 0.05), GREY, "mm", int(w * 0.9))
+    _fit(d, (w // 2, int(h * 0.66)), "wallet brain: Bitcoin Core 31.1",
+         int(h * 0.048), GREY, "mm", int(w * 0.9))
+    _actions(d, w, h, ["BACK"], 0)
+    return img
+
+
+SETTINGS_OPTIONS = ["Power off", "About"]
 
 
 def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
