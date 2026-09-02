@@ -240,7 +240,8 @@ ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 def seed_entry(w, h, word_index, total_words, prefix, candidates, grid_cur=0):
     """A-Z grid word entry (Ben, 2026-09-01): d-pad moves, A types the
     letter, the candidate list narrows, center-press picks the top word.
-    Same grid model as codex32 entry; ~180 presses for a 24-word seed."""
+    Same grid model as codex32 entry. Measured cost for a 24-word seed is
+    352 presses against the old dial's 546 (tests/test_ui_cost.py)."""
     img, d = _frame(w, h, f"SEED  WORD  {word_index} / {total_words}")
     d.text((int(w * 0.06), int(h * 0.155)), (prefix or "").upper() + "_",
            font=_font(int(h * 0.075)), fill=CREAM, anchor="lm")

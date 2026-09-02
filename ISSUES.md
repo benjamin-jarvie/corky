@@ -4,6 +4,7 @@ Open defects and gaps, recorded so they are not lost between sessions.
 Fixed items leave this file and live in the git history instead.
 
 Last reviewed 2026-09-02, after the two-axis review of `e9ca1ab..4f23599`.
+Testing rules that came out of that review: [TESTING.md](TESTING.md).
 
 ## Deferred by decision (Ben, 2026-09-02): fix at M1
 
@@ -42,30 +43,33 @@ with a read-only root (M3).
 ## Test gaps found by the same review
 
 The review found that new input surfaces shipped without a test that feeds
-them real data. The xprv path is now covered by session T. These are not.
+them real data. All four are now closed; the rules they produced live in
+[TESTING.md](TESTING.md). They stay listed here until the next review round
+confirms them, because a gap that closes quietly tends to reopen quietly.
 
 ### I-3 `fit_to_panel` has no test
 
-Zero test files reference it. The D11 fix is unverified in either direction:
-nothing asserts that modules stay square, and nothing catches I-1.
+**Closed 2026-09-02.** `tests/test_qr_out.py` asserts integer scaling, square
+modules, a white letterbox surround, and pins the I-1 cropping gap so the fix
+is visible when it lands.
 
 ### I-4 `_show_qr_loop` has no test, and its shipping path never runs
 
-`if not self.animate:` takes a one-pass branch in every dev and scripted run,
-so the paced, repeating loop that ships to the device is never executed by
-the suite. D12's delay, repetition and stop key are unverified.
+**Closed 2026-09-02.** `tests/test_qr_out.py` sets `animate` and runs the real
+loop on a thread, asserting it repeats, is paced by its delay, stops on a key,
+paints panel-sized frames, and shows a single-frame PSBT once.
 
 ### I-5 Typed descriptor entry has no end-to-end test
 
-`_seed_descriptor_typed` is exercised only by session T's assertion that a
-real Core private descriptor is expressible on the grid. Nothing types one
-through the device and opens a key with it, which is exactly the shape of
-failure that hid the original S3 charset bug.
+**Closed 2026-09-02.** Session T2 reads a real private descriptor out of Core,
+types it through the device character by character, and signs a PSBT funded to
+that descriptor's own first address.
 
 ### I-6 `_state_signed` and `_ask_passphrase` have no direct tests
 
-Both are reached through end-to-end sessions only. Their branches (CANCEL
-versus DONE, NO versus YES, C on the action bar) are not asserted directly.
+**Closed 2026-09-02.** `tests/test_ui_cost.py` now asserts every branch of
+both: sign-another versus power-off versus C on the result screen, and
+decline versus accept versus CANCEL on the passphrase prompt.
 
 ## Standing hardware-blocked work
 

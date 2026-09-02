@@ -11,7 +11,6 @@ Two things this suite holds:
 
 Run: python3 tests/test_ui_cost.py
 """
-import string
 import sys
 from pathlib import Path
 
@@ -193,28 +192,124 @@ WORDLIST = load_wordlist()
 
 
 def word_presses(word):
-    """Replays Session._collect_words: u/d dials 26 letters, A commits one,
-    R opens the candidate list, u/d + A picks from it."""
-    prefix, total = "", 0
+    """Replays Session._collect_words as it is TODAY: an 8x4 letter grid.
+
+    The dial this used to model died with audit item D4. A cost model that
+    measures a UI the device no longer has reports a confident, meaningless
+    number, which TESTING.md rule 4 exists to prevent.
+
+    Per letter: u/d moves a row (wrapping mod 32), l/r moves a column, A
+    types it. The word is taken with the centre press once it heads the
+    candidate list.
+    """
+    prefix, total, cur = "", 0, 0
     while True:
-        cands = [w for w in WORDLIST if w.startswith(prefix)][:4]
-        if word in cands:
-            i = cands.index(word)
-            return total + 1 + min(i, len(cands) - i) + 1
-        idx = string.ascii_lowercase.index(word[len(prefix)])
-        total += min(idx, 26 - idx) + 1
-        prefix += word[len(prefix)]
+        cands = [w for w in WORDLIST if w.startswith(prefix)][:3]
+        if cands and cands[0] == word:
+            return total + 1          # centre press takes the top candidate
+        nxt = word[len(prefix)]
+        t = screens.ALPHABET.index(nxt)
+        rows = (t // 8 - cur // 8) % 4
+        cols = (t % 8 - cur % 8) % 8
+        total += min(rows, 4 - rows) + min(cols, 8 - cols) + 1
+        cur = t
+        prefix += nxt
 
 
 import random  # noqa: E402  (test-only; never imported by device code)
 random.seed(1)
 sample = [random.choice(WORDLIST) for _ in range(24)]
 cost = sum(word_presses(w) for w in sample)
-BUDGET = 546
+# The grid replaced the dial (D4). The dial cost 546 presses for 24 words;
+# the budget below is the grid's measured cost with headroom, and it must
+# never drift back toward the dial's number.
+BUDGET = 380
 if cost > BUDGET:
     bad(f"24-word entry now costs {cost} presses, over the {BUDGET} budget")
 else:
-    ok(f"24-word entry costs {cost} presses (budget {BUDGET})")
+    ok(f"24-word entry costs {cost} presses on the grid "
+       f"(budget {BUDGET}; the old dial cost 546)")
+
+# --- I-6: the two decision screens, branch by branch ----------------------
+# Both were reached only through end-to-end sessions, so their individual
+# outcomes were never asserted. TESTING.md rule 3: exercise the branches.
+
+class Rec:
+    """Records the actions_sel / selected each screen was drawn with."""
+
+    width, height = 320, 240
+
+    def __init__(self):
+        self.sel = []
+
+    def show(self, image, sensitive=False):
+        pass
+
+
+def signed_outcome(keys):
+    d = Rec()
+    sess = corky_main.Session(d, ScriptedButtons(list(keys)), FakeRpc())
+    return sess._state_signed("x.psbt written")
+
+
+cases = [("a", corky_main.SIGN_AGAIN, "A on the default choice signs another"),
+         ("ra", corky_main.POWER_OFF, "R then A powers off"),
+         ("rla", corky_main.SIGN_AGAIN, "R then L returns to sign another"),
+         ("c", corky_main.POWER_OFF, "C on the result powers off")]
+for keys, want, why in cases:
+    got = signed_outcome(keys)
+    if got != want:
+        bad(f"_state_signed({keys!r}) returned {got!r}, expected {want!r}")
+    else:
+        ok(f"_state_signed: {why}")
+
+
+def passphrase_outcome(keys):
+    sess = corky_main.Session(Rec(), ScriptedButtons(list(keys)), FakeRpc())
+    return sess._ask_passphrase()
+
+
+# NO is the default, so a single A must never open the text grid.
+if passphrase_outcome("a") != "":
+    bad("_ask_passphrase: A on the default NO did not return an empty string")
+else:
+    ok("_ask_passphrase: A on the default NO gives no passphrase")
+
+if passphrase_outcome("b") != "":
+    bad("_ask_passphrase: B did not decline")
+else:
+    ok("_ask_passphrase: B declines")
+
+# YES opens the grid; typing z then centre-press returns it.
+zi = screens.charset_pages("passphrase")
+zpage = next(i for i, pg in enumerate(zi) if "z" in pg)
+keys = ["r", "a"]                       # NO -> YES, then open the grid
+cur, page = 0, 0
+while page < zpage:                     # r past the end turns the page
+    while cur < len(zi[page]) - 1:
+        keys.append("r"); cur += 1
+    keys.append("r"); page += 1; cur = 0
+ti = zi[zpage].index("z")
+while cur + 8 <= ti:
+    keys.append("d"); cur = min(len(zi[page]) - 1, cur + 8)
+while cur < ti:
+    keys.append("r"); cur += 1
+keys.append("a")                        # type it
+keys.append("p")                        # centre press = done
+if passphrase_outcome(keys) != "z":
+    bad("_ask_passphrase: YES then typing 'z' did not return 'z'")
+else:
+    ok("_ask_passphrase: YES opens the grid and returns what was typed")
+
+# CANCEL on the grid must give no passphrase, not the characters typed.
+cancel_keys = ["r", "a", "a", "c", "a"]   # YES, type one char, C -> bar, A
+# the bar lands on DONE, so move to CANCEL first: C then L then A
+cancel_keys = ["r", "a", "a", "c", "l", "a"]
+if passphrase_outcome(cancel_keys) != "":
+    bad("_ask_passphrase: CANCEL on the grid kept the typed characters")
+else:
+    ok("_ask_passphrase: CANCEL on the grid discards what was typed")
+
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

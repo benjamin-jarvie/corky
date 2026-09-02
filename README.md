@@ -289,11 +289,11 @@ secret material during entry but performs no cryptography on it.
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,848 lines** (2,689 with blanks/comments).
+**Total functional code: 1,848 lines** (2,690 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,895 lines — none of it ships on the device.**
+**Test code: 2,954 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent
@@ -318,6 +318,15 @@ attribution. Theirs to audit upstream; only the integration points are
 ours. The home icons are a six-glyph subset of Font Awesome Free Solid
 ([`hw/vendor/fonts/`](hw/vendor/fonts/), CC BY 4.0 / SIL OFL, attributed
 in that directory's NOTICE); no other glyphs ship.
+
+## How this is tested
+
+`RUN_NODE=1 ./run_tests.sh` is the gate. [TESTING.md](TESTING.md) records the
+rules that came out of the 2026-09-02 two-axis review, after a feature shipped
+in a state where it could not work past a fully green suite: every input
+surface needs a real-data round-trip test, the shipping branch must be the one
+under test, and a cost or count claim must come from a measurement. Open
+defects are in [ISSUES.md](ISSUES.md).
 
 ## Audit record
 
