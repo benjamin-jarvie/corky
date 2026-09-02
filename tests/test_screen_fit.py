@@ -65,7 +65,7 @@ CASES = {
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
     "seed-entry": lambda w, h: screens.seed_entry(
-        w, h, 24, 24, "consider", ("consider", "control", "convince", "cook")),
+        w, h, 24, 24, "consi", ("consider", "control", "convince"), 18),
     "seed-length": lambda w, h: screens.seed_length(w, h),
     "seed-menu": lambda w, h: screens.seed_menu(w, h, 4),
     "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),

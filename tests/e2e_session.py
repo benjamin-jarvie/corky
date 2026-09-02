@@ -21,7 +21,22 @@ MNEMONIC = "abandon " * 11 + "about"
 # Button script for typing the canonical mnemonic (see main._seed_words):
 # abandon: append 'a', open candidates, accept first  -> "ara"
 # about:   'a', +1 to 'b', append, +14 to 'o', append, candidates, accept
-WORDS_SCRIPT = "ara" * 11 + ("a" + "da" + "d" * 14 + "a" + "ra")
+def word_keys(word):
+    """Type a BIP39 word on the 8x4 letter grid (a=0..z=25, wrap %32) and
+    center-press to take the top candidate. Four letters uniquely identify
+    any BIP39 word, so the top candidate is the word."""
+    cur, out = 0, []
+    for ch in word[:4]:
+        tgt = ord(ch) - 97
+        d = (tgt - cur) % 32
+        out.append("d" * (d // 8) + "r" * (d % 8) + "a")
+        cur = tgt
+    out.append("p")
+    return "".join(out)
+
+
+# 11x abandon + about, typed on the grid.
+WORDS_SCRIPT = word_keys("abandon") * 11 + word_keys("about")
 
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 

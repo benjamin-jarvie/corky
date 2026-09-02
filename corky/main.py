@@ -21,7 +21,6 @@ Keys: u/d = up/down, l/r = left/right, a = select, b = back, c = reject.
 """
 
 import argparse
-import string
 import sys
 import threading
 import time
@@ -239,23 +238,6 @@ class Session:
                 selected = 1 - selected
             elif key == "a":
                 return 12 if selected == 0 else 24
-            elif key == "b":
-                return None
-
-    def _pick_candidate(self, candidates, word_index, total):
-        selected = 0
-        while True:
-            marked = tuple(candidates[selected:] + candidates[:selected])
-            self.display.show(screens.seed_entry(
-                self.w, self.h, word_index, total,
-                candidates[selected], marked), sensitive=True)
-            key = self.buttons.read()
-            if key == "u":
-                selected = (selected - 1) % len(candidates)
-            elif key == "d":
-                selected = (selected + 1) % len(candidates)
-            elif key == "a":
-                return candidates[selected]
             elif key == "b":
                 return None
 
@@ -580,32 +562,34 @@ class Session:
             return None
         words = []
         while len(words) < total:
-            prefix, cursor = "", 0
+            prefix, gi = "", 0
             while True:
                 candidates = [w for w in self.wordlist
-                              if w.startswith(prefix)][:4]
+                              if w.startswith(prefix)][:3]
                 self.display.show(screens.seed_entry(
                     self.w, self.h, len(words) + 1, total,
-                    prefix + string.ascii_lowercase[cursor],
-                    tuple(candidates)), sensitive=True)
+                    prefix, tuple(candidates), gi), sensitive=True)
                 key = self.buttons.read()
+                # 8x4 grid, wrap like the codex32 grid; letters are 0..25.
                 if key == "u":
-                    cursor = (cursor - 1) % 26
+                    gi = (gi - 8) % 32
                 elif key == "d":
-                    cursor = (cursor + 1) % 26
+                    gi = (gi + 8) % 32
+                elif key == "l":
+                    gi = (gi - 1) % 32
+                elif key == "r":
+                    gi = (gi + 1) % 32
                 elif key == "a":
-                    prefix += string.ascii_lowercase[cursor]
-                    cursor = 0
+                    if gi < 26:
+                        prefix += screens.ALPHABET[gi]
                 elif key == "b":
                     prefix = prefix[:-1]
+                elif key == "p":
+                    if candidates:            # center-press: take the top word
+                        words.append(candidates[0])
+                        break
                 elif key == "c":
                     return None
-                elif key == "r" and candidates:
-                    word = self._pick_candidate(candidates, len(words) + 1,
-                                                total)
-                    if word:
-                        words.append(word)
-                        break
         return words
 
     # -- PSBT load: stick first, then QR frames ---------------------------

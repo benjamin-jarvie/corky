@@ -229,18 +229,41 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
     return img
 
 
-def seed_entry(w, h, word_index, total_words, partial, candidates):
+ALPHABET = "abcdefghijklmnopqrstuvwxyz"
+
+
+def seed_entry(w, h, word_index, total_words, prefix, candidates, grid_cur=0):
+    """A-Z grid word entry (Ben, 2026-09-01): d-pad moves, A types the
+    letter, the candidate list narrows, center-press picks the top word.
+    Same grid model as codex32 entry; ~180 presses for a 24-word seed."""
     img, d = _frame(w, h, f"SEED  WORD  {word_index} / {total_words}")
-    d.text((w // 2, int(h * 0.25)), partial + "_", font=_font(int(h * 0.13)),
-           fill=CREAM, anchor="mm")
-    for i, c in enumerate(candidates[:4]):
-        y = int(h * (0.44 + i * 0.11))
-        sel = i == 0
-        if sel:
-            d.rounded_rectangle([int(w * 0.28), y - int(h * 0.048),
-                         int(w * 0.72), y + int(h * 0.048)], radius=4, outline=OCHRE)
-        d.text((w // 2, y), c, font=_font(int(h * 0.065)),
-               fill=CREAM if sel else GREY, anchor="mm")
+    d.text((int(w * 0.06), int(h * 0.155)), (prefix or "").upper() + "_",
+           font=_font(int(h * 0.075)), fill=CREAM, anchor="lm")
+    # Candidates: the top one sits in a gold box (center-press takes it).
+    cx = int(w * 0.60)
+    for i, word in enumerate(candidates[:3]):
+        y = int(h * (0.135 + i * 0.072))
+        if i == 0:
+            d.rounded_rectangle([cx - int(w * 0.02), y - int(h * 0.03),
+                                 int(w * 0.97), y + int(h * 0.03)],
+                                radius=4, outline=OCHRE)
+        d.text((cx, y), word, font=_font(int(h * 0.05)),
+               fill=CREAM if i == 0 else GREY, anchor="lm")
+    # 8x4 letter grid.
+    cell_w, cell_h = w // 9, int(h * 0.135)
+    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.36)
+    for i, ch in enumerate(ALPHABET):
+        r, c = divmod(i, 8)
+        gx = x0 + c * cell_w + cell_w // 2
+        gy = y0 + r * cell_h + cell_h // 2
+        if i == grid_cur:
+            d.rounded_rectangle([gx - cell_w // 2 + 2, gy - cell_h // 2 + 2,
+                                 gx + cell_w // 2 - 2, gy + cell_h // 2 - 2],
+                                radius=4, outline=OCHRE)
+        d.text((gx, gy), ch.upper(), font=_font(int(h * 0.06)),
+               fill=CREAM if i == grid_cur else GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.955)), "center · pick word",
+           font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
     return img
 
 
