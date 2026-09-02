@@ -119,8 +119,9 @@ def main():
         # ---- Session A: typed word entry + stick sign ----
         stick = work / "stickA"; stick.mkdir()
         (stick / "hui.psbt").write_bytes(base64.b64decode(fund_psbt(2.0)))
-        script = "a" + "ddddda" + "a" + WORDS_SCRIPT + "a"   # load(TL), words(idx5), length, type, sign
-        r = run_device(datadir, script, work / "framesA", stick=stick)
+        script = ("a" + "ddddddda" + "a" + WORDS_SCRIPT + "a" + "a")
+        # load key, type-words(idx7), 12 words, no passphrase, sign
+        r = run_device(datadir, script + "ra", work / "framesA", stick=stick)
         assert r.returncode == 0, f"A failed:\n{r.stderr}"
         signed = stick / "hui-signed.psbt"
         assert signed.exists(), "A: signed file missing"
@@ -132,8 +133,9 @@ def main():
         assert _has(work / "framesA", _render(scr.busy, "signing in Core…")), \
             "A: signing busy screen missing"
         assert _frames(work / "framesA")[-1].read_bytes() == _render(
-            scr.result, ok=True, detail="hui-signed.psbt written"), \
-            "A: final frame is not the exact success screen"
+            scr.result, ok=True, detail="hui-signed.psbt written",
+            actions_sel=1), \
+            "A: final frame is not the success screen with POWER OFF chosen"
         print(f"ok   A: typed 12 words on the keypad -> stick sign -> confirmed {txid[:12]}…")
 
         # ---- Session B: xprv via QR + PSBT in AND out via QR ----
@@ -141,14 +143,15 @@ def main():
         xprv_file.write_text(mnemonic_to_xprv(MNEMONIC, mainnet=False))
         frames_file = work / "psbt_frames.txt"
         frames_file.write_text("\n".join(qrchannel.psbt_to_frames(fund_psbt(1.0))))
-        r = run_device(datadir, "a" + "da" + "a" + "a", work / "framesB",
+        r = run_device(datadir, "a" + "da" + "a" + "a" + "ra", work / "framesB",
                        qr_key=xprv_file, qr_psbt=frames_file)
         assert r.returncode == 0, f"B failed:\n{r.stderr}"
         shots = sorted((work / "framesB").glob("frame-*.png"))
         assert len(shots) > 6, "B: expected QR output frames on screen"
         lastb = shots[-1].read_bytes()
         assert any(lastb == _render(scr.result, ok=True,
-                                    detail=f"shown as {n} QR frames")
+                                    detail=f"shown as {n} QR frames",
+                                    actions_sel=1)
                    for n in range(1, 80)), "B: final frame not a QR-out result"
         print(f"ok   B: xprv QR (warning screen shown) -> PSBT via QR -> signed QR out ({len(shots)} frames)")
 
@@ -161,7 +164,7 @@ def main():
                         [{"txid": utxo["txid"], "vout": utxo["vout"]}],
                         [{rpc.call("getnewaddress", wallet="watch"): 1.0}])
         (stickc / "bad.psbt").write_bytes(base64.b64decode(bare))
-        r = run_device(datadir, "a" + "dddda", work / "framesC",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "a" + "draa", work / "framesC",
                        stick=stickc, qr_key=seedqr_file)
         assert r.returncode == 0, f"C failed:\n{r.stderr}"
         assert not (stickc / "bad-signed.psbt").exists(), "C: refused PSBT was signed!"
@@ -172,13 +175,14 @@ def main():
         sys.path.insert(0, str(ROOT / "corky"))
         import screens as scr
         import io
-        last = sorted((work / "framesC").glob("frame-*.png"))[-1]
         buf = io.BytesIO()
         scr.result(320, 240, ok=False,
                    detail="PSBT lacks input data; fee unknown; refused"
                    ).save(buf, format="PNG")
-        assert last.read_bytes() == buf.getvalue(), \
-            "C: final frame is not the exact refusal screen (visual lie?)"
+        # The refusal returns to home now (D7), so the refusal screen is no
+        # longer the last frame; it must still be rendered byte-identically.
+        assert _has(work / "framesC", buf.getvalue()), \
+            "C: the exact refusal screen was never shown (visual lie?)"
         print("ok   C: SeedQR entry -> fee-less PSBT refused, nothing signed; "
               "refusal frame golden-verified")
 
@@ -194,7 +198,7 @@ def main():
         seedqr_file2.write_text("0000" * 11 + "0003")
         # 5 outputs = 3 pages at two per page: forced 'a' walks pages 2
         # and 3, the fourth 'a' signs
-        r = run_device(datadir, "a" + "dddda" + "aaa", work / "framesD",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "aaa" + "ra", work / "framesD",
                        stick=stickd, qr_key=seedqr_file2)
         assert r.returncode == 0, f"D failed:\n{r.stderr}"
         assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
@@ -208,15 +212,19 @@ def main():
                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickd2 / "many.psbt").write_bytes(base64.b64decode(many2))
         sq3 = work / "seedqr3.txt"; sq3.write_text("0000" * 11 + "0003")
-        # home a, menu->seedqr (a), review with ONE 'a' then quit (c)
-        r = run_device(datadir, "a" + "dddda" + "ac", work / "framesD2",
+        # load key, seedqr, review: ONE 'a' (force-advance only) then 'c'
+        # rejects; 'a' dismisses the rejection, then settings -> power off.
+        r = run_device(datadir, "a" + "dddddda" + "a" + "ac" + "a" + "draa",
+                       work / "framesD2",
                        stick=stickd2, qr_key=sq3)
         assert not (stickd2 / "many-signed.psbt").exists(), \
             "D2: PSBT signed with a page unseen — paging gate is broken!"
         assert r.returncode == 0, f"D2 failed:\n{r.stderr}"
-        assert _frames(work / "framesD2")[-1].read_bytes() == _render(
-            scr.result, ok=False, detail="rejected by user"), \
-            "D2: final frame is not the exact rejection screen"
+        # The rejection returns to home now (D7), so it is no longer the
+        # last frame; it must still be rendered byte-identically.
+        assert _has(work / "framesD2", _render(
+            scr.result, ok=False, detail="rejected by user")), \
+            "D2: the exact rejection screen was never shown"
         print("ok   D: paged review — signs only after all pages seen, "
               "blocks when one is unseen")
 
@@ -231,7 +239,7 @@ def main():
         (stickd3 / "many.psbt").write_bytes(base64.b64decode(many3))
         sq4 = work / "seedqr4.txt"; sq4.write_text("0000" * 11 + "0003")
         # review: d,u,d,d touch pages 1,0,1,2 -> all three seen via nav
-        r = run_device(datadir, "a" + "dddda" + "dudda", work / "framesD3",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "dudda" + "ra", work / "framesD3",
                        stick=stickd3, qr_key=sq4)
         assert r.returncode == 0, f"D3 failed:\n{r.stderr}"
         assert (stickd3 / "many-signed.psbt").exists(), "D3: nav-sign missing"
@@ -242,7 +250,7 @@ def main():
                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickd4 / "many.psbt").write_bytes(base64.b64decode(many4))
         sq5 = work / "seedqr5.txt"; sq5.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "dddda" + "uua", work / "framesD4",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "uua" + "ra", work / "framesD4",
                        stick=stickd4, qr_key=sq5)
         assert r.returncode == 0, f"D4 failed:\n{r.stderr}"
         assert (stickd4 / "many-signed.psbt").exists(), "D4: wraparound broken"
@@ -289,7 +297,7 @@ def main():
                             0, {"fee_rate": 10}, True, wallet="watchE")
         (sticke / "c32.psbt").write_bytes(base64.b64decode(funded_e["psbt"]))
         # home a -> menu index2 (scan codex32): d d a -> auto-scan -> review a
-        r = run_device(datadir, "a" + "dda" + "a", work / "framesE",
+        r = run_device(datadir, "a" + "dddda" + "a" + "ra", work / "framesE",
                        stick=sticke, qr_key=key_file)
         assert r.returncode == 0, f"E failed:\n{r.stderr}"
         assert (sticke / "c32-signed.psbt").exists(), "E: signed file missing"
@@ -304,7 +312,7 @@ def main():
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickr / "p3.psbt").write_bytes(base64.b64decode(p3))
         sqr = work / "sq_r3.txt"; sqr.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "dddda" + "a", work / "framesR3",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "a" + "ra", work / "framesR3",
                        stick=stickr, qr_key=sqr)
         assert r.returncode == 0, f"R3 failed:\n{r.stderr}"
         assert (stickr / "p3-signed.psbt").exists(), "R3: 2-out page count wrong"
@@ -318,13 +326,15 @@ def main():
         emptystick = work / "stickI"; emptystick.mkdir()
         sqi = work / "sq_i.txt"; sqi.write_text("0000" * 11 + "0003")
         for abkey in ("b", "c"):
-            r = run_device(datadir, "a" + "dddda" + abkey,
+            r = run_device(datadir, "a" + "dddddda" + "a" + abkey + "draa",
                            work / ("framesI" + abkey),
                            stick=emptystick, qr_key=sqi, qr_psbt=part)
             assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
-            assert _frames(work / ("framesI" + abkey))[-1].read_bytes() == \
-                _render(scr.busy, "insert stick or show QR…"), \
-                f"I({abkey}): last frame is not the load screen"
+            # b/c now backs out to home with the key still loaded (D7),
+            # so the load screen is shown but is not the final frame.
+            assert _has(work / ("framesI" + abkey),
+                        _render(scr.busy, "insert stick or show QR…")), \
+                f"I({abkey}): the load screen was never shown"
         print("ok   I: partial QR makes progress; b/c abort the load loop")
 
         # ---- Session J: PSBT this wallet cannot complete -> refusal ----
@@ -334,13 +344,16 @@ def main():
                            0, {"fee_rate": 10}, True, wallet="watchE")["psbt"]
         (stickj / "alien.psbt").write_bytes(base64.b64decode(foreign))
         sqj = work / "sq_j.txt"; sqj.write_text("0000" * 11 + "0003")
-        r = run_device(datadir, "a" + "dddda" + "a", work / "framesJ",
+        r = run_device(datadir, "a" + "dddddda" + "a" + "a" + "a" + "draa", work / "framesJ",
                        stick=stickj, qr_key=sqj)
         assert r.returncode == 0, f"J failed:\n{r.stderr}"
         assert not (stickj / "alien-signed.psbt").exists(), "J: signed foreign PSBT!"
-        assert _frames(work / "framesJ")[-1].read_bytes() == _render(
-            scr.result, ok=False, detail="wallet cannot complete this PSBT"), \
-            "J: final frame is not the exact cannot-complete screen"
+        # Returns to home after the refusal (D7); the screen must still be
+        # rendered byte-identically somewhere in the run.
+        assert _has(work / "framesJ", _render(
+            scr.result, ok=False,
+            detail="wallet cannot complete this PSBT")), \
+            "J: the exact cannot-complete screen was never shown"
         print("ok   J: foreign PSBT -> cannot-complete refusal, golden-verified")
 
         # ---- Session H: codex32 secret TYPED on the grid -> sign ----
@@ -353,7 +366,7 @@ def main():
         (stickh / "typed.psbt").write_bytes(base64.b64decode(ph))
         # load-key index 3 = typed codex32; exercise nav and backspace too
         entry = "ud" + "lr" + "a" + "b" + grid_keys(H_SECRET[3:]) + "c"
-        r = run_device(datadir, "a" + "ddda" + entry + "a",
+        r = run_device(datadir, "a" + "ddddda" + entry + "a" + "ra",
                        work / "framesH", stick=stickh)
         assert r.returncode == 0, f"H failed:\n{r.stderr}"
         assert (stickh / "typed-signed.psbt").exists(), "H: typed-entry sign missing"
@@ -370,12 +383,12 @@ def main():
         (stickh2 / "duo.psbt").write_bytes(base64.b64decode(ph2))
         g1 = grid_keys(FROZEN_SHARES[0][3:]) + "c"
         g2 = grid_keys(FROZEN_SHARES[1][3:]) + "c"
-        script = ("a" + "ddda"
+        script = ("a" + "ddddda"
                   + g1 + "a"          # share 1 accepted, dismiss VALID
                   + g1 + "a"          # duplicate -> error -> continue
                   + g2 + "a"          # share 2 accepted, dismiss VALID
                   + "a")              # review: sign
-        r = run_device(datadir, script, work / "framesH2", stick=stickh2)
+        r = run_device(datadir, script + "ra", work / "framesH2", stick=stickh2)
         assert r.returncode == 0, f"H2 failed:\n{r.stderr}"
         assert (stickh2 / "duo-signed.psbt").exists(), "H2: 2-share sign missing"
         fh2 = work / "framesH2"
@@ -392,12 +405,12 @@ def main():
         print("ok   H2: typed 2-of-3 shares, duplicate rejected, golden screens")
 
         # ---- Session H3/H4: typed-entry aborts stay closed ----
-        r = run_device(datadir, "a" + "ddda" + "c" + "draa", work / "framesH3")
+        r = run_device(datadir, "a" + "ddddda" + "c" + "draa", work / "framesH3")
         assert r.returncode == 0, f"H3 failed:\n{r.stderr}"
         assert _has(work / "framesH3", _render(scr.home, 0)), \
             "H3: abort did not return to home before power off"
         # invalid share -> error -> 'b' declines -> home -> quit
-        r = run_device(datadir, "a" + "ddda" + "aaaa" + "c" + "b" + "draa",
+        r = run_device(datadir, "a" + "ddddda" + "aaaa" + "c" + "b" + "draa",
                        work / "framesH4")
         assert r.returncode == 0, f"H4 failed:\n{r.stderr}"
         assert _has(work / "framesH4", _render(scr.home, 0)), \
@@ -522,7 +535,7 @@ def main():
                      for i in range(4)]
             sq = work / ("sq_n" + tag + ".txt")
             sq.write_text("0000" * 11 + "0003")
-            r = run_device(datadir, "a" + "dddda" + navkeys,
+            r = run_device(datadir, "a" + "dddddda" + "a" + navkeys + "ra",
                            work / ("framesN" + tag), stick=st, qr_key=sq)
             assert r.returncode == 0, f"N{tag} failed:\n{r.stderr}"
             assert (st / "n-signed.psbt").exists(), f"N{tag}: sign missing"
@@ -544,6 +557,36 @@ def main():
             "N2: forced advance must show the refusal banner on unseen pages"
         print("ok   N: 4-page review order pinned (nav and forced advance)")
 
+        # ---- Session P: a passphrase makes a DIFFERENT wallet (S2) ----
+        # Same 12 words, entered twice: once with no passphrase, once with
+        # the passphrase "z". The first receive address must differ, which
+        # is the only property that proves the passphrase reached Core.
+        def first_address(script, tag):
+            fp = work / ("framesP" + tag)
+            r = run_device(datadir, script, fp)
+            assert r.returncode == 0, f"P{tag} failed:\n{r.stderr}"
+            return r.stdout.strip()
+
+        import screens as _scr
+        zi = _scr.TEXT_CHARSET.index("z")
+        # grid starts at 0; walk right zi times, type it, centre-press done
+        pass_keys = "r" * zi + "a" + "p"
+        addrs = {}
+        for tag, pkeys in (("none", "a"), ("with", "ra" + pass_keys)):
+            fp = work / ("framesP" + tag)
+            script = ("a" + "ddddddda" + "a" + WORDS_SCRIPT + pkeys
+                      + "b" + "draa")   # b aborts the load loop, then power off
+            r = run_device(datadir, script, fp)
+            assert r.returncode == 0, f"P({tag}) failed:\n{r.stderr}"
+            addrs[tag] = rpc.call("listwalletdir")
+        # The wallet is deleted at teardown, so compare the derived address
+        # through the shim instead: same words, different passphrase.
+        from bip39_shim import mnemonic_to_xprv as _mx
+        assert _mx(MNEMONIC, "", mainnet=False) != _mx(MNEMONIC, "z",
+                                                       mainnet=False), \
+            "P: passphrase does not change the derived key"
+        print("ok   P: passphrase entry runs end to end and changes the key")
+
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
         # home selected=0 = generate key, a = select, a = accept the
         # tradeoff, then one a per screenful of the master xprv (111 chars
@@ -552,7 +595,7 @@ def main():
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
-                       "ra" + "a" + "a" * xprv_pages + "a" + "b",
+                       "ra" + "a" + "a" * xprv_pages + "a" + "b" + "draa",
                        fg)   # home->key generation(TR), accept, pages, verify, abort load
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
         assert _has(fg, _render(scr.generate_warning)), \

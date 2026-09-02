@@ -220,12 +220,17 @@ def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
     return img
 
 
-def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written"):
+def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
+           actions_sel=None):
+    """The end of a signing run. When actions_sel is given, the screen
+    offers SIGN ANOTHER / POWER OFF instead of ending the session."""
     img, d = _frame(w, h)
     _status_circle(img, d, w, h, "SIGNED" if ok else "FAILED",
                    OCHRE if ok else RED)
     _fit(d, (w // 2, int(h * 0.68)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
+    if actions_sel is not None:
+        _actions(d, w, h, ["SIGN ANOTHER", "POWER OFF"], actions_sel)
     return img
 
 
@@ -289,6 +294,8 @@ def busy(w, h, message="checking words, deriving in Core…", phase=0):
 SEED_MENU_OPTIONS = [
     ("Scan descriptor QR", "pure Core"),
     ("Scan xprv QR", "pure Core"),
+    ("Type descriptor", "pure Core"),
+    ("Type xprv", "pure Core"),
     ("Scan codex32", "BIP32-native"),
     ("Type codex32 share(s)", "BIP32-native"),
     ("Scan SeedQR", "words via Corky"),
@@ -300,15 +307,20 @@ def seed_menu(w, h, selected=0):
     """Choose the seed input mode (A-14's modes + SeedQR + codex32/A-18)."""
     img, d = _frame(w, h, "LOAD  KEY")
     options = SEED_MENU_OPTIONS
+    # Eight modes now (typed xprv/descriptor joined the scanned ones), so
+    # the rows are pitched to fit the panel rather than a fixed 0.115.
+    top, bottom = 0.155, 0.94
+    pitch = (bottom - top) / max(len(options) - 1, 1)
     for i, (label, note) in enumerate(options):
-        y = int(h * (0.17 + i * 0.115))
+        y = int(h * (top + i * pitch))
         if i == selected:
-            d.rounded_rectangle([int(w * 0.04), y - int(h * 0.055),
-                         int(w * 0.96), y + int(h * 0.055)], radius=4, outline=OCHRE)
-        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
-               fill=CREAM if i == selected else GREY, anchor="lm")
-        d.text((int(w * 0.92), y), note, font=_font(int(h * 0.042)),
-               fill=OCHRE if i == selected else GREY, anchor="rm")
+            d.rounded_rectangle([int(w * 0.04), y - int(h * pitch * 0.46),
+                                 int(w * 0.96), y + int(h * pitch * 0.46)],
+                                radius=4, outline=OCHRE)
+        _fit(d, (int(w * 0.08), y), label, int(h * 0.052),
+             CREAM if i == selected else GREY, "lm", int(w * 0.60))
+        _fit(d, (int(w * 0.92), y), note, int(h * 0.04),
+             OCHRE if i == selected else GREY, "rm", int(w * 0.28))
     return img
 
 
@@ -392,6 +404,53 @@ import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent))
 from codex32 import CHARSET as BECH32_CHARSET  # single source of truth
+
+
+TEXT_CHARSET = ("abcdefghijklmnopqrstuvwxyz0123456789"
+                "ACDEFGHJKLMNPQRSTUVWXYZ/'[]#")   # 64 cells, 8x8
+
+
+def text_entry(w, h, title, text, cursor=0, hint="", secret=False):
+    """Free text on an 8x8 grid: passphrases (S2) and typed xprv or
+    descriptor strings (S3). `secret=True` masks the echo, since a
+    passphrase is shoulder-surfable and does not checksum."""
+    img, d = _frame(w, h, title)
+    shown = ("*" * len(text)) if secret else text[-28:]
+    _fit(d, (w // 2, int(h * 0.15)), (shown or "") + "_",
+         int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    if hint:
+        _fit(d, (w // 2, int(h * 0.225)), hint, int(h * 0.04), GREY, "mm",
+             int(w * 0.92))
+    # 8 rows must clear the action bar at 0.93h, so the pitch is tight.
+    cell_w, cell_h = w // 9, int(h * 0.074)
+    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.265)
+    for i, ch in enumerate(TEXT_CHARSET):
+        r, c = divmod(i, 8)
+        gx = x0 + c * cell_w + cell_w // 2
+        gy = y0 + r * cell_h + cell_h // 2
+        if i == cursor:
+            d.rounded_rectangle([gx - cell_w // 2 + 2, gy - cell_h // 2 + 2,
+                                 gx + cell_w // 2 - 2, gy + cell_h // 2 - 2],
+                                radius=4, outline=OCHRE)
+        d.text((gx, gy), ch, font=_font(int(h * 0.05)),
+               fill=CREAM if i == cursor else GREY, anchor="mm")
+    _actions(d, w, h, ["CANCEL", "DONE"], 1)
+    return img
+
+
+def passphrase_prompt(w, h, selected=0):
+    """BIP39 passphrase is optional and changes the wallet completely."""
+    img, d = _frame(w, h, "PASSPHRASE")
+    _fit(d, (w // 2, int(h * 0.30)), "Add a BIP39 passphrase?",
+         int(h * 0.065), OCHRE, "mm", int(w * 0.94))
+    for i, line in enumerate([
+            "A passphrase makes a different wallet.",
+            "The same words with no passphrase open",
+            "a different one. Nothing checks it."]):
+        _fit(d, (w // 2, int(h * (0.44 + i * 0.075))), line,
+             int(h * 0.045), CREAM, "mm", int(w * 0.94))
+    _actions(d, w, h, ["NO", "YES"], selected)
+    return img
 
 
 def codex32_scan(w, h):

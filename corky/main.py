@@ -76,6 +76,10 @@ class DevQrSource:
         return iter(Path(self.psbt_path).read_text().split())
 
 
+# What a PSBT run reports back to the home screen.
+SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
+
+
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
                  passphrase="", animate=False):
@@ -149,11 +153,19 @@ class Session:
                           self._seed_generate,   # 1 key generation
                           self.state_tools       # 2 tools
                           ][selected]()
+                # Coming back from a flow always lands on the first tile,
+                # so home is in a known state however you got here.
+                row = col = 0
                 if opened:
-                    # A key is now loaded in Core: go straight on to loading
-                    # a PSBT rather than back to HOME.
-                    self.state_load()
-                    return
+                    # A key is loaded in Core: sign PSBTs with it until the
+                    # user backs out (D7, -> home, key still loaded) or
+                    # chooses POWER OFF on the result screen (D8).
+                    while True:
+                        outcome = self.state_load()
+                        if outcome != SIGN_AGAIN:
+                            break
+                    if outcome == POWER_OFF:
+                        return
 
     def state_settings(self) -> bool:
         """Settings menu. Returns True if the user chose power off (the
@@ -183,14 +195,15 @@ class Session:
             self.display.show(screens.seed_menu(self.w, self.h, selected))
             key = self.buttons.read()
             if key == "u":
-                selected = (selected - 1) % 6
+                selected = (selected - 1) % 8
             elif key == "d":
-                selected = (selected + 1) % 6
+                selected = (selected + 1) % 8
             elif key == "b":
                 return False
             elif key == "a":
                 try:
                     return [self._seed_descriptor, self._seed_xprv,
+                            self._seed_descriptor_typed, self._seed_xprv_typed,
                             self._seed_codex32_scan, self._seed_codex32_type,
                             self._seed_seedqr, self._seed_words][selected]()
                 except Exception as exc:
@@ -207,6 +220,9 @@ class Session:
         return bool(self._tool_generate())
 
     def _open_words(self, mnemonic):
+        # S2: the passphrase is asked for here, so every words-based mode
+        # (typed and SeedQR) offers it on the same screen.
+        self.passphrase = self._ask_passphrase()
         stop = self._busy("checking words, deriving in Core…")
         try:
             signer.open_session(self.rpc, mnemonic, self.passphrase)
@@ -241,6 +257,49 @@ class Session:
             elif key == "b":
                 return None
 
+    def _text_entry(self, title, hint="", secret=False):
+        """Drive the 8x8 text grid. u/d/l/r move, A types, B deletes,
+        centre-press or C finishes, and an empty result is a cancel."""
+        text, cur = "", 0
+        n = len(screens.TEXT_CHARSET)
+        while True:
+            self.display.show(screens.text_entry(
+                self.w, self.h, title, text, cur, hint, secret),
+                sensitive=True)
+            key = self.buttons.read()
+            if key == "u":
+                cur = (cur - 8) % n
+            elif key == "d":
+                cur = (cur + 8) % n
+            elif key == "l":
+                cur = (cur - 1) % n
+            elif key == "r":
+                cur = (cur + 1) % n
+            elif key == "a":
+                text += screens.TEXT_CHARSET[cur]
+            elif key == "b":
+                text = text[:-1]
+            elif key in ("p", "c"):
+                return text or None
+
+    def _ask_passphrase(self):
+        """S2: offer a BIP39 passphrase before deriving. Returns the
+        passphrase (possibly empty). A passphrase cannot be verified by the
+        device, so the screen says what it does before it is typed."""
+        sel = 0
+        while True:
+            self.display.show(screens.passphrase_prompt(self.w, self.h, sel))
+            key = self.buttons.read()
+            if key in ("l", "r"):
+                sel = 1 - sel
+            elif key in ("b", "c"):
+                return ""
+            elif key == "a":
+                if sel == 0:
+                    return ""
+                return self._text_entry("PASSPHRASE",
+                                        "nothing checks this", True) or ""
+
     def _keymaterial(self, kind):
         """Warning screen (A-14: the QR IS the wallet), then scan."""
         self.display.show(screens.keymaterial_warning(self.w, self.h, kind))
@@ -259,6 +318,31 @@ class Session:
         if payload is None:
             return False
         signer.open_session_descriptors(self.rpc, payload.splitlines())
+        return True
+
+    def _seed_descriptor_typed(self):
+        """S3: a descriptor typed on the grid, for a camera-less build or a
+        descriptor that never existed as a QR."""
+        text = self._text_entry("TYPE  DESCRIPTOR", "private descriptor")
+        if not text:
+            return False
+        stop = self._busy("importing into Core…")
+        try:
+            signer.open_session_descriptors(self.rpc, [text])
+        finally:
+            stop()
+        return True
+
+    def _seed_xprv_typed(self):
+        """S3: an xprv typed on the grid."""
+        text = self._text_entry("TYPE  XPRV", "BIP32 extended private key")
+        if not text:
+            return False
+        stop = self._busy("importing into Core…")
+        try:
+            signer.open_session_xprv(self.rpc, text)
+        finally:
+            stop()
         return True
 
     def _seed_xprv(self):
@@ -564,6 +648,9 @@ class Session:
         while len(words) < total:
             prefix, gi = "", 0
             while True:
+                # B on an empty prefix steps back to the previous word, so a
+                # word committed by mistake at position 3 of 24 is fixable
+                # without abandoning the whole entry (D5).
                 candidates = [w for w in self.wordlist
                               if w.startswith(prefix)][:3]
                 self.display.show(screens.seed_entry(
@@ -583,7 +670,11 @@ class Session:
                     if gi < 26:
                         prefix += screens.ALPHABET[gi]
                 elif key == "b":
-                    prefix = prefix[:-1]
+                    if prefix:
+                        prefix = prefix[:-1]
+                    elif words:
+                        words.pop()           # undo the previous word
+                        break
                 elif key == "p":
                     if candidates:            # center-press: take the top word
                         words.append(candidates[0])
@@ -630,9 +721,11 @@ class Session:
             if not advanced:
                 key = self.buttons.read()
                 if key in ("b", "c"):
-                    return
+                    # Back out of the load loop WITHOUT ending the session:
+                    # the key stays in Core and home is reachable again.
+                    return TO_HOME
             time.sleep(0.02)
-        self.state_review(psbt, source)
+        return self.state_review(psbt, source)
 
     def state_review(self, psbt, source):
         info = signer.describe_psbt(self.rpc, psbt)
@@ -642,7 +735,8 @@ class Session:
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
                 detail="PSBT lacks input data; fee unknown; refused"))
-            return
+            self.buttons.read()
+            return TO_HOME
         outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
         pages = max(1, (len(outs) + 1) // 2)
         page, seen, refused, sel = 0, {0}, False, 1
@@ -666,12 +760,12 @@ class Session:
                     page, refused = (page + 1) % pages, True
                     seen.add(page)
                     continue
-                self.state_sign(psbt, source)
-                return
+                return self.state_sign(psbt, source)
             elif key == "c" or (key == "a" and sel == 0):
                 self.display.show(screens.result(
                     self.w, self.h, ok=False, detail="rejected by user"))
-                return
+                self.buttons.read()
+                return TO_HOME
 
     def state_sign(self, psbt, source):
         stop = self._busy("signing in Core…")
@@ -683,17 +777,64 @@ class Session:
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
                 detail="wallet cannot complete this PSBT"))
-            return
+            self.buttons.read()
+            return TO_HOME
         if source is not None:
             out = filechannel.write_signed(source, signed["psbt"])
             detail = f"{out.name} written"
         else:
             frames = qrchannel.psbt_to_frames(signed["psbt"])
-            for img in qrchannel.frames_to_images(frames):
-                self.display.show(img.resize((self.w, self.h)))
+            self._show_qr_loop(frames)
             detail = f"shown as {len(frames)} QR frames"
-        self.display.show(screens.result(self.w, self.h, ok=True,
-                                         detail=detail))
+        return self._state_signed(detail)
+
+    def _show_qr_loop(self, frames, delay=0.15):
+        """Play the BC-UR animation as a steady, repeating loop.
+
+        A fountain animation must cycle continuously at a readable rate for
+        Sparrow or a phone to catch every part; one unpaced pass is not
+        readable for any multi-frame PSBT. Any key stops. A single frame is
+        a static QR, so it is shown once and waits for a key.
+        """
+        images = [qrchannel.fit_to_panel(img, self.w, self.h)
+                  for img in qrchannel.frames_to_images(frames)]
+        if len(images) == 1:
+            self.display.show(images[0])
+            self.buttons.read()
+            return
+        if not self.animate:
+            # Dev/scripted runs: one deterministic pass, no timing.
+            for img in images:
+                self.display.show(img)
+            return
+        stop = threading.Event()
+
+        def wait_for_key():
+            self.buttons.read()
+            stop.set()
+
+        watcher = threading.Thread(target=wait_for_key, daemon=True)
+        watcher.start()
+        while not stop.is_set():
+            for img in images:
+                if stop.is_set():
+                    break
+                self.display.show(img)
+                stop.wait(delay)
+
+    def _state_signed(self, detail):
+        """Result screen with SIGN ANOTHER / POWER OFF (Ben, 2026-09-01)."""
+        sel = 0
+        while True:
+            self.display.show(screens.result(
+                self.w, self.h, ok=True, detail=detail, actions_sel=sel))
+            key = self.buttons.read()
+            if key in ("l", "r"):
+                sel = 1 - sel
+            elif key == "a":
+                return SIGN_AGAIN if sel == 0 else POWER_OFF
+            elif key == "c":
+                return POWER_OFF
 
 
 def main():

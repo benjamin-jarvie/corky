@@ -99,3 +99,21 @@ def frames_to_images(frames, box_size=4, border=2):
         images.append(qr.make_image(fill_color="black",
                                     back_color="white").convert("RGB"))
     return images
+
+
+def fit_to_panel(img, w, h):
+    """Scale a square QR to the panel by an INTEGER factor and letterbox it.
+
+    Resizing a square QR to a 4:3 panel gives non-square modules and
+    interpolated edges, so the coordinator's scanner has to recover a code
+    that is no longer a code. An integer factor with NEAREST keeps every
+    module square and hard-edged; the surround is white so the quiet zone
+    survives.
+    """
+    from PIL import Image
+    factor = max(1, min(w // img.width, h // img.height))
+    scaled = img.resize((img.width * factor, img.height * factor),
+                        Image.NEAREST)
+    panel = Image.new("RGB", (w, h), "white")
+    panel.paste(scaled, ((w - scaled.width) // 2, (h - scaled.height) // 2))
+    return panel

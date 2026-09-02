@@ -273,29 +273,29 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1048 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1195 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (560) ·
-[`corky/screens.py`](corky/screens.py) (426) ·
+[`corky/main.py`](corky/main.py) (663) ·
+[`corky/screens.py`](corky/screens.py) (470) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 246 lines.**
-[`corky/signer.py`](corky/signer.py) (138) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 262 lines.**
+[`corky/signer.py`](corky/signer.py) (146) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
-[`corky/qrchannel.py`](corky/qrchannel.py) (63) move PSBTs as opaque
+[`corky/qrchannel.py`](corky/qrchannel.py) (71) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,648 lines** (2,381 with blanks/comments).
+**Total functional code: 1,811 lines** (2,617 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 2,662 lines — none of it ships on the device.**
+**Test code: 2,686 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent
+checks, 10 scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never

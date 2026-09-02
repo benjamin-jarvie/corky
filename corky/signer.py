@@ -41,22 +41,39 @@ class Rpc:
     """Minimal bitcoin-cli wrapper. chain: 'main', 'test', 'regtest', 'signet'."""
 
     def __init__(self, datadir, chain="main", cli="bitcoin-cli"):
-        flag = {"main": [], "test": ["-testnet"], "regtest": ["-regtest"],
-                "signet": ["-signet"]}[chain]
+        flag = {"main": [], "test": ["-testnet"], "testnet4": ["-testnet4"],
+                "regtest": ["-regtest"], "signet": ["-signet"]}[chain]
         self.base = [cli, f"-datadir={datadir}", *flag]
         self.chain = chain
-        subdir = {"main": "", "test": "testnet3", "regtest": "regtest",
-                  "signet": "signet"}[chain]
+        # Verified against Core 31.1: -testnet still writes testnet3/,
+        # and -testnet4 writes testnet4/.
+        subdir = {"main": "", "test": "testnet3", "testnet4": "testnet4",
+                  "regtest": "regtest", "signet": "signet"}[chain]
         self.wallet_dir = Path(datadir) / subdir / "wallets"
 
-    def call(self, method, *params, wallet=None):
+    def call(self, method, *params, wallet=None, stdin=False):
+        """Run one bitcoin-cli command.
+
+        stdin=True sends the parameters through bitcoin-cli's -stdin instead
+        of argv, so key material never appears in a process listing. Callers
+        that pass an xprv or a private descriptor MUST set it (S4).
+        """
         cmd = list(self.base)
         if wallet:
             cmd.append(f"-rpcwallet={wallet}")
-        cmd += [method,
-                *[p if isinstance(p, str) else json.dumps(p, default=_json_decimal)
-                  for p in params]]
-        out = subprocess.run(cmd, capture_output=True, text=True)
+        args = [p if isinstance(p, str)
+                else json.dumps(p, default=_json_decimal) for p in params]
+        feed = None
+        if stdin:
+            # bitcoin-cli -stdin reads the EXTRA ARGUMENTS from stdin, one
+            # per line; the method itself stays in argv. Verified against
+            # bitcoin-cli 31.1's own -stdin help text.
+            cmd.append("-stdin")
+            cmd.append(method)
+            feed = "\n".join(args) + "\n"
+        else:
+            cmd += [method, *args]
+        out = subprocess.run(cmd, capture_output=True, text=True, input=feed)
         if out.returncode != 0:
             raise RuntimeError(f"{method}: {out.stderr.strip()}")
         text = out.stdout.strip()
@@ -78,7 +95,8 @@ def build_descriptors(rpc, xprv):
             raw = f"{func}({xprv}/{purpose}h/{coin}h/0h/{change}/*)"
             # getdescriptorinfo's "checksum" field covers the descriptor as
             # given (private form); its "descriptor" field is the public form.
-            checksum = rpc.call("getdescriptorinfo", raw)["checksum"]
+            checksum = rpc.call("getdescriptorinfo", raw,
+                                stdin=True)["checksum"]
             descs.append(_desc_entry(f"{raw}#{checksum}", internal=bool(change)))
     return descs
 
@@ -90,7 +108,8 @@ def _desc_entry(desc, internal):
 
 def _import(rpc, descriptors):
     rpc.call("createwallet", WALLET, False, True, "", False, True)
-    result = rpc.call("importdescriptors", descriptors, wallet=WALLET)
+    result = rpc.call("importdescriptors", descriptors, wallet=WALLET,
+                      stdin=True)
     failures = [r for r in result if not r.get("success")]
     if failures:
         raise RuntimeError(f"importdescriptors failed: {failures}")
@@ -121,7 +140,7 @@ def open_session_descriptors(rpc, descriptors):
             # are refused here rather than silently imported.
             raise RuntimeError("multisig descriptors are out of v1 scope")
         # Re-checksum via Core (accepts descriptors with or without one).
-        info = rpc.call("getdescriptorinfo", desc)
+        info = rpc.call("getdescriptorinfo", desc, stdin=True)
         bare = desc.split("#")[0]
         # Heuristic: a trailing /1/* branch is the change chain. Documented
         # limitation: multipath/nonstandard descriptors may need explicit
