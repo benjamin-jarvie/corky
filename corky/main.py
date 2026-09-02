@@ -297,8 +297,7 @@ class Session:
             elif key == "a":
                 if sel == 0:
                     return ""
-                return self._text_entry("PASSPHRASE",
-                                        "nothing checks this", True) or ""
+                return self._text_entry("PASSPHRASE", secret=True) or ""
 
     def _keymaterial(self, kind):
         """Warning screen (A-14: the QR IS the wallet), then scan."""
@@ -323,7 +322,7 @@ class Session:
     def _seed_descriptor_typed(self):
         """S3: a descriptor typed on the grid, for a camera-less build or a
         descriptor that never existed as a QR."""
-        text = self._text_entry("TYPE  DESCRIPTOR", "private descriptor")
+        text = self._text_entry("PRIVATE  DESCRIPTOR")
         if not text:
             return False
         stop = self._busy("importing into Core…")
@@ -335,7 +334,7 @@ class Session:
 
     def _seed_xprv_typed(self):
         """S3: an xprv typed on the grid."""
-        text = self._text_entry("TYPE  XPRV", "BIP32 extended private key")
+        text = self._text_entry("BIP32  EXTENDED  PRIVATE  KEY")
         if not text:
             return False
         stop = self._busy("importing into Core…")

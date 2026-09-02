@@ -112,8 +112,8 @@ def _frame(w, h, title=None):
     img = Image.new("RGB", (w, h), INK)
     d = ImageDraw.Draw(img)
     if title:
-        d.text((w // 2, int(h * 0.06)), title, font=_font(int(h * 0.07)),
-               fill=GREY, anchor="mm")
+        _fit(d, (w // 2, int(h * 0.06)), title, int(h * 0.07), GREY, "mm",
+             int(w * 0.92))
         d.line([(int(w * 0.06), int(h * 0.11)), (int(w * 0.94), int(h * 0.11))],
                fill=GREY, width=1)
     return img, d
@@ -445,8 +445,8 @@ def passphrase_prompt(w, h, selected=0):
          int(h * 0.065), OCHRE, "mm", int(w * 0.94))
     for i, line in enumerate([
             "A passphrase makes a different wallet.",
-            "The same words with no passphrase open",
-            "a different one. Nothing checks it."]):
+            "There is no check on it: mistype it and",
+            "you open an empty wallet with no warning."]):
         _fit(d, (w // 2, int(h * (0.44 + i * 0.075))), line,
              int(h * 0.045), CREAM, "mm", int(w * 0.94))
     _actions(d, w, h, ["NO", "YES"], selected)
