@@ -47,6 +47,25 @@ All inputs with internal pull-ups (`PUD_UP`, so pressed = LOW). SeedSigner
 adds software debounce and key-repeat timing on top; worth lifting that logic
 too when the UI is built.
 
+### What each control does (PLAN A-15c)
+
+Eight controls, all of them used. The "4-button primary scheme" in PLAN A-15
+belonged to the Pimoroni Display HAT Mini and died with A-13b/A-15b; it is
+not a requirement.
+
+| Control | Corky's meaning |
+|---|---|
+| Joystick up / down | Move the selection; page through review outputs |
+| Joystick left / right | Move within a grid row; toggle the bottom action bar |
+| Joystick press | Pick the top candidate word; move the edit caret in codex32 entry |
+| KEY1 (A) | Select / activate the highlighted option |
+| KEY2 (B) | Delete a character; step back one word; back one page |
+| KEY3 (C) | Abort the current flow |
+
+The same map applies to the CM4 build and the Zero 2 W pocket build: the
+CM4 carrier presents the standard Raspberry Pi 40-pin GPIO header, so BOARD
+pin numbers are identical on CM4, Zero 1.3 and Zero 2 W.
+
 ## Camera: the one place Corky must NOT copy SeedSigner
 
 SeedSigner pins `picamera==1.13`, the **legacy** camera stack, frozen to old

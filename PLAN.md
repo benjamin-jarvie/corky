@@ -88,12 +88,26 @@
   electrically compatible with the carrier's header but mechanically
   Zero-shaped; pending Ben identifying the exact PCB. UI must support
   4-button (no joystick) navigation as the primary scheme.
+  **Superseded by A-15b: see A-15c for the control surface actually built.**
 
 - **A-15b (2026-08-18): A-15's display and button scheme are superseded.**
   The Display HAT Mini and its "4-button primary scheme" died with A-13b:
   the SeedSigner+ hat (d-pad + three keys, same GPIO map as the 1.3" hat)
   is the primary control surface, on the CM4 carrier per A-15's board
   decision, which stands. Navigation is d-pad + A/B/C.
+
+- **A-15c (2026-09-02): the control surface, as built (Ben).** A-15's
+  "4-button primary scheme" belonged to the Pimoroni Display HAT Mini,
+  which A-13b/A-15b retired. Every board Corky targets carries a 5-way
+  joystick plus three keys: the SeedSigner+ hat on the CM4 build, and the
+  WaveShare 1.3" hat on the Zero 2 W pocket build. The UI uses all eight
+  controls; a 4-button-only scheme is explicitly NOT a requirement, and
+  reintroducing one would roughly double seed and codex32 entry cost
+  (grid entry would become two-stage row-then-column). The audit's D10
+  is closed by this amendment: the brief was stale, the code was right.
+  GPIO is identical across CM4 carrier, Zero 1.3 and Zero 2 W, because
+  the carrier presents the standard Raspberry Pi 40-pin header; the pin
+  map in hw/HARDWARE.md is unchanged across all three.
 - **A-16: dev image vs release image (2026-08-18).** Two distinct images per
   release, both hashed in the pinned tuple. DEV: SSH enabled over the
   carrier's wired Ethernet (no radio involved; the cable is the visible,
