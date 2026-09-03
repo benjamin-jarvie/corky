@@ -72,13 +72,53 @@ def swap_active_mb():
     return (total + 1023) // 1024
 
 
-def _watch_low_water(stop, box):
-    """Sample MemAvailable every 200ms: the true low point falls between
-    RPC calls, so two spot samples are not enough (ticket 02)."""
+def soc_temp_c():
+    """SoC temperature in C, or None off a Pi. ORDER.md's cooling decision
+    drops the heatsink, so the gate has to show what the SoC reaches."""
+    zone = Path("/sys/class/thermal/thermal_zone0/temp")
+    if not zone.exists():
+        return None
+    try:
+        return int(zone.read_text().strip()) / 1000.0
+    except ValueError:
+        return None
+
+
+THROTTLE_BITS = {0: "under-voltage NOW", 1: "arm frequency capped NOW",
+                 2: "throttled NOW", 3: "soft temp limit NOW",
+                 16: "under-voltage since boot", 17: "arm freq capped since boot",
+                 18: "throttled since boot", 19: "soft temp limit since boot"}
+
+
+def throttled():
+    """(raw, [reasons]) from vcgencmd, or (None, []) where it is absent.
+    A weak micro-USB supply shows up here and nowhere else in the report."""
+    vc = shutil.which("vcgencmd")
+    if vc is None:
+        return None, []
+    out = subprocess.run([vc, "get_throttled"], capture_output=True,
+                         text=True).stdout.strip()
+    if "=" not in out:
+        return None, []
+    raw = out.split("=", 1)[1]
+    try:
+        bits = int(raw, 16)
+    except ValueError:
+        return raw, []
+    return raw, [name for bit, name in THROTTLE_BITS.items() if bits & (1 << bit)]
+
+
+def _sample(stop, track):
+    """Sample MemAvailable and SoC temperature every 200ms: the true low
+    point falls between RPC calls, so two spot samples are not enough
+    (ticket 02). Temperature peaks between calls the same way."""
     while not stop.wait(0.2):
         m = mem_available_mb()
-        if m is not None and (box[0] is None or m < box[0]):
-            box[0] = m
+        if m is not None and (track["mem"] is None or m < track["mem"]):
+            track["mem"] = m
+        t = soc_temp_c()
+        if t is not None and (track["temp"] is None or t > track["temp"]):
+            track["temp"] = t
 
 
 def main():
@@ -94,9 +134,9 @@ def main():
         sys.exit(2)
 
     stop_sampler = threading.Event()
-    low_box = [None]  # MemAvailable floor at 200ms resolution
-    threading.Thread(target=_watch_low_water,
-                     args=(stop_sampler, low_box), daemon=True).start()
+    track = {"mem": None, "temp": None}  # floor and peak at 200ms resolution
+    threading.Thread(target=_sample,
+                     args=(stop_sampler, track), daemon=True).start()
 
     datadir = tempfile.mkdtemp(prefix="corky-m0-")
     t0 = time.time()
@@ -154,16 +194,27 @@ def main():
         report["fee shown (rBTC)"] = review["fee_btc"]
         report["peak bitcoind RSS (MB)"] = vm_hwm_mb(daemon.pid)
         mem_now = mem_available_mb()
-        floors = (low_box[0], low_water, mem_now)
+        floors = (track["mem"], low_water, mem_now)
         report["MemAvailable low-water (MB)"] = (
             min(x for x in floors if x is not None)
             if any(x is not None for x in floors) else "n/a (not Linux)")
+        if track["temp"] is not None:
+            report["peak SoC temperature (C)"] = round(track["temp"], 1)
+        raw, reasons = throttled()
+        if raw is not None:
+            report["vcgencmd get_throttled"] = raw
 
         print("\nM0 GATE REPORT")
         for k, v in report.items():
             print(f"  {k}: {v}")
         rss = report["peak bitcoind RSS (MB)"]
         mem = report["MemAvailable low-water (MB)"]
+        for reason in reasons:
+            # Not a fail: the pass line is memory (PLAN.md), and ORDER.md
+            # rules that throttling costs sign time and nothing else.
+            # Under-voltage is still worth shouting about, because a weak
+            # supply can spoil every other number above.
+            print(f"  !! {reason}")
         if isinstance(mem, int):
             verdict = "PASS" if mem >= 100 else "FAIL"
             print(f"\nM0 {verdict}: headroom {mem}MB (need >=100MB)")

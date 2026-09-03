@@ -5,7 +5,13 @@ OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"   # record from the Imager download
 CORE_VERSION="31.1"
 CORE_TARBALL="bitcoin-31.1-aarch64-linux-gnu.tar.gz"
 CORE_URL="https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-aarch64-linux-gnu.tar.gz"
-CORE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"       # verify against SHA256SUMS + GPG, then pin
+# Verified 2026-09-03 on the Mac, out of band from bitcoincore.org:
+#   11 of 11 GPG signatures on SHA256SUMS good, 0 bad, 0 missing keys.
+#   Signing keys came from the guix.sigs repo (builder-keys/), a
+#   different host to the one serving the binary.
+#   achow101, fanquake, Sjors and hebasto each attest this same hash
+#   in their own noncodesigned.SHA256SUMS for 31.1.
+CORE_SHA256="dcf1873f2208ba4f962f3398d47e154c39c0084be8f4553e05c940d0ace3d004"
 CORKY_COMMIT="HEAD"                             # pin to a tag for release images
 PIP_PINS="qrcode==7.4.2 pyzbar==0.1.9"          # everything pip installs, pinned
 DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"     # sha256 of the provisioned SD image (A-16)
