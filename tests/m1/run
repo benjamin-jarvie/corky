@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run a rig script under the x86_64 interpreter with the pinned wheels.
+DIR=$(cd "$(dirname "$0")" && pwd)
+exec env PYTHONDONTWRITEBYTECODE=1 \
+     PYTHONPATH="$DIR/.build/py-x86:$DIR/../../corky:$DIR/../../hw/vendor" \
+     arch -x86_64 /usr/bin/python3 "$@"
