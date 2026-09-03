@@ -245,6 +245,15 @@ outputs, amounts and the fee as computed by Core from the coordinator-supplied
 input amounts (an air-gapped signer cannot independently verify input amounts;
 none can). Coordinator target: Sparrow.
 
+**Set Sparrow's QR density to Low.** Sparrow's default, Normal, packs up to
+775 characters into one frame, which is an 81x81 QR. Measured against the
+device's own decoder at its 512x384 camera stream, that reads reliably only
+when the code fills about 90 percent of the view; ordinary hand blur takes
+whole frames out below that. Low tops out near 215 characters, a 45x45 code,
+and reads from anywhere in the frame. Corky does not refuse large frames, so
+holding the camera closer works too, but it says so on screen when it sees
+them. Numbers and method: `tests/m1/legibility_rig.py`.
+
 Out of scope for v1: multisig, message signing, address explorer, and dice
 entropy. Corky signs for seeds that already live on metal, and writes no
 randomness of its own; the one generation path it offers (v1.1, opt-in)
@@ -274,26 +283,26 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1268 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1293 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (718) ·
+[`corky/main.py`](corky/main.py) (743) ·
 [`corky/screens.py`](corky/screens.py) (488) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 288 lines.**
+**Layer 3 — never touches secrets at all. 389 lines.**
 [`corky/signer.py`](corky/signer.py) (160) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
-[`corky/qrchannel.py`](corky/qrchannel.py) (83) move PSBTs as opaque
+[`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,910 lines** (2,827 with blanks/comments).
+**Total functional code: 2,036 lines** (3,086 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 3,226 lines — none of it ships on the device.**
+**Test code: 3,230 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent

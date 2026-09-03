@@ -81,8 +81,15 @@ print(f"ok   frames render to PIL images ({imgs[0].size[0]}px)")
 #    yields a fixed frame count, so an off-by-one on the constant changes it.
 frozen = base64.b64encode(bytes((i * 13 + 7) & 0xFF for i in range(1500))).decode()
 nframes = len(qrchannel.psbt_to_frames(frozen))
-assert nframes == 16, f"frozen frame count changed: {nframes} (MAX_FRAGMENT_LEN off?)"
-print(f"ok   frozen frame count == 16 at MAX_FRAGMENT_LEN={qrchannel.MAX_FRAGMENT_LEN}")
+pure = int(qrchannel.psbt_to_frames(frozen)[0].split("/")[1].split("-")[1])
+# Two constants are pinned here, not one. `pure` catches MAX_FRAGMENT_LEN
+# drifting; the total catches FOUNTAIN_REDUNDANCY drifting, which is what
+# ticket 09 relies on to survive an unreadable frame.
+assert pure == 16, f"pure cycle changed: {pure} (MAX_FRAGMENT_LEN off?)"
+assert nframes == 16 * qrchannel.FOUNTAIN_REDUNDANCY, \
+    f"frame count changed: {nframes} (FOUNTAIN_REDUNDANCY off?)"
+print(f"ok   frozen cycle == 16 at MAX_FRAGMENT_LEN={qrchannel.MAX_FRAGMENT_LEN}, "
+      f"{nframes} frames at redundancy {qrchannel.FOUNTAIN_REDUNDANCY}")
 
 # feed() must return True on completion, and again on every later call.
 one = base64.b64encode(b"psbt\xff" + os.urandom(40)).decode()

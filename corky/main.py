@@ -54,14 +54,49 @@ _KEY_CHARSET = set(
     "()[]{}#*'/,:;h<>@?!&+=-_.\n\r ")
 
 
-class CameraQrSource:
-    """Device QR source. Camera capture is the M1 deliverable; until it
-    lands, QR entry paths report their absence instead of dead-ending."""
+class ImageQrSource:
+    """Turns a stream of images into decoded QR strings.
+
+    Ticket 04 fixed the contract: a source yields strings and nothing else.
+    Every stopping rule lives in qrchannel.scan_psbt, so this class holds no
+    policy at all. A tick with no code in view yields None, which is what lets
+    the caller's no-progress timeout fire on a still scene.
+
+    Subclasses supply images. That is the only part that needs hardware, which
+    is why CameraQrSource below is four lines.
+    """
+
+    def images(self):
+        raise NotImplementedError
 
     def scan_key(self):
         raise RuntimeError("camera not yet wired (M1); use the USB stick")
 
     def scan_psbt_frames(self):
+        for image in self.images():
+            if image is None:
+                yield None
+                continue
+            found = qrchannel.decode_image(image)
+            if not found:
+                yield None
+            for payload in found:
+                yield payload
+
+
+class CameraQrSource(ImageQrSource):
+    """Device QR source. Capture is the M1 hardware deliverable.
+
+    Everything above this line is built and tested (tests/m1). All that is
+    missing is picamera2 producing frames at ~512x384, ~10fps
+    (hw/HARDWARE.md:75).
+    """
+
+    def images(self):
+        # Yields nothing until capture lands, which is what the pre-M1 source
+        # did. state_load then falls through to the USB stick instead of
+        # crashing. Raising here would take the whole app down on a board with
+        # no camera, which is strictly worse than the behaviour it replaced.
         return iter(())
 
 
@@ -805,7 +840,18 @@ class Session:
                                        "insert stick or show QR…"))
         psbt, source = None, None
         qr_frames = None
-        assembler = qrchannel.FrameAssembler()
+        notice = {"text": "insert stick or show QR…"}
+
+        def on_event(kind, detail):
+            # The screen string ticket 03 asked for, and ticket 05's restart.
+            # screens.busy already takes a message, so no new screen is needed.
+            if kind == "advisory":
+                notice["text"] = "large frames: set Sparrow to Low density"
+            elif kind == "restart":
+                notice["text"] = "different transaction, starting again…"
+
+        scan = qrchannel.PsbtScan(on_event=on_event)
+        shown = notice["text"]
         while psbt is None:
             if self.stick_dir:
                 found = filechannel.find_unsigned(self.stick_dir)
@@ -817,20 +863,27 @@ class Session:
             # an incomplete UR assembly can complete on a later pass.
             if qr_frames is None:
                 qr_frames = self.qr.scan_psbt_frames()
-            progress_before = assembler.progress
-            for frame in qr_frames:
-                try:
-                    if assembler.feed(frame):
-                        psbt = assembler.psbt_b64
+            progress_before = scan.progress
+            try:
+                for frame in qr_frames:
+                    if scan.feed(frame):
+                        psbt = scan.psbt_b64
                         break
-                except qrchannel.QrChannelError:
-                    continue
-            else:
+                else:
+                    qr_frames = None
+            except qrchannel.ScanTimeout as exc:
+                # Ticket 05: say why, then keep waiting rather than dropping
+                # the user out of a screen they deliberately opened.
+                notice["text"] = f"scan stalled ({exc}); try again"
+                scan = qrchannel.PsbtScan(on_event=on_event)
                 qr_frames = None
+            if notice["text"] != shown:
+                shown = notice["text"]
+                self.display.show(screens.busy(self.w, self.h, shown))
             # Progress, not mere frame consumption, counts as advancing —
             # otherwise an incomplete dev file spins at 50Hz and the
             # back/reject buttons are never polled.
-            advanced = psbt is not None or assembler.progress > progress_before
+            advanced = psbt is not None or scan.progress > progress_before
             if psbt is not None:
                 break
             if not advanced:
