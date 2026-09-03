@@ -1,13 +1,15 @@
 # Map: M1 QR, everything except the optics
 
 Labels: wayfinder:map
-Opened 2026-09-03. **COMPLETE 2026-09-03**: all eight tickets closed,
+Opened 2026-09-03. **COMPLETE 2026-09-03**: all nine tickets closed,
 the route is walked. Reviewed the same day with `/mp-code-review`; the Spec
 axis found ticket 08's resolution had been retro-fitted and two of its claims
 were false. See that ticket's Amendment. Fifteen findings across both axes,
 all fixed. Chasing one of them opened **ticket 09**: zxing, the decoder Sparrow
 uses, cannot read about one frame in 125 of Corky's output, deterministically,
-and looping does not help. The map is complete; 09 is a new defect it found.
+and looping does not help. That is now closed too, by emitting fountain parts
+past the pure cycle. Recorded as PLAN A-20 and ISSUES I-9, and it taught
+TESTING.md rule 8.
 
 ## Destination
 

@@ -120,7 +120,43 @@ first version of the I-2 test faked a missing `systemctl` as exit code 1,
 so it passed over a `FileNotFoundError` that made the whole fallback dead
 code.
 
+## Rule 8: test against the other implementation's decoder, not your own
+
+Every QR test Corky had decoded with `pyzbar`, because that is what the device
+runs. That felt right and it hid a defect for as long as it existed.
+
+Corky renders 244-character UR frames as a 49x49 QR. With the quiet zone that
+is 53 modules, and the 320x240 panel allows `box_size = 240 // 53 = 4`. So
+Corky renders at exactly **4.0 pixels per module** and cannot go higher without
+fewer modules. Measured over 375 frames, three of them (0.8%) cannot be decoded
+by **zxing**, which is the library Sparrow uses. `pyzbar` reads the same three
+without trouble.
+
+It was not intermittent. The same image failed five attempts out of five. And
+`psbt_to_frames` emitted one pure cycle which the display looped, so the
+scanner saw the identical unreadable image forever. At 13 to 21 frames per
+PSBT, roughly one transfer in seven could never complete.
+
+No suite could have found this, because every suite asked Corky's own decoder.
+The fix is `tests/sparrow`, which runs Sparrow 2.5.4's real library out of the
+sha256-verified release, and `tests/m1/outbound_margin.py`, which keeps
+measuring the rate so the day it gets worse is a day somebody notices.
+
+The rule: **an interop claim tested with your own tools is not an interop
+claim.** Where a counterpart is named, run the counterpart.
+
+The same pass produced Rule 8's twin, which is cheaper to state. When a test
+starts failing one run in five, find out why before making it pass. Adding a
+retry pass here would have gone green and buried the defect; it recovered
+exactly zero frames, and that zero is what exposed the cause.
+
 ## What is still thin
 
-`ISSUES.md` records I-1 to I-6 as fixed and D17/D18 as open. The standing
-milestone work (M0 to M3) genuinely does need the board.
+`ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18
+as open. The standing milestone work (M0 to M3) genuinely does need the board.
+
+`tests/sparrow` and `tests/m1` are **not in `run_tests.sh`**. They need a
+one-time `setup.sh` that downloads Sparrow and a JDK, and `tests/m1` needs
+Rosetta on Apple Silicon. Run them by hand after a change to the QR channel.
+A reader who runs only `./run_tests.sh` gets no interop coverage at all, and
+nothing in the output says so.

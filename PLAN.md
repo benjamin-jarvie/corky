@@ -198,6 +198,38 @@
   BITCOIN CORE for entropy, on an explicit opt-in path, in a v1.1 tool that
   sits beside the codex32 tools rather than in the seed-entry flow.
 
+- **A-20: the outbound QR carries fountain parts (Ben, 2026-09-03).**
+  `psbt_to_frames` used to return exactly one pure cycle, which the display
+  looped. That is fragile in a way only Sparrow's decoder shows. Corky renders
+  244-character UR frames as a 49x49 QR; with the quiet zone that is 53
+  modules, and the 320x240 panel allows `box_size = 240 // 53 = 4`. So Corky
+  renders at exactly 4.0 pixels per module and cannot go higher without fewer
+  modules. Measured over 375 frames
+  (`tests/m1/outbound_margin.py`), three of them (0.8%) cannot be decoded by
+  **zxing**, the library Sparrow uses, while `pyzbar` reads them. The failure
+  is deterministic, five attempts out of five, so looping a pure cycle shows
+  the scanner the same unreadable image forever. At 13 to 21 frames per PSBT
+  that is roughly one transfer in seven that can never complete.
+
+  **The decision.** Emit `seq_len * FOUNTAIN_REDUNDANCY` frames, with
+  redundancy 2. Everything past the pure cycle is a fountain part and can stand
+  in for one the scanner never got, which is what Sparrow's own `UREncoder`
+  does when it sends to us. Proved by dropping each pure part in turn: 11 of 11
+  individually droppable.
+
+  **What it costs.** The frame count doubles, 21 to 42 for a six-input P2WPKH
+  PSBT and 13 to 26 for P2TR, so a scanner that reads everything first time
+  waits twice as long. Ben took that over a transfer that can hang.
+
+  **Rejected.** Lowering `MAX_FRAGMENT_LEN` to raise the margin: it adds frames
+  too, and only makes the failure rarer rather than recoverable. Accepting it
+  and documenting a restart: it asks the user to diagnose a symptom whose cause
+  they cannot see, on a device whose claim is that you can trust what it shows
+  you.
+
+  Reasoning and rejected options in full:
+  `docs/wayfinder/m1-qr-without-optics/tickets/09-zxing-cannot-read-some-frames.md`.
+
   **Mechanism (revised same day at Ben's direction: EXACTLY as a Core
   wallet, no shaping).** `signer.generate_wallet()` calls `createwallet`,
   so Core generates the master key with its own `GetStrongRandBytes` and

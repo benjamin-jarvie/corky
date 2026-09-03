@@ -227,7 +227,7 @@ two arrive as a single static QR or typed text and never touch the shim at
 all: pure Core from the first byte. (Descriptor mode is the answer to
 Maxwell's BIP39 critique: the backup carries its own derivation path, script
 type and checksum. Its trade-off: it is a printed/engraved QR, not stampable
-steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out via **three channels**: animated QR;
+steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out via **three channels**: animated QR, which carries fountain parts past the pure cycle so a frame the scanner cannot read never strands a transfer;
 a PSBT file on a USB stick in the OTG port; and — once the M3 RAM-resident
 image lands — the boot microSD itself, SeedSigner-OS style (the whole OS runs
 from RAM, so the card can be pulled and used as the PSBT sled). QR is the
@@ -320,6 +320,17 @@ The README's own numbers are tested too:
 if any count above drifts from the tree or a link goes dead. Run it all:
 [`./run_tests.sh`](run_tests.sh) (`RUN_NODE=1` adds the
 bitcoind suites).
+
+**Plus 86 checks against Sparrow itself**, which the count above excludes and
+`run_tests.sh` does not run. [`tests/sparrow/`](tests/sparrow/) drives Sparrow
+2.5.4's own library out of its sha256-verified release, so the PSBTs Corky
+signs are the PSBTs Sparrow really builds: 38 interop checks across both script
+types and eight transaction shapes, with Corky's review fee and outputs
+compared to Sparrow's own to the satoshi, and 20 more that put a real PSBT
+through the QR channel in both directions. [`tests/m1/`](tests/m1/) adds 28
+covering the scan rules, and two rigs that measure whether each side can
+actually read the other's screen. Both need a one-time `setup.sh`, and
+`tests/m1` needs Rosetta on Apple Silicon.
 
 **Vendored, not ours: 2,219 lines** in [`hw/vendor/`](hw/vendor/) —
 SeedSigner's display drivers and BC-UR codec, unmodified, MIT/BSD with

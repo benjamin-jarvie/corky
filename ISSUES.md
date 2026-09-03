@@ -83,6 +83,48 @@ above. `Requires=` does NOT propagate a stop when a unit exits on its own;
 no-systemd fallback could never have run. Both were found by the two-axis
 review of this commit, not by the suite.
 
+## Fixed 2026-09-03
+
+Two-axis review of the M1 QR sprint (`/mp-code-review`), 15 findings, all
+fixed. The full list is in
+`docs/wayfinder/m1-qr-without-optics/tickets/08-imageqrsource.md`, under
+Amendment. The three that were more than tidying:
+
+### I-7 `frame_identity` ran container code before the guards
+
+`scan_psbt` called `frame_identity()` before `FrameAssembler.feed()`, so
+`URDecoder.parse`, `Bytewords.decode` and `Part.from_cbor` all saw a frame
+before `MAX_FRAME_CHARS` refused anything. That breaks the condition PLAN A-11
+puts on the opaque-bytes exception, which licenses container unwrapping only
+when it is bounded and length-capped first. A 4000-character hostile frame
+reached the CBOR decoder.
+
+Fixed: one `checked_frame()` gates both, raises `QrChannelError` only.
+
+### I-8 A camera-less board crashed instead of falling through
+
+`CameraQrSource.scan_psbt_frames` was changed from `return iter(())` to
+raising `RuntimeError`. `state_load` catches only `QrChannelError`, so on
+hardware the PSBT screen would have taken the app down rather than falling
+through to the USB stick. A regression introduced by the same sprint that
+claimed the opposite in its own ticket.
+
+Fixed and pinned by a test.
+
+### I-9 One frame in 125 was unreadable by Sparrow, permanently
+
+Corky rendered at exactly 4.0 pixels per module, and about 0.8% of frames
+cannot be decoded by zxing, which is Sparrow's decoder. Deterministic, five
+failures out of five, while `pyzbar` read the same images. `psbt_to_frames`
+emitted one pure cycle which the display looped, so waiting showed the scanner
+the same unreadable image forever. Roughly one transfer in seven could never
+complete.
+
+Fixed by emitting fountain parts past the pure cycle, as Sparrow's own encoder
+does. Ticket 09 in the M1 map has the reasoning and the rejected options.
+Rule 8 in `TESTING.md` is the lesson: every test used Corky's own decoder, so
+nothing could have caught it.
+
 ## Open
 
 Raised by the 2026-08-18 audit, never closed, and NOT closed here. Listed

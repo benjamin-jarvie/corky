@@ -14,4 +14,10 @@ for t in $SUITES_FAST ${RUN_NODE:+$SUITES_NODE}; do
   if $PY "$t" >/dev/null 2>&1; then echo "PASS $t"; else echo "FAIL $t"; FAILED=1; fi
 done
 [ -z "$RUN_NODE" ] && echo "(fast suites only; RUN_NODE=1 ./run_tests.sh adds the bitcoind suites)"
+# The interop suites are not run here: they need a one-time setup.sh that
+# downloads Sparrow and a JDK, and tests/m1 needs Rosetta on Apple Silicon.
+# Say so, because silence reads as "this is all the coverage there is".
+echo "(not run here: tests/sparrow  38+20 checks vs Sparrow's own library"
+echo "               tests/m1       28 checks + the two legibility rigs"
+echo "               both need their setup.sh first; see TESTING.md rule 8)"
 exit $FAILED
