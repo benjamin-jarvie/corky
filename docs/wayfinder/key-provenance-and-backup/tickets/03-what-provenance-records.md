@@ -37,10 +37,33 @@ retype opens the same key.**
 
 The **XFP** and the **origin**. Not the words, not the seed.
 
-When a flow needs the seed (a codex32 backup), Corky asks for the words
-again, derives a key, and compares the fingerprint against the loaded one.
-Match: proceed. Mismatch: refuse, and say that these words do not open this
-key.
+When a flow needs the seed, Corky asks for the words again, derives a key,
+and compares the fingerprint against the loaded one. Match: proceed.
+Mismatch: refuse, and say that these words do not open this key.
+
+**Exactly one flow needs the seed: the codex32 backup. Signing never does,
+and neither does anything else.** Ben asked this directly on 2026-09-04 and
+the answer was not explicit enough above.
+
+| flow | needs | retype |
+|---|---|---|
+| sign a PSBT | the wallet in Core | no |
+| show XFP, addresses, descriptors | Core | no |
+| export a watch-only descriptor | Core | no |
+| derive a BIP-85 child | the root xprv, which Core holds | no |
+| show the xprv backup | Core's descriptors | no |
+| **codex32 backup** | **the seed, which Core never had** | **yes** |
+
+`open_session` (`corky/signer.py:127`) converts the mnemonic to an xprv once,
+imports the descriptors, and the private keys then live in Core.
+`sign_psbt` calls `walletprocesspsbt`; the mnemonic is finished the moment
+the import lands.
+
+codex32 is the only flow that could ever need it: everything else derives
+DOWNWARD from the key, and Core has the key. codex32 goes UPWARD to the seed,
+which exists before Core and is never inside it. So: load once, sign all day,
+and retype only when making a paper backup, which is the moment a recovery
+drill belongs anyway.
 
 Rejected: holding the mnemonic for the session. It removes the retype, which
 was the original ask, but it lengthens the exact window Layer 2 exists to
