@@ -66,6 +66,25 @@ The same map applies to the CM4 build and the Zero 2 W pocket build: the
 CM4 carrier presents the standard Raspberry Pi 40-pin GPIO header, so BOARD
 pin numbers are identical on CM4, Zero 1.3 and Zero 2 W.
 
+## Verified on real hardware, 2026-09-04 (Zero 2 W, SeedSigner+ hat)
+
+Everything below was read from source until this date. What the board says:
+
+| Claim | Result |
+|---|---|
+| ST7789 320x240 over SPI0 CE0 | works, after two driver fixes (ISSUES I-11) |
+| Control pins DC=22, RST=13, BL=18 (BOARD) | correct |
+| Button map, all eight controls | correct, `tests/hw_buttons.py` |
+| Camera is OV5647 class | yes: `ov5647`, up to 2592x1944 |
+| picamera2 at ~512x384, ~10fps | 30fps capture; 8.2fps through the whole
+  loop including decode and painting the panel |
+
+**The camera is mounted at 90 degrees to the panel.** The frame arrives
+sideways. This does not affect scanning, because zbar reads a QR at any
+orientation, so Corky must NOT rotate before decoding: it would cost a copy
+per frame and buy nothing. Rotate for the viewfinder only, where a human has
+to aim.
+
 ## Camera: the one place Corky must NOT copy SeedSigner
 
 SeedSigner pins `picamera==1.13`, the **legacy** camera stack, frozen to old

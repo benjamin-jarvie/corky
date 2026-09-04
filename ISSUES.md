@@ -212,6 +212,30 @@ limit is unreachable there.
 invisible on the dev machine, and only the target can see it. See TESTING.md
 rule 9.
 
+### I-11 The display driver could not drive the panel Corky ships
+
+**Found 2026-09-04 on the board, closed the same day.** Two defects, neither
+ever executed, both only reachable on the 320x240 SeedSigner+ hat.
+
+`SetWindows` hardcoded both high address octets to `0x00`, correct only while
+every coordinate is below 256. On a 320-wide panel `(320 - 1) & 0xff` is 63,
+so the driver would have pushed 320x240 pixels into a 64-column window. The
+vendored header said "fixed 240x240 width/height" while `hal.DeviceDisplay`
+defaulted to 320x240 and `hw/HARDWARE.md` named the 2.8" hat as primary.
+Nobody had reconciled the two.
+
+`show_image` converted pixels with `Image.convert("BGR;16")`. That raw mode
+is deprecated in Pillow 11, which the Pi has, and **already removed in Pillow
+12**, where it raises "image has wrong mode". It worked on the board and
+would have died at the next apt upgrade. It also could not run on a current
+dev machine, which is how it went unexamined for so long.
+
+Replaced with a direct RGB-8:8:8 to big-endian RGB-5:6:5 pack. Equivalence
+was checked on the board while the old path still existed: a full sweep of
+all 256 values per channel, 20,000 random pixels, and a real 320x240 frame,
+byte-identical in every case. `tests/test_display_driver.py` stubs `spidev`
+and `RPi.GPIO` and reads back the bytes the driver would put on the bus.
+
 ## Standing hardware-blocked work
 
 Not defects. Recorded so the list above is not confused with them.
