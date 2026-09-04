@@ -150,6 +150,36 @@ starts failing one run in five, find out why before making it pass. Adding a
 retry pass here would have gone green and buried the defect; it recovered
 exactly zero frames, and that zero is what exposed the cause.
 
+## Rule 9: some defects are invisible on the dev machine, by construction
+
+Rule 7 says "needs hardware" is a claim that needs checking, and it stands.
+This is its opposite number: sometimes the hardware really is the only place
+a defect can appear, and no amount of care on the Mac will surface it.
+
+`corky/signer.py` passed the base64 PSBT to `bitcoin-cli` as one argv entry.
+Linux caps a **single** argument at `MAX_ARG_STRLEN`, 32 pages, 128KB, and
+that cap is separate from the 2MB `ARG_MAX` total. A PSBT carries a whole
+previous transaction per input, so the M0 stress case at 250 inputs went past
+it and `execve` returned `E2BIG`.
+
+**macOS applies no per-argument cap at all.** The 250-input path was tested,
+repeatedly, and passed every time. It even produced the "RSS about 99MB"
+reference figure that `m0/FLASH.md` quoted for a fortnight. The test was not
+missing and it was not weak. The dev machine cannot fail this way.
+
+What catches this class is not a better test on the Mac. It is running the
+real thing on the real target early, which is what M0 exists to do. The gate
+paid for itself the first time it ran.
+
+What a test on the Mac **can** do is stop the fix regressing. `FakeRpc` in
+`tests/test_property.py` asserts `stdin=True` on any PSBT-carrying method
+rather than merely accepting the argument, so the rule is enforced where the
+limit is unreachable.
+
+The rule: **when a limit belongs to the target's kernel, the dev machine is
+not evidence.** Name the limit, encode it as an assertion, and get on real
+hardware sooner.
+
 ## What is still thin
 
 `ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18

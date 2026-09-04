@@ -35,9 +35,12 @@ FLAGS = ["-regtest", "-dbcache=4", "-maxmempool=5", "-rpcthreads=1",
 
 
 def vm_hwm_mb(pid):
+    """Peak RSS in MB. pid may be "self" for this process."""
     status = Path(f"/proc/{pid}/status")
     if not status.exists():  # dev machine (macOS): current RSS via ps instead
-        out = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)],
+        import os
+        real = os.getpid() if pid == "self" else pid
+        out = subprocess.run(["ps", "-o", "rss=", "-p", str(real)],
                              capture_output=True, text=True).stdout.strip()
         return int(out) // 1024 if out else None
     for line in status.read_text().splitlines():
@@ -205,7 +208,13 @@ def main():
         assert signed["complete"], "stress PSBT did not fully sign"
         report["build+review+sign stress PSBT (s)"] = round(time.time() - t, 1)
         report["fee shown (rBTC)"] = review["fee_btc"]
+        report["stress psbt size (KB)"] = len(funded["psbt"]) // 1024
         report["peak bitcoind RSS (MB)"] = vm_hwm_mb(daemon.pid)
+        # The gate's own process is part of the device's budget too: on the
+        # real device this is corky/main.py, holding the same PSBT string and
+        # the same decodepsbt JSON. Reporting only the daemon hid 45MB of the
+        # loss between 180 and 210 inputs.
+        report["peak gate process RSS (MB)"] = vm_hwm_mb("self")
         mem_now = mem_available_mb()
         floors = (track["mem"], low_water, mem_now)
         report["MemAvailable low-water (MB)"] = (
