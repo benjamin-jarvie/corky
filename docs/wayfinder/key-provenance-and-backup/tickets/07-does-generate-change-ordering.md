@@ -2,6 +2,8 @@
 
 Labels: wayfinder:grilling (HITL)
 Blocked by: none
+Assignee: claude (claimed 2026-09-04)
+Status: CLOSED 2026-09-04
 
 ## Question
 
@@ -53,3 +55,43 @@ Whatever the answer, the recovery drill is worth taking: Bails forces a
 re-type and rebuilds the wallet only from what was re-entered. Its mismatch
 check is an unimplemented TODO, so Corky should do the comparison Bails does
 not.
+
+## Resolution (Ben, 2026-09-04)
+
+**Generation does not change. The conversion lives in Tools, it replaces the
+key, and it is refused once the wallet has ever received.**
+
+I drifted here and Ben pulled it back: he had already decided codex32 belongs
+in Tools, separate from generation, and I re-opened it as a generation
+change. His version works.
+
+    Core generates      K
+    Tools converts      K's bytes -> seed S -> HMAC -> K'
+    codex32 encodes     S
+    restoring S gives   K'
+
+**The conversion necessarily produces a different key.** That is forced, not a
+flaw: BIP32 turns a seed into a key by HMAC, and Core starts at the key. So
+the conversion cannot be a *backup* of the existing key. It must **replace**
+it: Corky imports `K'` and the wallet becomes `K'`. The fingerprint on home
+changes, which is the honest visible signal.
+
+**Safe only before the wallet is funded.** Convert after receiving and the
+coins sit at `K`'s addresses while the backup restores `K'`. Corky checks the
+wallet has never received and refuses otherwise.
+
+Rejected, and it is the dangerous reading: leaving the wallet as `K` while the
+backup encodes `S`. It would look like a working backup and restore the wrong
+wallet, which is the exact hazard this map exists to close.
+
+So A-19 stays literally true. Core makes the key with its own RNG and Corky
+signs with that wallet, unless the user deliberately asks Tools to convert it
+into one that can be split.
+
+**Seed length is unresolved.** 128-bit gives a 48-character string, a third
+less to stamp and read back on every share, at the security level Bitcoin's
+own address hashes sit at; Bails hardcodes it. 256-bit preserves all of
+Core's entropy in 74 characters. Ben stopped before answering, so it goes to
+the full version's fog.
+
+Closed.

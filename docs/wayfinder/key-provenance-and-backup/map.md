@@ -5,10 +5,50 @@ Opened 2026-09-04.
 
 ## Destination
 
+**This map now belongs to the FULL build, not to the pure signer. See "The
+fork" below before taking a ticket.**
+
 Every backup and recovery flow works on the board: Corky knows where its key
 came from, Tools can answer "what key is this?", codex32 splits the loaded key
 behind an XFP confirmation, BIP-85 lives in Tools as its own thing, and no
 flow can produce a backup of a wallet other than the one it says.
+
+## The fork (Ben, 2026-09-04)
+
+JW Weatherman, on being told Corky is a tiny UI over Core:
+
+> "your only focus should be in minimizing any additional code you add. As
+> soon as code review is required you are half way to a rug product. When more
+> code review is required than the thing justifies you are a fully rug
+> product. If you can add no code at all that's the ideal. Next best is the
+> tiniest UI needed and absolutely nothing more."
+
+Measured the same day, and it is worse than the critique assumes.
+**codex32 is 74% of Layer 1**, the code that transforms secret material:
+
+    50  shim/bip39_shim.py    BIP39 words -> seed -> xprv
+   254  corky/codex32.py      codex32 encode/split/recover
+    38  corky/seedqr.py       SeedQR digits -> words
+   342  TOTAL
+
+Without codex32, Layer 1 is 88 lines. Without SeedQR too, **every line in
+Corky that ever transforms a secret is the 50-line BIP39 shim**, which exists
+only because Core has no BIP39 and is already frozen and hash-pinned.
+
+Fifty lines is a claim you can hand someone: read one page, everything else is
+Bitcoin Core. Three hundred and forty-two is a code review, and the moment one
+is required the guarantee is the thing being reviewed.
+
+**Ben's decision: fork now, before any of this map is built.** Nothing here
+has been implemented yet, so the split is free today and expensive later.
+
+- **Pure signer.** BIP39 shim only. No codex32, no SeedQR, no Tools, no
+  BIP-85, no silent payments. Its backup story is that it has none: your words
+  are already on metal, from your own dice, and the device never touches them.
+  That is not a gap, it may be the product.
+- **Full build.** Everything this map decides, plus silent payments later.
+
+Every decision below stands. They are now decisions about the full build.
 
 ## Notes
 
@@ -103,6 +143,11 @@ flow can produce a backup of a wallet other than the one it says.
   and why this one can be split, nothing else; the rest lives on the export
   screen. The XFP goes on this transient screen and never on paper.
 
+- [07 Does Generate change ordering](tickets/07-does-generate-change-ordering.md)
+  — generation does not change; A-19 stays literally true. The conversion is a
+  Tools operation that REPLACES the key, because HMAC makes the converted key
+  a different one, and it is refused once the wallet has ever received.
+
 ## Not yet specified
 
 - What the recovery card must carry, and whether Corky prints or displays it.
@@ -119,6 +164,11 @@ flow can produce a backup of a wallet other than the one it says.
   needs Bails' fuller version: show the backup, discard it, rebuild the wallet
   only from what the user re-enters.
 - Whether the review screen should show the XFP too, not only home.
+- Converted seed length: 128-bit (48 chars, a third less to stamp on every
+  share, Bails' choice) against 256-bit (74 chars, keeps all of Core's
+  entropy). Raised 2026-09-04, not answered.
+- What the pure signer keeps and drops, exactly, and which of the two the
+  repo's main branch becomes. That is a separate effort, not this map.
 - An address explorer in Tools, beyond the first few shown at export time.
 - Whether the four-character grouping and head/tail colouring decided for
   addresses should also apply to the xpub, the descriptor, and the xprv
