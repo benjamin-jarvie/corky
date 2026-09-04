@@ -58,6 +58,13 @@ class Rpc:
         stdin=True sends the parameters through bitcoin-cli's -stdin instead
         of argv, so key material never appears in a process listing. Callers
         that pass an xprv or a private descriptor MUST set it (S4).
+
+        Callers that pass a PSBT must set it too, for a second reason.
+        Linux caps any SINGLE argument at MAX_ARG_STRLEN, 32 pages, which
+        is 128KB, separately from the 2MB ARG_MAX total. A PSBT carries a
+        whole previous transaction per input, so a many-input PSBT passes
+        that cap and execve fails with E2BIG. macOS has no per-argument
+        cap, so this cannot reproduce on the dev machine (I-10).
         """
         cmd = list(self.base)
         if wallet:
@@ -164,8 +171,8 @@ def describe_psbt(rpc, psbt_b64):
     an air-gapped signer cannot verify those amounts against the chain.
     The screen must say so.
     """
-    decoded = rpc.call("decodepsbt", psbt_b64)
-    analysis = rpc.call("analyzepsbt", psbt_b64)
+    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True)
+    analysis = rpc.call("analyzepsbt", psbt_b64, stdin=True)
     outputs = [
         {"address": vout["scriptPubKey"].get("address", "(non-standard)"),
          "amount_btc": vout["value"]}
@@ -205,7 +212,8 @@ def describe_psbt(rpc, psbt_b64):
 
 
 def sign_psbt(rpc, psbt_b64):
-    result = rpc.call("walletprocesspsbt", psbt_b64, wallet=WALLET)
+    result = rpc.call("walletprocesspsbt", psbt_b64, wallet=WALLET,
+                      stdin=True)
     return {"psbt": result["psbt"], "complete": result["complete"]}
 
 

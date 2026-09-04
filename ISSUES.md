@@ -185,6 +185,33 @@ that descriptor's own first address.
 both: sign-another versus power-off versus C on the result screen, and
 decline versus accept versus CANCEL on the passphrase prompt.
 
+### I-10 A PSBT was passed to `bitcoin-cli` as one argv entry
+
+**Found 2026-09-03 on the board, closed the same day.** `describe_psbt` and
+`sign_psbt` passed the base64 PSBT as a command-line argument. Linux caps a
+SINGLE argument at `MAX_ARG_STRLEN`, 32 pages, which is 128KB, and that cap
+is separate from the 2MB `ARG_MAX` total. A PSBT carries a whole previous
+transaction per input, so the M0 stress case at 250 inputs passed the cap and
+`execve` returned `E2BIG`:
+
+```
+OSError: [Errno 7] Argument list too long: 'bitcoin-cli'
+```
+
+**macOS applies no per-argument cap.** Every run on the dev machine passed,
+including the 250-input run that produced the "RSS about 99MB" reference in
+`m0/FLASH.md`. The test existed and ran; the dev machine cannot fail this way.
+
+Fixed by routing the three PSBT-carrying calls through `bitcoin-cli -stdin`,
+a path `Rpc.call` already had for keeping xprvs out of process listings.
+`FakeRpc` in `tests/test_property.py` now ASSERTS `stdin=True` on any
+PSBT-carrying method, so a regression fails on the Mac even though the real
+limit is unreachable there.
+
+**The lesson is not "add a test".** It is that a whole class of defect is
+invisible on the dev machine, and only the target can see it. See TESTING.md
+rule 9.
+
 ## Standing hardware-blocked work
 
 Not defects. Recorded so the list above is not confused with them.

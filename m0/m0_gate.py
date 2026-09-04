@@ -130,7 +130,14 @@ def main():
     if swap:
         print(f"M0 INVALID: {swap}MB of swap is active. Swap makes RSS read"
               " low and MemAvailable read high; no verdict is possible.")
-        print("Fix: sudo swapoff -a   (reverts at reboot), then re-run.")
+        # swapoff -a alone is not enough on Trixie. systemd-zram-generator
+        # owns dev-zram0.swap, swap.target wants it, so systemd re-activates
+        # the unit seconds after the device goes away. Stop the unit, and do
+        # it in the same shell as the run so nothing can race it.
+        print("Fix, in one session (both revert at reboot):")
+        print("  sudo systemctl stop dev-zram0.swap   # Trixie: zram, or it")
+        print("                                       # comes straight back")
+        print("  sudo swapoff -a                      # any disk swap left")
         sys.exit(2)
 
     stop_sampler = threading.Event()
@@ -183,9 +190,15 @@ def main():
                   for u in rpc.call("listunspent", wallet=signer.WALLET)]
         total = sum(float(u["amount"]) for u in
                     rpc.call("listunspent", wallet=signer.WALLET))
+        # subtractFeeFromOutputs keeps this a single output with no change,
+        # which is the shape the stress case wants. A hard-coded fee reserve
+        # was wrong at both ends: 60x the real fee at 250 inputs, and larger
+        # than the whole funded amount below about 10 inputs, where it failed
+        # with "Transaction amount too small".
         funded = rpc.call("walletcreatefundedpsbt", inputs,
-                          [{dest: round(total - 0.05, 8)}], 0,
-                          {"fee_rate": 5}, True, wallet=signer.WALLET)
+                          [{dest: round(total, 8)}], 0,
+                          {"fee_rate": 5, "subtractFeeFromOutputs": [0]},
+                          True, wallet=signer.WALLET)
         report["stress psbt inputs"] = len(inputs)
         review = signer.describe_psbt(rpc, funded["psbt"])
         signed = signer.sign_psbt(rpc, funded["psbt"])

@@ -71,12 +71,20 @@ checksum fetched from the server that served the binary proves nothing.
 
 ## 4. Run the gate
 
+Do all of it in **one** SSH session. Both commands revert at reboot.
+
 ```bash
-sudo swapoff -a   # RPi OS enables swap by default; swap falsifies both
-                  # gate numbers and the gate refuses to run with it on.
-                  # Reverts at reboot.
+sudo systemctl stop dev-zram0.swap   # see below
+sudo swapoff -a                      # any disk swap as well
 cd /opt/corky && python3 m0/m0_gate.py --inputs 250
 ```
+
+RPi OS enables swap by default, and swap falsifies both gate numbers, so
+the gate refuses to run with it on. On Trixie `swapoff -a` on its own does
+not hold: `systemd-zram-generator` owns `dev-zram0.swap`, `swap.target`
+wants it, and systemd re-activates the unit seconds after the device goes
+away. Measured 2026-09-03: swap was gone in one SSH session and back in
+the next. Stop the unit, and stay in the same session.
 
 ## 5. Read the verdict
 

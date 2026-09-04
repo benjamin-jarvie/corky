@@ -291,18 +291,18 @@ secret material during entry but performs no cryptography on it.
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
 
-**Layer 3 — never touches secrets at all. 389 lines.**
-[`corky/signer.py`](corky/signer.py) (160) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 390 lines.**
+[`corky/signer.py`](corky/signer.py) (161) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,036 lines** (3,086 with blanks/comments).
+**Total functional code: 2,037 lines** (3,094 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 3,230 lines — none of it ships on the device.**
+**Test code: 3,232 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent

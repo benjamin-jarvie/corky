@@ -207,7 +207,13 @@ class FakeRpc:
         self._decoded = decoded
         self._analysis = analysis
 
-    def call(self, method, *params, wallet=None):
+    def call(self, method, *params, wallet=None, stdin=False):
+        # stdin is not optional for a PSBT-carrying call: on Linux a PSBT
+        # is too long to pass as one argv entry (I-10). The double asserts
+        # it rather than accepting it, so a regression fails here on the
+        # dev machine, where the real execve limit cannot be reached.
+        if method in ("decodepsbt", "analyzepsbt", "walletprocesspsbt"):
+            assert stdin, f"{method} must pass the PSBT through stdin"
         if method == "decodepsbt":
             return self._decoded
         if method == "analyzepsbt":
