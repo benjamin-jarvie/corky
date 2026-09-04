@@ -66,6 +66,13 @@ class ImageQrSource:
     is why CameraQrSource below is four lines.
     """
 
+    #: The most recent frame, for a viewfinder. None until one arrives.
+    last_image = None
+
+    #: A camera is always a channel worth offering. The dev source overrides
+    #: this, because a dev run with no --qr-psbt has nothing to scan.
+    available = True
+
     def images(self):
         raise NotImplementedError
 
@@ -77,6 +84,10 @@ class ImageQrSource:
 
     def scan_psbt_frames(self):
         for image in self.images():
+            # Ticket 04 still holds: this yields strings and nothing else.
+            # The image is parked here instead, so a caller that wants a
+            # viewfinder can read it without the stream carrying two types.
+            self.last_image = image
             if image is None:
                 yield None
                 continue
@@ -137,6 +148,11 @@ class DevQrSource:
         self.key_path = key_path
         self.psbt_path = psbt_path
 
+    @property
+    def available(self):
+        """No file, no frames. state_load offers only channels that exist."""
+        return bool(self.psbt_path)
+
     def scan_key(self):
         """One payload: SeedQR digits, xprv or descriptor text."""
         if not self.key_path:
@@ -188,6 +204,10 @@ class Session:
         self.passphrase = passphrase
         self.w, self.h = display.width, display.height
         self.wordlist = load_wordlist()
+        #: Master fingerprint of the open wallet, or None. Refreshed
+        #: whenever a flow returns, because any of them can open or close
+        #: a key.
+        self.xfp = None
 
     # -- flow --------------------------------------------------------------
 
@@ -276,13 +296,28 @@ class Session:
             worker.join(timeout=1)
         return halt
 
+    def _show_core_error(self, exc):
+        """Put a Core failure on screen instead of taking the app down.
+
+        Core's error strings carry an "error code: -4" line and a blank
+        line before the message; the last non-empty line is the part a
+        person can act on.
+        """
+        lines = [ln.strip() for ln in str(exc).splitlines() if ln.strip()]
+        detail = lines[-1] if lines else str(exc)
+        self.display.show(screens.result(self.w, self.h, ok=False,
+                                         detail=detail))
+        self.buttons.read()
+
     def state_home(self):
         # 2x2 tiles: load key | key generation / tools | settings.
         # Power off lives inside settings (Ben, 2026-09-01).
         row = col = 0
         while True:
+            self.xfp = signer.master_fingerprint(self.rpc)
             selected = row * 2 + col
-            self.display.show(screens.home(self.w, self.h, selected))
+            self.display.show(screens.home(self.w, self.h, selected,
+                                           xfp=self.xfp))
             key = self.buttons.read()
             if key == "u":
                 row = (row - 1) % 2
@@ -292,15 +327,25 @@ class Session:
                 col = (col - 1) % 2
             elif key == "r":
                 col = (col + 1) % 2
-            elif key == "a":
+            elif key in ("a", "p"):
                 if selected == 3:          # settings
                     if self.state_settings():
                         return             # settings chose power off
                     continue
-                opened = [self.state_seed_menu,  # 0 load key
-                          self._seed_generate,   # 1 key generation
-                          self.state_tools       # 2 tools
-                          ][selected]()
+                # Every flow talks to Core, and Core can refuse. An
+                # unhandled RuntimeError used to end the process, leaving
+                # the panel frozen on whatever it had last painted, with no
+                # message and no way back (found on the board, 2026-09-04:
+                # a second generate in one session read as "it bailed").
+                # Say what went wrong and return to home instead.
+                try:
+                    opened = [self.state_seed_menu,  # 0 load key
+                              self._seed_generate,   # 1 key generation
+                              self.state_tools       # 2 tools
+                              ][selected]()
+                except RuntimeError as exc:
+                    self._show_core_error(exc)
+                    opened = False
                 # Coming back from a flow always lands on the first tile,
                 # so home is in a known state however you got here.
                 row = col = 0
@@ -328,7 +373,7 @@ class Session:
                 selected = (selected + 1) % 2
             elif key == "b":
                 return False
-            elif key == "a":
+            elif key in ("a", "p"):
                 if selected == 0:          # power off
                     return True
                 # about: show, then any key returns to the settings menu
@@ -348,7 +393,7 @@ class Session:
                 selected = (selected + 1) % 8
             elif key == "b":
                 return False
-            elif key == "a":
+            elif key in ("a", "p"):
                 try:
                     return [self._seed_descriptor, self._seed_xprv,
                             self._seed_descriptor_typed, self._seed_xprv_typed,
@@ -400,7 +445,7 @@ class Session:
             key = self.buttons.read()
             if key in ("u", "d"):
                 selected = 1 - selected
-            elif key == "a":
+            elif key in ("a", "p"):
                 return 12 if selected == 0 else 24
             elif key == "b":
                 return None
@@ -425,7 +470,7 @@ class Session:
             if sel is not None:            # focus is on the action bar
                 if key in ("l", "r"):
                     sel = 1 - sel
-                elif key == "a":
+                elif key in ("a", "p"):
                     return text if sel == 1 else None
                 elif key in ("b", "c"):
                     sel = None
@@ -471,7 +516,7 @@ class Session:
                 sel = 1 - sel
             elif key in ("b", "c"):
                 return ""
-            elif key == "a":
+            elif key in ("a", "p"):
                 if sel == 0:
                     return ""
                 return self._text_entry("PASSPHRASE", "passphrase",
@@ -482,7 +527,7 @@ class Session:
         self.display.show(screens.keymaterial_warning(self.w, self.h, kind))
         while True:
             key = self.buttons.read()
-            if key == "a":
+            if key in ("a", "p"):
                 payload = self._scan_key_guarded().strip()
                 self.display.show(screens.busy(self.w, self.h,
                                                "importing into Core…"))
@@ -666,7 +711,7 @@ class Session:
                 selected = (selected + 1) % len(tools)
             elif key == "b":
                 return False
-            elif key == "a":
+            elif key in ("a", "p"):
                 try:
                     return bool(tools[selected]())
                 except Exception as exc:
@@ -745,7 +790,9 @@ class Session:
         and that cards or dice remain the default.
         """
         sel, scroll = 1, 0
-        max_scroll = len(screens.GENERATE_LINES) - screens.GEN_VISIBLE
+        # Wrapping means the line count depends on the panel, so ask the
+        # screen rather than counting the source strings.
+        max_scroll = screens.generate_scroll_max(self.w, self.h)
         while True:
             self.display.show(screens.generate_warning(
                 self.w, self.h, sel, scroll))
@@ -756,7 +803,7 @@ class Session:
                 scroll = min(scroll + 1, max_scroll)
             elif key == "u":
                 scroll = max(scroll - 1, 0)
-            elif key == "a":
+            elif key in ("a", "p"):
                 if sel == 0:
                     return False
                 break
@@ -802,7 +849,7 @@ class Session:
                 if i == 0:
                     return False    # nothing earlier: BACK is ABORT here
                 i -= 1
-            elif key == "a":
+            elif key in ("a", "p"):
                 if i + 1 == len(pages):
                     return True
                 i += 1
@@ -815,7 +862,7 @@ class Session:
             key = self.buttons.read()
             if key in ("u", "d"):
                 selected = 1 - selected
-            elif key == "a":
+            elif key in ("a", "p"):
                 return selected
             elif key == "b":
                 return None
@@ -866,11 +913,65 @@ class Session:
     # -- PSBT load: stick first, then QR frames ---------------------------
 
     def state_load(self):
+        """Pick a channel, then run only that one (Ben, 2026-09-04).
+
+        It used to poll the stick and the camera together behind one line,
+        "insert stick or show QR". That gave neither channel a screen of its
+        own: the camera ran while you were fetching a stick, and the scan
+        had nowhere to show what it could see. The two also want different
+        patience. A scan that has made no progress for 20s means the aim is
+        wrong and should say so; a stick you are still walking to fetch is
+        not a fault at any elapsed time.
+        """
+        # Offer only the channels that exist. On the device both always do,
+        # so the menu always appears; a board with no camera would be wrong
+        # to offer "Scan QR", and a dev run with no --qr-psbt has nothing to
+        # scan. One channel means there is nothing to ask.
+        can_qr = getattr(self.qr, "available", True)
+        can_stick = bool(self.stick_dir)
+        if not can_qr and not can_stick:
+            self.display.show(screens.result(
+                self.w, self.h, ok=False, detail="no way to load a PSBT"))
+            self.buttons.read()
+            return TO_HOME
+        if not can_stick:
+            return self._load_by_qr()
+        if not can_qr:
+            return self._load_by_stick()
+        choice = 0
+        while True:
+            self.display.show(screens.channel_menu(self.w, self.h, choice))
+            key = self.buttons.read()
+            if key in ("u", "d"):
+                choice = 1 - choice
+            elif key in ("a", "p"):
+                break
+            elif key in ("b", "c"):
+                return TO_HOME
+        return self._load_by_stick() if choice == 1 else self._load_by_qr()
+
+    def _load_by_stick(self):
+        """Wait on the USB stick alone. No timeout: fetching one is not a
+        fault, however long it takes. B or C returns to the channel menu."""
         self.display.show(screens.busy(self.w, self.h,
-                                       "insert stick or show QR…"))
+                                       "insert the stick…"))
+        while True:
+            if self.stick_dir:
+                found = filechannel.find_unsigned(self.stick_dir)
+                if found and filechannel.wait_stable(found[0]):
+                    return self.state_review(
+                        filechannel.read_psbt(found[0]), found[0])
+            key = self.buttons.pressed()
+            if key == "b":
+                return self.state_load()
+            if key == "c":
+                return TO_HOME
+            time.sleep(0.2)
+
+    def _load_by_qr(self):
         psbt, source = None, None
         qr_frames = None
-        notice = {"text": "insert stick or show QR…"}
+        notice = {"text": "hold the QR in view"}
 
         def on_event(kind, detail):
             # The screen string ticket 03 asked for, and ticket 05's restart.
@@ -895,21 +996,28 @@ class Session:
                 qr_frames = self.qr.scan_psbt_frames()
             progress_before = scan.progress
             try:
-                for frame in qr_frames:
-                    if scan.feed(frame):
-                        psbt = scan.psbt_b64
-                        break
-                else:
+                # ONE frame per pass. A camera is an infinite generator, so
+                # looping it here never returns: the viewfinder freezes on
+                # its last paint and the buttons are never polled. That could
+                # not happen while CameraQrSource returned an empty iterator;
+                # it appeared the moment a real camera was wired (2026-09-04).
+                try:
+                    frame = next(qr_frames)
+                except StopIteration:
                     qr_frames = None
+                    frame = None
+                if frame is not None and scan.feed(frame):
+                    psbt = scan.psbt_b64
             except qrchannel.ScanTimeout as exc:
                 # Ticket 05: say why, then keep waiting rather than dropping
                 # the user out of a screen they deliberately opened.
                 notice["text"] = f"scan stalled ({exc}); try again"
                 scan = qrchannel.PsbtScan(on_event=on_event)
                 qr_frames = None
-            if notice["text"] != shown:
-                shown = notice["text"]
-                self.display.show(screens.busy(self.w, self.h, shown))
+            shown = notice["text"]
+            self.display.show(screens.scanning(
+                self.w, self.h, getattr(self.qr, "last_image", None), shown,
+                scan.progress))
             # Progress, not mere frame consumption, counts as advancing —
             # otherwise an incomplete dev file spins at 50Hz and the
             # back/reject buttons are never polled.
@@ -917,10 +1025,16 @@ class Session:
             if psbt is not None:
                 break
             if not advanced:
-                key = self.buttons.read()
-                if key in ("b", "c"):
-                    # Back out of the load loop WITHOUT ending the session:
-                    # the key stays in Core and home is reachable again.
+                key = self.buttons.pressed()
+                # hw/HARDWARE.md gives B and C different jobs and they should
+                # keep them here. B is "back one page": you still want to
+                # load a transaction, the QR just is not working. C is
+                # "abort the current flow", so it leaves altogether. A stall
+                # on its own moves you nowhere; ticket 05 settled that it
+                # says why and keeps waiting.
+                if key == "b":
+                    return self.state_load()
+                if key == "c":
                     return TO_HOME
             time.sleep(0.02)
         return self.state_review(psbt, source)
@@ -952,7 +1066,7 @@ class Session:
             elif key == "u":
                 page, refused = (page - 1) % pages, False
                 seen.add(page)
-            elif key == "a" and sel == 1:
+            elif key in ("a", "p") and sel == 1:
                 if len(seen) < pages:
                     # Every output must have been on screen before signing.
                     page, refused = (page + 1) % pages, True
@@ -961,7 +1075,7 @@ class Session:
                 return self.state_sign(psbt, source)
             elif key == "b":
                 return TO_HOME       # back to home, key still loaded (D7)
-            elif key == "c" or (key == "a" and sel == 0):
+            elif key == "c" or (key in ("a", "p") and sel == 0):
                 self.display.show(screens.result(
                     self.w, self.h, ok=False, detail="rejected by user"))
                 self.buttons.read()
@@ -1042,7 +1156,7 @@ class Session:
             key = self.buttons.read()
             if key in ("l", "r"):
                 sel = 1 - sel
-            elif key == "a":
+            elif key in ("a", "p"):
                 return SIGN_AGAIN if sel == 0 else POWER_OFF
             elif key == "c":
                 return POWER_OFF

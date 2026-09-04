@@ -331,16 +331,26 @@ def main():
         part.write_text(allframes[0])
         emptystick = work / "stickI"; emptystick.mkdir()
         sqi = work / "sq_i.txt"; sqi.write_text("0000" * 11 + "0003")
-        for abkey in ("b", "c"):
-            r = run_device(datadir, "a" + "dddddda" + "a" + abkey + "draa",
+        # state_load now opens on a channel menu (Ben, 2026-09-04), and this
+        # session supplies BOTH channels, so the menu appears and has to be
+        # answered before the scan loop is reached at all. Without the extra
+        # "a" the abort key lands on the menu and this stops testing what its
+        # name says. B goes back one page to the menu, C aborts to home
+        # (hw/HARDWARE.md), so the two need different tails.
+        for abkey, tail in (("b", "c" + "draa"), ("c", "draa")):
+            r = run_device(datadir,
+                           "a" + "dddddda" + "a" + "a" + abkey + tail,
                            work / ("framesI" + abkey),
                            stick=emptystick, qr_key=sqi, qr_psbt=part)
             assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
-            # b/c now backs out to home with the key still loaded (D7),
-            # so the load screen is shown but is not the final frame.
+            # In dev there is no camera frame, so screens.scanning falls back
+            # to the wait frame with the scan's own message.
             assert _has(work / ("framesI" + abkey),
-                        _render(scr.busy, "insert stick or show QR…")), \
-                f"I({abkey}): the load screen was never shown"
+                        _render(scr.busy, "hold the QR in view")), \
+                f"I({abkey}): the scan screen was never shown"
+            assert _has(work / ("framesI" + abkey),
+                        _render(scr.channel_menu, 0)), \
+                f"I({abkey}): the channel menu was never shown"
         print("ok   I: partial QR makes progress; b/c abort the load loop")
 
         # ---- Session J: PSBT this wallet cannot complete -> refusal ----

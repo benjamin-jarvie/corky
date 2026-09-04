@@ -42,6 +42,12 @@ class DevButtons:
         except StopIteration:
             raise ScriptExhausted("dev keypad script exhausted") from None
 
+    def pressed(self):
+        """Non-blocking on the device; on the dev harness it consumes the
+        script exactly as read() does, so a scripted session stays
+        deterministic instead of spinning on a poll that never returns."""
+        return self.read()
+
 
 class DeviceDisplay:
     """ST7789 320x240 (SeedSigner+ hat) via the vendored driver."""
@@ -77,9 +83,22 @@ class DeviceButtons:
     def read(self):
         import time
         while True:
-            for key, pin in self.PINS.items():
-                if self._gpio.input(pin) == self._gpio.LOW:
-                    while self._gpio.input(pin) == self._gpio.LOW:
-                        time.sleep(0.01)      # wait for release (debounce)
-                    return "p" if key == "press" else key
+            key = self.pressed()
+            if key is not None:
+                return key
             time.sleep(0.02)
+
+    def pressed(self):
+        """Whatever is down right now, or None. Does not block.
+
+        The polling loops (waiting on a stick, running the camera) must stay
+        responsive to Back while doing their own work, so they cannot sit
+        inside read().
+        """
+        import time
+        for key, pin in self.PINS.items():
+            if self._gpio.input(pin) == self._gpio.LOW:
+                while self._gpio.input(pin) == self._gpio.LOW:
+                    time.sleep(0.01)          # wait for release (debounce)
+                return "p" if key == "press" else key
+        return None

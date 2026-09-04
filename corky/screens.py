@@ -73,6 +73,56 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     d.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
+def _wrap(d, text, size, maxw):
+    """Break `text` into lines that fit `maxw` at `size`, on word boundaries.
+
+    The alternative is shrinking the type, which is what _fit does and what
+    the generate warning used to do. On a screen that already scrolls that
+    is the wrong trade: height is free and legibility is not.
+    """
+    out, cur = [], ""
+    for word in text.split():
+        trial = f"{cur} {word}".strip()
+        if not cur or _width(d, trial, size, "mm", (0, 0)) <= maxw:
+            cur = trial
+        else:
+            out.append(cur)
+            cur = word
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _fit_block(d, lines, xs, size, fill, anchor, maxw):
+    """Draw several lines of body copy at ONE shared size.
+
+    _fit shrinks each string on its own, which is right for a single string
+    the device did not choose and wrong for a paragraph: the long line comes
+    out smaller than the short one and the block reads ragged. Found on the
+    board, 2026-09-04, on the generate-a-seed warning.
+
+    Picks the largest size at or below `size` where EVERY line fits, then
+    draws them all at it. Falls back to _fit per line only at the floor, so
+    a pathological string still degrades rather than running off the edge.
+    """
+    while size > 6:
+        if all(_width(d, text, size, anchor, xs[0]) <= maxw for text in lines):
+            break
+        size -= 1
+    font = _font(size)
+    for text, xy in zip(lines, xs):
+        if _width(d, text, size, anchor, xy) > maxw:
+            _fit(d, xy, text, size, fill, anchor, maxw)   # floor reached
+        else:
+            d.text(xy, text, font=font, fill=fill, anchor=anchor)
+    return size
+
+
+def _width(d, text, size, anchor, xy):
+    box = d.textbbox(xy, text, font=_font(size), anchor=anchor)
+    return box[2] - box[0]
+
+
 def _actions(d, w, h, labels, selected=1):
     """The bottom action bar (Ben, 2026-09-01): actions are visible,
     d-pad-toggleable options in one place, never key legends in corners.
@@ -124,15 +174,28 @@ HOME_TILES = [("load key", "load"), ("key generation", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
 
-def home(w, h, selected=0):
+def home(w, h, selected=0, xfp=None):
     """SeedSigner-style 2x2 home: four tiles, each a Font Awesome icon and a
     title. Load key first, key generation second, tools, settings (which
-    holds power off). No CORKY text. It is a KEY, not a wallet."""
+    holds power off). No CORKY text. It is a KEY, not a wallet.
+
+    `xfp` is the loaded wallet's master fingerprint, shown at the top in
+    ochre (Ben, 2026-09-04). It is the one fact that tells you WHICH key is
+    open, and a signer that cannot answer that invites signing with the
+    wrong one. Absent when no key is loaded, so the header doubles as the
+    "is anything open" indicator.
+    """
     img = Image.new("RGB", (w, h), INK)
     d = ImageDraw.Draw(img)
     mx, my, gap = int(w * 0.06), int(h * 0.09), int(w * 0.04)
+    if xfp:
+        _fit(d, (w // 2, int(h * 0.055)), xfp.upper(), int(h * 0.062),
+             OCHRE, "mm", int(w * 0.9))
+        my = int(h * 0.125)
     bw = (w - 2 * mx - gap) // 2
-    bh = (h - 2 * my - gap) // 2
+    # Bottom margin stays at the original 0.09 so the tiles keep their
+    # footing; only the top grows to make room for the fingerprint.
+    bh = (h - my - int(h * 0.09) - gap) // 2
     for i, (label, icon) in enumerate(HOME_TILES):
         r, c = divmod(i, 2)
         x = mx + c * (bw + gap)
@@ -171,10 +234,10 @@ def about(w, h):
     img, d = _frame(w, h, "ABOUT")
     d.text((w // 2, int(h * 0.34)), "CORKY", font=_font(int(h * 0.11)),
            fill=CREAM, anchor="mm")
-    _fit(d, (w // 2, int(h * 0.52)), "Core's keys, nothing kept",
-         int(h * 0.05), GREY, "mm", int(w * 0.9))
-    _fit(d, (w // 2, int(h * 0.66)), "wallet brain: Bitcoin Core 31.1",
-         int(h * 0.048), GREY, "mm", int(w * 0.9))
+    _fit_block(d, ["Core's keys, nothing kept",
+                   "wallet brain: Bitcoin Core 31.1"],
+               [(w // 2, int(h * 0.52)), (w // 2, int(h * 0.66))],
+               int(h * 0.05), GREY, "mm", int(w * 0.9))
     _actions(d, w, h, ["BACK"], 0)
     return img
 
@@ -304,6 +367,80 @@ SEED_MENU_OPTIONS = [
 ]
 
 
+CHANNEL_OPTIONS = [("Scan QR", "camera"), ("USB stick", "/mnt/usb")]
+
+
+def channel_menu(w, h, selected=0):
+    """Pick the channel a PSBT arrives on (Ben, 2026-09-04).
+
+    It used to poll both at once behind one vague line, "insert stick or
+    show QR". Neither channel then got a screen of its own, so the camera
+    ran while you were fetching a stick and the scan had nowhere to show
+    what it could see.
+    """
+    img, d = _frame(w, h, "LOAD  TRANSACTION")
+    for i, (label, note) in enumerate(CHANNEL_OPTIONS):
+        y = int(h * (0.36 + i * 0.20))
+        if i == selected:
+            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.085),
+                                 int(w * 0.94), y + int(h * 0.085)],
+                                radius=6, outline=OCHRE, width=2)
+        _fit(d, (int(w * 0.12), y), label, int(h * 0.065),
+             CREAM if i == selected else GREY, "lm", int(w * 0.55))
+        _fit(d, (int(w * 0.88), y), note, int(h * 0.042),
+             OCHRE if i == selected else GREY, "rm", int(w * 0.28))
+    return img
+
+
+# The camera sits at 90 degrees to the panel on this build, and Ben chose to
+# fill the screen rather than keep the edges of the view (hw/HARDWARE.md).
+VIEWFINDER_ROTATE = 90
+VIEWFINDER_FILL = True
+
+
+def scanning(w, h, frame, message, progress=0.0):
+    """Live camera view with a caption. THE viewfinder.
+
+    Measured on the board, 2026-09-04: aiming with no view on screen got 1
+    read in 120s; the same target with a viewfinder got 53 in 90s, and time
+    to first decode fell from 35.3s to 8.3s. A scan screen that shows
+    nothing is asking the operator to aim a lens they cannot see through.
+    """
+    if frame is None:
+        return busy(w, h, message)
+    img = Image.fromarray(frame, mode="L").convert("RGB")
+    if VIEWFINDER_ROTATE:
+        img = img.rotate(VIEWFINDER_ROTATE, expand=True)
+    if VIEWFINDER_FILL:
+        scale = max(w / img.width, h / img.height)
+        img = img.resize((round(img.width * scale), round(img.height * scale)),
+                         Image.NEAREST)
+        left, top = (img.width - w) // 2, (img.height - h) // 2
+        img = img.crop((left, top, left + w, top + h))
+    else:
+        img.thumbnail((w, h), Image.NEAREST)
+        canvas = Image.new("RGB", (w, h), INK)
+        canvas.paste(img, ((w - img.width) // 2, (h - img.height) // 2))
+        img = canvas
+    d = ImageDraw.Draw(img)
+    bar = int(h * 0.13)
+    d.rectangle([0, h - bar, w, h], fill=INK)
+    _fit(d, (w // 2, h - bar // 2), message, int(h * 0.05), CREAM, "mm",
+         int(w * 0.94))
+    if progress > 0:
+        # PsbtScan.progress is the UR decoder's own estimate, 0 to 1. A bar
+        # the operator can act on: it says keep going, this is working.
+        pct = max(0.0, min(progress, 1.0))
+        d.rectangle([int(w * 0.05), 2, int(w * 0.95), int(h * 0.035)],
+                    outline=GREY)
+        d.rectangle([int(w * 0.05), 2,
+                     int(w * 0.05) + int(w * 0.9 * pct), int(h * 0.035)],
+                    fill=OCHRE)
+        _fit(d, (w // 2, int(h * 0.075)), f"{pct * 100:.0f}%",
+             int(h * 0.042), OCHRE, "mm", int(w * 0.5))
+    return img
+
+
 def seed_menu(w, h, selected=0):
     """Choose the seed input mode (A-14's modes + SeedQR + codex32/A-18)."""
     img, d = _frame(w, h, "LOAD  KEY")
@@ -342,28 +479,65 @@ def tools_menu(w, h, selected=0):
 
 
 GENERATE_LINES = [
-    "Core's own RNG makes this key, not Corky and not a vendor.",
-    "It is software. You cannot audit it as it runs.",
-    "Cards or dice stay the verifiable option, and the default.",
-    "Choose this if you trust Core's RNG more than any other.",
-    "Core cannot make BIP39 words. Corky will not invent them.",
-    "Your backup is a codex32 string, or k-of-n shares.",
+    # Ben, 2026-09-04: "we don't need all the slop of what it's not."
+    # Three statements, each about what this does and what you get. The
+    # honest caveat stays, because it changes the decision; the list of
+    # things Corky is not does not.
+    # The ochre headline above already says the entropy is Core's, so a
+    # body line repeating it is more slop.
+    "Software entropy cannot be audited as it runs. "
+    "Cards or dice remain the verifiable default.",
+    "Your backup is Core's master xprv: 111 characters to transcribe.",
 ]
-GEN_VISIBLE = 4   # body lines on screen at once; U/D scroll the rest
+
+#: Body copy never shrinks below this. The screen scrolls, so a long line
+#: wraps instead (Ben, 2026-09-04: "the font is too small to read on that,
+#: we already can scroll down"). Shrinking to fit the width buys nothing
+#: when height is free.
+MIN_BODY = 0.068          # fraction of panel height (16px at 240)
+GEN_VISIBLE = 5           # wrapped lines on screen at once; U/D scroll
+
+
+def generate_body(d, w, h):
+    """GENERATE_LINES wrapped to the panel at the minimum readable size.
+
+    A blank line between each source line (Ben, 2026-09-04). Wrapping turns
+    every sentence into one or two lines, and without a gap the paragraphs
+    run together into a wall the eye cannot break up.
+    """
+    out = []
+    for line in GENERATE_LINES:
+        if out:
+            out.append("")
+        out.extend(_wrap(d, line, int(h * MIN_BODY), int(w * 0.90)))
+    return out
+
+
+def generate_scroll_max(w, h):
+    """How far the body can scroll. main.py must ask, because wrapping
+    means the line count depends on the panel, not on GENERATE_LINES."""
+    img = Image.new("RGB", (w, h))
+    return max(0, len(generate_body(ImageDraw.Draw(img), w, h)) - GEN_VISIBLE)
 
 
 def generate_warning(w, h, selected=1, scroll=0):
     """Shown before Core-RNG generation (PLAN A-19). The body scrolls with
     U/D so the font stays readable; L/R toggle the action; more below is
     marked with a down chevron."""
-    img, d = _frame(w, h, "GENERATE  A  SEED")
+    img, d = _frame(w, h, "GENERATE  A  KEY")
     _fit(d, (w // 2, int(h * 0.22)), "Entropy comes from Bitcoin Core.",
          int(h * 0.065), OCHRE, "mm", int(w * 0.94))
-    last = min(scroll + GEN_VISIBLE, len(GENERATE_LINES))
-    for row, i in enumerate(range(scroll, last)):
-        _fit(d, (w // 2, int(h * (0.36 + row * 0.10))), GENERATE_LINES[i],
-             int(h * 0.05), CREAM, "mm", int(w * 0.94))
-    if last < len(GENERATE_LINES):
+    body = generate_body(d, w, h)
+    last = min(scroll + GEN_VISIBLE, len(body))
+    visible = body[scroll:last]
+    size = int(h * MIN_BODY)
+    font = _font(size)
+    # Left-aligned: this is a paragraph, and centring every wrapped line
+    # gives a ragged left edge the eye has to re-find on each line.
+    for row, text in enumerate(visible):
+        d.text((int(w * 0.06), int(h * (0.35 + row * 0.077))), text,
+               font=font, fill=CREAM, anchor="lm")
+    if last < len(body):
         cx, cy, r = w // 2, int(h * 0.77), int(h * 0.02)
         d.polygon([(cx - r, cy - r), (cx + r, cy - r), (cx, cy + r)],
                   fill=OCHRE)
@@ -380,9 +554,9 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
     lines = ["There is no passphrase layer on a raw " + kind + ".",
              "Anyone holding this code holds the funds.",
              "Scan it in private."]
-    for i, line in enumerate(lines):
-        _fit(d, (w // 2, int(h * (0.46 + i * 0.09))), line,
-             int(h * 0.05), CREAM, "mm", int(w * 0.94))
+    _fit_block(d, lines,
+               [(w // 2, int(h * (0.46 + i * 0.09))) for i in range(len(lines))],
+               int(h * 0.05), CREAM, "mm", int(w * 0.94))
     _actions(d, w, h, ["BACK", "SCAN"], selected)
     return img
 

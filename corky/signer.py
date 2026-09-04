@@ -15,6 +15,7 @@ The front end (screen/camera) calls exactly four things per session:
 import hashlib
 import hmac
 import json
+import re
 import shutil
 import time
 from decimal import Decimal
@@ -231,6 +232,12 @@ def generate_wallet(rpc):
     share one master key (they always do for Core-generated wallets; the
     check is a sanity assertion, not entropy verification).
     """
+    # Clear any session wallet first. Corky holds exactly one, in a ramdisk
+    # that power-off wipes, so a leftover is never something to preserve.
+    # Without this, generating a second key in one session dies on
+    # "Database already exists" and takes the app down with it (found on the
+    # board, 2026-09-04: generate, view the backup, go home, generate again).
+    _drop_wallet(rpc, WALLET)
     rpc.call("createwallet", WALLET)
     descs = rpc.call("listdescriptors", True, wallet=WALLET)["descriptors"]
     masters = set()
@@ -255,6 +262,25 @@ def _drop_wallet(rpc, name):
     except RuntimeError:
         pass
     shutil.rmtree(rpc.wallet_dir / name, ignore_errors=True)
+
+
+def master_fingerprint(rpc):
+    """The wallet's master key fingerprint (XFP), or None if no wallet.
+
+    Read from the PUBLIC descriptors: listdescriptors without the private
+    flag, so nothing secret is fetched to draw a header. Core writes the
+    origin as [XXXXXXXX/84h/...] at the front of every descriptor, and all
+    of a wallet's descriptors share one master key.
+    """
+    try:
+        descs = rpc.call("listdescriptors", wallet=WALLET)["descriptors"]
+    except (RuntimeError, KeyError, TypeError):
+        return None                      # no wallet loaded: no fingerprint
+    for d in descs:
+        m = re.search(r"\[([0-9a-fA-F]{8})/", d.get("desc", ""))
+        if m:
+            return m.group(1).lower()
+    return None
 
 
 def close_session(rpc):
