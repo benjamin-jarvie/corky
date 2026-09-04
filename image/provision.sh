@@ -15,21 +15,32 @@ source "$PINS"
 
 echo "== 1/5 Bitcoin Core $CORE_VERSION"
 if ! command -v bitcoind >/dev/null || ! bitcoind --version | grep -q "v$CORE_VERSION"; then
-    cd /tmp
-    curl -fSLO "$CORE_URL"
-    curl -fSLO "$(dirname "$CORE_URL")/SHA256SUMS"
     if [ "$CORE_SHA256" = "UNPINNED_UNTIL_FIRST_FLASH" ]; then
-        # SHA256SUMS from the same server proves nothing (checksum theater).
-        # Refuse to install: verify out-of-band, pin, re-run.
-        echo "!! CORE_SHA256 is unpinned. Tarball hash is:"
-        sha256sum "$CORE_TARBALL"
-        echo "!! Verify it against SHA256SUMS + the Guix attestation GPG keys"
-        echo "!! on a trusted machine, record it in image/PINS, re-run."
+        # Refuse before downloading. The hash has to come from a trusted
+        # machine anyway: SHA256SUMS served by the host that served the
+        # binary proves nothing, so there is nothing useful to learn here.
+        echo "!! CORE_SHA256 is unpinned, refusing to install Bitcoin Core."
+        echo "!! On a trusted machine, verify the tarball against SHA256SUMS"
+        echo "!! and the builder GPG keys from the guix.sigs repo, then record"
+        echo "!! the hash in image/PINS and re-run."
         exit 1
     fi
-    echo "$CORE_SHA256  $CORE_TARBALL" | sha256sum -c -
-    tar xzf "$CORE_TARBALL"
-    install -m 755 "bitcoin-$CORE_VERSION/bin/bitcoind" "bitcoin-$CORE_VERSION/bin/bitcoin-cli" /usr/local/bin/
+    # NOT /tmp. On Trixie /tmp is a tmpfs sized at half of RAM, which is
+    # 208MB on a Zero 2 W. The tarball is 82MB and unpacks to more than
+    # that, so the extract dies part-written, and filling that tmpfs eats
+    # the very RAM the M0 gate exists to measure. Work on disk instead.
+    work="$(mktemp -d /var/tmp/corky-core.XXXXXX)"
+    trap 'rm -rf "$work"' EXIT
+    curl -fSL -o "$work/$CORE_TARBALL" "$CORE_URL"
+    echo "$CORE_SHA256  $work/$CORE_TARBALL" | sha256sum -c -
+    # Only the two binaries Corky runs. bitcoin-qt and test_bitcoin are most
+    # of the archive by size and neither is ever executed.
+    tar xzf "$work/$CORE_TARBALL" -C "$work" \
+        "bitcoin-$CORE_VERSION/bin/bitcoind" "bitcoin-$CORE_VERSION/bin/bitcoin-cli"
+    install -m 755 "$work/bitcoin-$CORE_VERSION/bin/bitcoind" \
+                   "$work/bitcoin-$CORE_VERSION/bin/bitcoin-cli" /usr/local/bin/
+    rm -rf "$work"
+    trap - EXIT
 fi
 bitcoind --version | head -1
 
