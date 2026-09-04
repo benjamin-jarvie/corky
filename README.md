@@ -283,10 +283,10 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1293 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1313 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (743) ·
+[`corky/main.py`](corky/main.py) (763) ·
 [`corky/screens.py`](corky/screens.py) (488) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (49).
@@ -298,11 +298,11 @@ secret material during entry but performs no cryptography on it.
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,037 lines** (3,094 with blanks/comments).
+**Total functional code: 2,057 lines** (3,124 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
-**Test code: 3,232 lines — none of it ships on the device.**
+**Test code: 3,475 lines — none of it ships on the device.**
 [`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
 checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent
@@ -332,7 +332,7 @@ covering the scan rules, and two rigs that measure whether each side can
 actually read the other's screen. Both need a one-time `setup.sh`, and
 `tests/m1` needs Rosetta on Apple Silicon.
 
-**Vendored, not ours: 2,219 lines** in [`hw/vendor/`](hw/vendor/) —
+**Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/) —
 SeedSigner's display drivers and BC-UR codec, unmodified, MIT/BSD with
 attribution. Theirs to audit upstream; only the integration points are
 ours. The home icons are a six-glyph subset of Font Awesome Free Solid

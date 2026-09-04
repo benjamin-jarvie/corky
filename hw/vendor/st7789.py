@@ -6,9 +6,9 @@ BOARD pins DC=22, RST=13, BL=18)."""
 
 import spidev
 import RPi.GPIO as GPIO
+from PIL import Image as _Image, ImageChops as _ImageChops   # CORKY: RGB565
 import time
 import array
-import numpy as _np          # CORKY: RGB565 packing, see show_image
 from dataclasses import dataclass
 
 
@@ -191,10 +191,22 @@ class ST7789:
         # Same output, computed directly: RGB-8:8:8 to big-endian RGB-5:6:5.
         # tests/test_display_driver.py pins the bytes; equivalence with the
         # old path was checked on the board on 2026-09-03, all 65536 values.
-        rgb = _np.asarray(Image.convert("RGB"), dtype=_np.uint16)
-        pix = ((((rgb[:, :, 0] & 0xF8) << 8)
-                | ((rgb[:, :, 1] & 0xFC) << 3)
-                | (rgb[:, :, 2] >> 3)).astype(">u2").tobytes())
+        # Pillow only, no numpy: hw/HARDWARE.md fixes Corky's third-party
+        # surface at Pillow, pyzbar, qrcode, urtypes, picamera2, RPi.GPIO
+        # and spidev, and numpy is not on it.
+        #
+        # RGB565 big-endian is  RRRRRGGG GGGBBBBB, so
+        #   high = (r & 0xF8) | (g >> 5)
+        #   low  = ((g & 0x1C) << 3) | (b >> 3)
+        # Both are per-channel lookups, which is exactly what point() does.
+        # "LA" is two interleaved 8-bit planes, so merge lays the high and
+        # low bytes down in the order the panel wants with no packing loop.
+        r, g, b = Image.convert("RGB").split()
+        high = _ImageChops.add(r.point(lambda v: v & 0xF8),
+                               g.point(lambda v: v >> 5))
+        low = _ImageChops.add(g.point(lambda v: (v & 0x1C) << 3),
+                              b.point(lambda v: v >> 3))
+        pix = _Image.merge("LA", (high, low)).tobytes()
         self.SetWindows ( 0, 0, self.width, self.height)
         GPIO.output(self._dc,GPIO.HIGH)
         self._spi.writebytes2(pix)	

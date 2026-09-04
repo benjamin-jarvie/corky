@@ -70,8 +70,13 @@ def main():
     ap.add_argument("--seconds", type=float, default=90.0)
     ap.add_argument("--rotate", type=int, default=90,
                     help="degrees counter-clockwise, viewfinder only")
-    ap.add_argument("--fill", action="store_true",
-                    help="fill the panel by cropping, instead of letterboxing")
+    # Ben's call, 2026-09-04: fill the panel. The camera is mounted 90
+    # degrees to it, so an upright picture is portrait on a landscape
+    # screen; that gives up either screen width or field of view, and he
+    # chose to keep the screen. --no-fill letterboxes instead.
+    ap.add_argument("--fill", action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="fill the panel by cropping (default), or letterbox")
     parsed = ap.parse_args()
     seconds, rotate, fill = parsed.seconds, parsed.rotate, parsed.fill
 

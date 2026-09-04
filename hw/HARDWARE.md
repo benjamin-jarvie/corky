@@ -85,6 +85,28 @@ orientation, so Corky must NOT rotate before decoding: it would cost a copy
 per frame and buy nothing. Rotate for the viewfinder only, where a human has
 to aim.
 
+**The viewfinder rotates 90 and fills the panel (Ben, 2026-09-04).** An
+upright picture from a 90-degree mount is portrait, and the panel is
+landscape 4:3, so it must give up either screen width or field of view.
+Filling crops the left and right edges of the view. Ben chose the screen
+over the edges, and rejected turning the module in its mount. Time to first
+decode of the same target, measured:
+
+| viewfinder | first lock |
+|---|---|
+| none, aiming blind | 35.3s |
+| rotated, letterboxed | 29.6s |
+| rotated, filling the panel | **8.3s** |
+
+A viewfinder is not a nicety. Blind aiming got 1 read in 120s; the same
+target with a viewfinder gave 53 in 90s.
+
+**The display driver uses Pillow only, not numpy.** The RGB565 pack is four
+`point()` lookups and an `Image.merge("LA", ...)`, 14ms per 320x240 frame on
+a Zero 2 W. numpy would have been faster to write and is already on the
+board via picamera2, but it is not on the dependency list above, and that
+list is the point.
+
 ## Camera: the one place Corky must NOT copy SeedSigner
 
 SeedSigner pins `picamera==1.13`, the **legacy** camera stack, frozen to old
