@@ -46,7 +46,13 @@ flow can produce a backup of a wallet other than the one it says.
    wallet index. Verified against Core 31.1: keypool 4000 before and after.
 9. **XFP exists**: `signer.master_fingerprint`, read from public descriptors,
    shown on home since 2026-09-04.
-10. **BIP-85 is the only route from a Core key to words**, and the words open a
+10. **The codex32 identifier must NOT be the XFP.** BIP93 defines no
+    convention. The XFP is public in every PSBT and descriptor, so putting it
+    on a share links that share to an on-chain wallet and its balance,
+    defeating the point that a single share is useless. Corky's
+    `sha256(b"corky-id" + seed)[:4]` is domain-separated and one-way. Verified
+    2026-09-04; corrects an earlier recommendation of mine.
+11. **BIP-85 is the only route from a Core key to words**, and the words open a
    DIFFERENT wallet. Entropy Lab does exactly this and says so plainly.
 
 ## Decisions so far
@@ -69,6 +75,15 @@ flow can produce a backup of a wallet other than the one it says.
   your backup" and is how people write down words that hold no coins.
 - **codex32 backup belongs in Tools (Ben, 2026-09-04)**, beside BIP-85,
   rather than on the default generate path.
+
+- [02 Keep Corky's codex32, or vendor python-codex32](tickets/02-vendor-python-codex32.md)
+  — keep ours. The two implementations agree bit for bit on all five BIP93
+  vectors and all six interpolation checks, which is the best evidence
+  Corky's codex32 has had. Vendoring would pull elliptic-curve code into the
+  module that forbids it, remove `split()` which only Corky has, and buy no
+  error correction because neither does any. Corky copies BIP93's own inline
+  Python verbatim. Borrow only CRC padding as a reader heuristic, and the
+  spec's four-character-window entry rules.
 
 ## Not yet specified
 

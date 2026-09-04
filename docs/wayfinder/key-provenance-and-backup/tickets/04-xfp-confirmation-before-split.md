@@ -15,10 +15,17 @@ Decide:
    derivation and network.
 2. Whether it also names the origin from ticket 03, so the user sees WHY
    this key can be split.
-3. Whether the XFP goes ON the backup. Bails defaults the codex32 identifier
-   to the BIP32 fingerprint, so the paper names its own key. Ours derives an
-   identifier from the seed instead. Changing it makes our strings match the
-   convention and makes a share self-describing.
+3. Whether the XFP goes ON the backup. **CORRECTED 2026-09-04: I recommended
+   this and I was wrong.** Research on python-codex32 found that BIP93
+   defines NO identifier convention ("We do not define how to choose the
+   identifier"), so there is nothing to match. Worse, the XFP is public: it
+   appears in every PSBT and descriptor. Putting it on a share lets whoever
+   finds that share link it to a specific on-chain wallet and read its
+   balance, which turns an individually useless share into a targeted signal
+   worth hunting the others for. Corky's `derive_identifier` is
+   `sha256(b"corky-id" + seed)[:4]`, domain-separated and one-way. **Keep
+   it.** The open question is only whether the XFP appears on the
+   CONFIRMATION SCREEN, which is transient, not on the paper, which is not.
 4. Whether the same confirmation guards signing, not only splitting. A signer
    that cannot say which key is open invites signing with the wrong one.
 5. What the abort path is, and whether it differs from KEY2 and KEY3
