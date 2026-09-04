@@ -1,6 +1,6 @@
 """Corky's session flow: everything between seed entry and signed PSBT.
 
-This module performs no cryptography. It converts the seed via the shim,
+This module performs no cryptography. It hands Core what the user supplied,
 then drives Bitcoin Core over RPC. Core does all key derivation, all PSBT
 parsing, all fee arithmetic and all signing. Every function here is plumbing.
 
@@ -18,7 +18,6 @@ import shutil
 import time
 from decimal import Decimal
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -130,7 +129,7 @@ def open_session_xprv(rpc, xprv):
 
 def open_session_descriptors(rpc, descriptors):
     """Input mode 1: Core-native private descriptors (from a static QR).
-    Fully self-describing; no shim, no assumed derivation paths.
+    Fully self-describing; no assumed derivation paths.
     Accepts one or more descriptor strings; each becomes an active
     receive/change pair according to its own content."""
     imports = []

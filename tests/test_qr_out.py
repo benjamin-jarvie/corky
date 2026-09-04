@@ -15,7 +15,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
-sys.path.insert(0, str(ROOT / "shim"))
 from PIL import Image  # noqa: E402
 import qrchannel  # noqa: E402
 import hal  # noqa: E402

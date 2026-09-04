@@ -63,7 +63,7 @@ CASES = {
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
-    "seed-menu": lambda w, h: screens.seed_menu(w, h, 4),
+    "seed-menu": lambda w, h: screens.seed_menu(w, h, 3),
     "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
     "generate-warning": lambda w, h: screens.generate_warning(w, h),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,

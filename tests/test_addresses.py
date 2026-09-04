@@ -1,7 +1,7 @@
 """Cross-implementation address check.
 
 Derives mainnet addresses for the canonical test mnemonic through the full
-Corky path (shim -> xprv -> Core deriveaddresses) and compares them to the
+Corky path (xprv -> Core -> Core deriveaddresses) and compares them to the
 published BIP84/BIP86 test vectors that every other wallet (Sparrow, embit,
 Electrum, Trezor) derives. If these match, Corky's wallets are byte-for-byte
 interoperable with the ecosystem.

@@ -10,7 +10,6 @@ signs, then finalize + broadcast + confirm on regtest.
 
 Matrix axes
 -----------
-  seed mode : words (open_session, uses the shim)
               xprv  (open_session_xprv)
               desc  (open_session_descriptors, both script types)
   script    : BIP84 wpkh (bech32) and BIP86 tr (bech32m keyspend)
@@ -51,17 +50,6 @@ XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLro
 MINER = "miner"
 
 
-def _split_shares(seed, k, n, ident):
-    """Deterministic entropy for the split, exactly as the device does it."""
-    import hashlib
-    import hmac
-    rand = b""
-    i = 0
-    while len(rand) < 64:
-        rand += hmac.new(seed, b"corky-split-v1" + bytes([i]),
-                         hashlib.sha512).digest()
-        i += 1
-    return c32.split(seed, k, n, ident, rand[:64])
 
 
 def open_mode(rpc, mode):
@@ -184,7 +172,7 @@ def main():
 
     # A-22: the two codex modes went to the lab; "words" is now the xprv
     # the old mnemonic produced, so the same wallet is exercised.
-    modes = ["words", "xprv", "desc"]
+    modes = ["xprv", "desc"]
     scripts = [84, 86]
     input_counts = [1, 2, 10]
     shapes = ["single_change", "two_change", "single_nochange"]

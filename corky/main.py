@@ -42,7 +42,6 @@ import filechannel
 import qrchannel
 import hal
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 
 
 MAX_KEY_PAYLOAD = 4096          # a descriptor set is a few hundred chars
@@ -187,7 +186,7 @@ def _run(cmd):
 
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
-                 passphrase="", animate=False, on_device=False):
+                 animate=False, on_device=False):
         self.display = display
         self.animate = animate
         # on_device gates the two real effects of POWER OFF. The dev harness
@@ -198,7 +197,6 @@ class Session:
         self.rpc = rpc
         self.stick_dir = Path(stick_dir) if stick_dir else None
         self.qr = qr_source or DevQrSource()
-        self.passphrase = passphrase
         self.w, self.h = display.width, display.height
         #: Master fingerprint of the open wallet, or None. Refreshed
         #: whenever a flow returns, because any of them can open or close
@@ -542,18 +540,6 @@ class Session:
 
     # -- backup display ----------------------------------------------------
 
-    @staticmethod
-    def _threshold_of(share):
-        ch = share[3].lower()
-        return int(ch) if ch.isdigit() and ch != "1" else 0
-
-
-
-
-
-
-
-
 
     def _tool_generate(self):
         """Seed generation and usage EXACTLY as a Bitcoin Core wallet
@@ -892,7 +878,7 @@ def main():
     ap.add_argument("--script", default="")
     ap.add_argument("--stick-dir")
     ap.add_argument("--qr-psbt", help="dev: file of UR frames, one per line")
-    ap.add_argument("--qr-key", help="dev: file with SeedQR digits/xprv/descriptor")
+    ap.add_argument("--qr-key", help="dev: file with an xprv or descriptor")
     ap.add_argument("--frames-dir", default="frames")
     args = ap.parse_args()
 

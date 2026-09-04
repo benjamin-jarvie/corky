@@ -13,7 +13,7 @@ signing are done by the same reviewed C++ code that runs the Bitcoin network's
 reference node. No reimplementation of wallet logic.
 
 The device holds nothing. The wallet lives on a ramdisk, the seed is entered
-each session (words or SeedQR), and power-off wipes everything.
+each session (an xprv or a descriptor), and power-off wipes everything.
 
 ## What Corky aims to achieve
 
@@ -49,7 +49,7 @@ all three: **relocate trust to places where lying is hard.**
   descriptor backs up a *wallet* (path, script type, checksum). Corky
   exports public descriptors precisely so the paper half of your backup
   can exist, and its descriptor entry mode means a Core-native backup
-  restores with zero guessing and zero shim.
+  restores with zero guessing.
 
 The Core bet is stated as a bet: Core is at once the most reviewed wallet
 code in existence and Bitcoin's most valuable infiltration target. Whether
@@ -61,44 +61,36 @@ concede. Corky holds the Core side with its eyes open.
 
 ## What you are trusting — stated plainly, not in fine print
 
-**One thing in Corky is not Bitcoin Core, and it sees your seed words.**
+**Nothing in Corky touches your key.**
 
-Bitcoin Core does not read BIP39 seed words and its developers have said it
-never will. So Corky carries a translator: `shim/bip39_shim.py` (lab branch),
-about 100 lines including comments, which turns your words into the xprv format
-Core imports. Know exactly what it is:
+That used to be almost true. Corky carried one translator, because Bitcoin
+Core does not read BIP39 seed words and its developers have said it never
+will, so something had to turn words into the xprv Core imports. PLAN A-22
+removed it. This build cannot read a seed phrase at all.
 
-- It uses **only Python's standard library hashing** (PBKDF2, HMAC-SHA512).
-  No third-party crypto libraries. No elliptic-curve math anywhere in it.
-- Its output is checked automatically against the **official BIP39 and BIP32
-  test vectors** (`shim/test_shim.py`). A single wrong bit produces a wallet
-  whose addresses do not match yours, which you would see immediately.
-- It runs on a device with **no radio and no persistent storage**, so even a
-  hostile version of it would have nowhere to send anything and nowhere to
-  hide anything.
-- It is **frozen**. Any change must re-pass the vectors and update the hash
-  recorded below.
+What is left is a body of code that draws screens, reads buttons, and carries
+bytes between you and Bitcoin Core:
 
-Every operation after the translator — deriving child keys, checking the
-transaction, signing — happens inside Bitcoin Core.
+- **No cryptographic primitive is imported anywhere in `corky/`.** Not
+  `hashlib`, not `hmac`, not `secrets`, not any curve library. Enforced by
+  [`tests/test_integrity.py`](tests/test_integrity.py), which fails if one
+  reappears.
+- **Keys reach Core three ways and Corky transforms none of them.** Core
+  generates one with its own RNG; or you supply an **xprv** or a
+  **descriptor**, typed or scanned, which Corky hands to `importdescriptors`
+  as the string you gave it.
+- Every operation on a key — deriving children, checking the transaction,
+  signing — happens inside Bitcoin Core.
 
-If you cannot accept those ~100 lines, Corky is not for you, and that is a
-legitimate position: use a signer whose whole stack you prefer. Corky's claim
-is not "trustless". It is: **you trust Bitcoin Core's wallet implementation
-instead of a rewrite of it, plus one small, frozen, vector-tested hashing file
-that we show you.**
+**The cost, said plainly.** You cannot bring a 12 or 24 word seed phrase.
+Nobody can move here from an existing hardware wallet by typing their words.
+Your backup is Core's 111-character master xprv, and it cannot be split into
+shares. If that is unacceptable, the `lab` branch keeps the translator,
+codex32 and SeedQR, and is meant for people who read code.
 
-Shim integrity:
-
-```
-shasum -a 256 shim/bip39_shim.py shim/english.txt
-```
-
-The wordlist must hash to the canonical BIP39 value
-`2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`
-(the shim refuses to run otherwise). The shim's own current hash is recorded
-in `SHIM_HASH` at the repo root and updated only with a passing vector run.
-
+Corky's claim is not "trustless". It is: **you trust Bitcoin Core's wallet
+implementation instead of a rewrite of it, and nothing else of ours computes
+on your key, because there is no such code to compute with.**
 
 ## The freedom property
 
@@ -221,9 +213,9 @@ That is the mitigation, not a cure, for a small project's maintenance risk.
 ## v1 scope (frozen)
 
 Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
-passphrase. Seed entry in three modes: BIP39 words / SeedQR (default; uses
-the shim), a raw **xprv**, or a **Core-native private descriptor** — the last
-two arrive as a single static QR or typed text and never touch the shim at
+passphrase. Key entry in two forms: a raw **xprv** or a **Core-native
+private descriptor**, each arriving as a static QR or typed on the grid,
+and neither transformed by anything of ours at
 all: pure Core from the first byte. (Descriptor mode is the answer to
 Maxwell's BIP39 critique: the backup carries its own derivation path, script
 type and checksum. Its trade-off: it is a printed/engraved QR, not stampable
@@ -261,7 +253,7 @@ asks Bitcoin Core for the entropy and gives you a codex32 string to write
 down. See PLAN A-19 for the tradeoff, stated plainly.
 
 
-## The code, in layers: Core + 354 lines that matter + a body
+## The code, in layers: Core, and a body that never touches your key
 
 Corky is Bitcoin Core plus a small body of our Python. The body is
 layered so the number that matters for trust stays tiny. Counted
@@ -288,30 +280,29 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1101 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1065 lines.**
 The device's body: menus, screens, buttons. It routes and displays key
 material during entry and backup but performs no arithmetic on it.
-[`corky/main.py`](corky/main.py) (578) ·
-[`corky/screens.py`](corky/screens.py) (453) ·
+[`corky/main.py`](corky/main.py) (572) ·
+[`corky/screens.py`](corky/screens.py) (423) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
 
-**Layer 3 — never touches secrets at all. 395 lines.**
-[`corky/signer.py`](corky/signer.py) (166) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 394 lines.**
+[`corky/signer.py`](corky/signer.py) (165) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 1,496 lines** (2,508 with blanks/comments).
+**Total functional code: 1,459 lines** (2,462 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 2,597 lines — none of it ships on the device.**
+**Test code: 2,572 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
-than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent
-implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
+than device is deliberate: a 36-cell signing matrix, 15 adversarial
+checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never
 type the ms1 separator; the flow was unusable until session G existed) —

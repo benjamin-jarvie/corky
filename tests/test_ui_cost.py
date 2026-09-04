@@ -239,30 +239,9 @@ for keys, want, why in cases:
 
 
 
-# NO is the default, so a single A must never open the text grid.
-
-
-# YES opens the grid; typing z then centre-press returns it.
-zi = screens.charset_pages("passphrase")
-zpage = next(i for i, pg in enumerate(zi) if "z" in pg)
-keys = ["r", "a"]                       # NO -> YES, then open the grid
-cur, page = 0, 0
-while page < zpage:                     # r past the end turns the page
-    while cur < len(zi[page]) - 1:
-        keys.append("r"); cur += 1
-    keys.append("r"); page += 1; cur = 0
-ti = zi[zpage].index("z")
-while cur + 8 <= ti:
-    keys.append("d"); cur = min(len(zi[page]) - 1, cur + 8)
-while cur < ti:
-    keys.append("r"); cur += 1
-keys.append("a")                        # type it
-keys.append("p")                        # centre press = done
-
-# CANCEL on the grid must give no passphrase, not the characters typed.
-cancel_keys = ["r", "a", "a", "c", "a"]   # YES, type one char, C -> bar, A
-# the bar lands on DONE, so move to CANCEL first: C then L then A
-cancel_keys = ["r", "a", "a", "c", "l", "a"]
+# A-22: the passphrase entry checks lived here. The prompt was a BIP39
+# concept and went with it, and this scaffolding computed key sequences
+# for assertions that were already gone.
 
 
 print(f"\n{len(fails)} failure(s)")

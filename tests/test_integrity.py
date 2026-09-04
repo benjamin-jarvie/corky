@@ -42,7 +42,16 @@ check("absent: the whole shim/ directory", not (ROOT / "shim").exists())
 #    hashing, no HMAC, no key stretching: Core does all of it.
 BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "ecdsa", "coincurve",
                   "bip32", "cryptography", "nacl"}
-for src in sorted((ROOT / "corky").glob("*.py")):
+# Every shipped .py, wherever it lives. The first version of this scanned
+# corky/*.py only, so a reintroduced Layer 1 in a new top-level directory
+# would have passed. Found by the A-22 spec review, 2026-09-04.
+SHIPPED = sorted(p for p in ROOT.rglob("*.py")
+                 if not any(part in {"tests", "hw", ".git", "m0", "tools",
+                                     "image", "docs"} or part.startswith(".")
+                            for part in p.relative_to(ROOT).parts))
+check("shipped modules found", len(SHIPPED) >= 7, f"{len(SHIPPED)} files")
+
+for src in SHIPPED:
     found = set()
     for node in ast.walk(ast.parse(src.read_text())):
         if isinstance(node, ast.Import):
@@ -50,17 +59,17 @@ for src in sorted((ROOT / "corky").glob("*.py")):
         elif isinstance(node, ast.ImportFrom) and node.module:
             found.add(node.module.split(".")[0])
     bad = found & BANNED_IMPORTS
-    check(f"no crypto import: corky/{src.name}", not bad,
+    check(f"no crypto import: {src.relative_to(ROOT)}", not bad,
           f"found {sorted(bad)}" if bad else "")
 
 # 3. No key-derivation vocabulary survives in the shipped code. A rename
 #    would not hide the intent; this catches the obvious reintroduction.
 BANNED_TEXT = ("pbkdf2", "mnemonic_to_", "seed_to_xprv", "Bitcoin seed",
                "BIP39_WORDLIST", "load_wordlist")
-for src in sorted((ROOT / "corky").glob("*.py")):
+for src in SHIPPED:
     body = src.read_text()
     hits = [t for t in BANNED_TEXT if t in body]
-    check(f"no derivation code: corky/{src.name}", not hits,
+    check(f"no derivation code: {src.relative_to(ROOT)}", not hits,
           f"found {hits}" if hits else "")
 
 # 4. The one thing Corky may do with a key is hand it to Core untouched.

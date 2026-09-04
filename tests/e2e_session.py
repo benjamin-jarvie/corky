@@ -12,7 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
-sys.path.insert(0, str(ROOT / "shim"))
 import signer  # noqa: E402
 import qrchannel  # noqa: E402
 

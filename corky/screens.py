@@ -297,12 +297,11 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
     return img
 
 
-ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
 
 
 
-def busy(w, h, message="checking words, deriving in Core…", phase=0):
+def busy(w, h, message="working…", phase=0):
     """The wait frame: the brand mark, turning while Core works. phase
     advances the rotation; the dev harness renders phase 0 only, the
     device animates from a thread (main._busy)."""
@@ -410,8 +409,7 @@ def seed_menu(w, h, selected=0):
     """Choose the key input mode. A-22: only forms Core understands."""
     img, d = _frame(w, h, "LOAD  KEY")
     options = SEED_MENU_OPTIONS
-    # Eight modes now (typed xprv/descriptor joined the scanned ones), so
-    # the rows are pitched to fit the panel rather than a fixed 0.115.
+    # Rows are pitched to fit the panel rather than a fixed 0.115.
     top, bottom = 0.155, 0.94
     pitch = (bottom - top) / max(len(options) - 1, 1)
     for i, (label, note) in enumerate(options):
@@ -449,7 +447,7 @@ MIN_BODY = 0.068          # fraction of panel height (16px at 240)
 GEN_VISIBLE = 5           # wrapped lines on screen at once; U/D scroll
 
 
-def generate_body(d, w, h):
+def _generate_body(d, w, h):
     """GENERATE_LINES wrapped to the panel at the minimum readable size.
 
     A blank line between each source line (Ben, 2026-09-04). Wrapping turns
@@ -468,7 +466,7 @@ def generate_scroll_max(w, h):
     """How far the body can scroll. main.py must ask, because wrapping
     means the line count depends on the panel, not on GENERATE_LINES."""
     img = Image.new("RGB", (w, h))
-    return max(0, len(generate_body(ImageDraw.Draw(img), w, h)) - GEN_VISIBLE)
+    return max(0, len(_generate_body(ImageDraw.Draw(img), w, h)) - GEN_VISIBLE)
 
 
 def generate_warning(w, h, selected=1, scroll=0):
@@ -478,7 +476,7 @@ def generate_warning(w, h, selected=1, scroll=0):
     img, d = _frame(w, h, "GENERATE  A  KEY")
     _fit(d, (w // 2, int(h * 0.22)), "Entropy comes from Bitcoin Core.",
          int(h * 0.065), OCHRE, "mm", int(w * 0.94))
-    body = generate_body(d, w, h)
+    body = _generate_body(d, w, h)
     last = min(scroll + GEN_VISIBLE, len(body))
     visible = body[scroll:last]
     size = int(h * MIN_BODY)
@@ -519,7 +517,6 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent))
-BECH32_CHARSET = "023456789acdefghjklmnpqrstuvwxyz"  # A-22: was imported from codex32
 
 
 # One alphabet per job. A single 64-cell set could not serve all three:
@@ -530,11 +527,12 @@ CELLS_PER_PAGE = 32          # 8 columns x 4 rows, above the action bar
 BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
           "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l
 DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
-PASSPHRASE_CHARSET = "".join(chr(c) for c in range(32, 127))  # 95, incl space
 
+
+# A-22: the passphrase charset went with the BIP39 passphrase prompt. An
+# xprv and a descriptor are the only things typed on this device now.
 CHARSETS = {"xprv": BASE58,
-            "descriptor": DESCRIPTOR_CHARSET,
-            "passphrase": PASSPHRASE_CHARSET}
+            "descriptor": DESCRIPTOR_CHARSET}
 
 
 def charset_pages(name):
@@ -544,7 +542,7 @@ def charset_pages(name):
             for i in range(0, len(cs), CELLS_PER_PAGE)]
 
 
-def text_entry(w, h, title, text, cursor=0, charset="passphrase", page=0,
+def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
                secret=False, actions_sel=1):
     """Text on a paged 8x4 grid: passphrases (S2) and typed xprv or
     descriptor strings (S3). `secret=True` masks the echo, since a
@@ -579,19 +577,6 @@ def text_entry(w, h, title, text, cursor=0, charset="passphrase", page=0,
     return img
 
 
-def passphrase_prompt(w, h, selected=0):
-    """BIP39 passphrase is optional and changes the wallet completely."""
-    img, d = _frame(w, h, "PASSPHRASE")
-    _fit(d, (w // 2, int(h * 0.30)), "Add a BIP39 passphrase?",
-         int(h * 0.065), OCHRE, "mm", int(w * 0.94))
-    for i, line in enumerate([
-            "A passphrase makes a different wallet.",
-            "There is no check on it: mistype it and",
-            "you open an empty wallet with no warning."]):
-        _fit(d, (w // 2, int(h * (0.44 + i * 0.075))), line,
-             int(h * 0.045), CREAM, "mm", int(w * 0.94))
-    _actions(d, w, h, ["NO", "YES"], selected)
-    return img
 
 
 
@@ -623,11 +608,6 @@ def share_pages(text):
 
 
 
-def address_lines(address, per_line=22):
-    """An address broken across lines that fit the panel. Returned as one
-    string with newlines so callers stay simple."""
-    return "\n".join(address[i:i + per_line]
-                      for i in range(0, len(address), per_line))
 
 
 
@@ -670,17 +650,6 @@ def splash(w, h):
 # thing paged across the panel. They are generic: A-22 keeps them for
 # Core's master xprv, which is the pure signer's only backup.
 
-def entry_error(w, h, detail="checksum failed at position 31"):
-    img, d = _frame(w, h)
-    _status_circle(img, d, w, h, "INVALID", RED)
-    _fit(d, (w // 2, int(h * 0.64)), detail, int(h * 0.055), CREAM, "mm",
-         int(w * 0.92))
-    d.text((w // 2, int(h * 0.72)), "detection only: this device never",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.78)), "guesses corrections to key material",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    _actions(d, w, h, ["BACK", "RE-ENTER"], 1)
-    return img
 
 def backup_page(w, h,
                           share="MS12NAMEA320ZYXRPP5QSRJG",
@@ -704,15 +673,15 @@ def backup_page(w, h,
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     else:
         _fit(d, (w // 2, int(h * 0.79)),
-             "the codex32 kit worksheets own paper",
+             "paper you keep, not this device",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     _actions(d, w, h,
              ["ABORT" if page == 0 else "BACK",
               "NEXT" if page + 1 < pages else "VERIFY"], 1)
     return img
 
-def verified(w, h, kind="share 2 of 3"):
-    """`kind` may carry newlines (see address_lines); each line is fitted."""
+def verified(w, h, kind="ok"):
+    """`kind` may carry newlines; each line is fitted separately."""
     img, d = _frame(w, h)
     _status_circle(img, d, w, h, "VALID", OCHRE)
     for i, line in enumerate(kind.split("\n")):

@@ -50,7 +50,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        # 1. Corky session from words
+        # 1. Corky session from an xprv
         signer.open_session_xprv(rpc, XPRV)
         pubs = signer.public_descriptors(rpc)
         assert len(pubs) == 4 and not any("prv" in d for d in pubs), \
