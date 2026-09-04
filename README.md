@@ -64,7 +64,7 @@ concede. Corky holds the Core side with its eyes open.
 **One thing in Corky is not Bitcoin Core, and it sees your seed words.**
 
 Bitcoin Core does not read BIP39 seed words and its developers have said it
-never will. So Corky carries a translator: [`shim/bip39_shim.py`](shim/bip39_shim.py),
+never will. So Corky carries a translator: `shim/bip39_shim.py` (lab branch),
 about 100 lines including comments, which turns your words into the xprv format
 Core imports. Know exactly what it is:
 
@@ -268,44 +268,49 @@ layered so the number that matters for trust stays tiny. Counted
 2026-08-20 as lines of functional code (blanks and comments excluded);
 file links are the audit map.
 
-**Layer 1 — transforms secret material. 354 lines. Frozen, hash-pinned.**
-The only code of ours that ever computes on a seed or key. Stdlib only,
-no elliptic-curve math anywhere, hashes pinned in
-[`SHIM_HASH`](SHIM_HASH) and enforced by
-[`tests/test_integrity.py`](tests/test_integrity.py):
+**Layer 1 — transforms secret material. 0 lines.**
+There is none. PLAN A-22 removed the BIP39 shim, codex32 and SeedQR from
+this build: nothing here computes on a seed or a key. Keys reach Core
+three ways and Corky transforms none of them — Core generates one with
+its own RNG, or you supply an **xprv** or a **descriptor**, typed or
+scanned, which Corky hands to `importdescriptors` as an opaque string.
 
-| File | Code lines | Does |
-|---|---|---|
-| [`shim/bip39_shim.py`](shim/bip39_shim.py) | 54 | BIP39 words → xprv |
-| [`corky/codex32.py`](corky/codex32.py) | 260 | BIP93: the BIP's own reference arithmetic |
-| [`corky/seedqr.py`](corky/seedqr.py) | 40 | SeedQR digits → words |
+That is not a claim about care taken. It is enforced:
+[`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped
+module imports `hashlib`, `hmac`, `secrets` or any curve library, or if
+the words `pbkdf2`, `seed_to_xprv` or `Bitcoin seed` reappear anywhere in
+[`corky/`](corky/).
 
-Enter by descriptor or xprv and even this layer is bypassed: pure Core.
-Words-only users trust Core + 54 lines — the original pitch, still true.
+The cost is real and deliberate: **this build cannot accept a 12 or 24
+word seed phrase**, so nobody can bring words from an existing hardware
+wallet, and a backup is Core's 111-character master xprv rather than
+words. The `lab` branch carries the removed modules for people who want
+codex32, BIP-85 and more, and merges `main` forward so every fix here
+reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1471 lines.**
-The device's body: menus, screens, buttons. It routes and displays
-secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (822) ·
-[`corky/screens.py`](corky/screens.py) (579) ·
+**Layer 2 — sees secrets, computes nothing with them. 1101 lines.**
+The device's body: menus, screens, buttons. It routes and displays key
+material during entry and backup but performs no arithmetic on it.
+[`corky/main.py`](corky/main.py) (578) ·
+[`corky/screens.py`](corky/screens.py) (453) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
 
-**Layer 3 — never touches secrets at all. 402 lines.**
-[`corky/signer.py`](corky/signer.py) (173) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 395 lines.**
+[`corky/signer.py`](corky/signer.py) (166) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,227 lines** (3,457 with blanks/comments).
-A bug in layers 2–3 can annoy you; it cannot leak what it never
-algebraically touches.
+**Total functional code: 1,496 lines** (2,508 with blanks/comments).
+A bug in either layer can show you the wrong thing. Neither can compute
+you the wrong key, because neither computes keys at all.
 
-**Test code: 3,479 lines — none of it ships on the device.**
-[`tests/`](tests/) + [`shim/test_shim.py`](shim/test_shim.py). More test
+**Test code: 2,597 lines — none of it ships on the device.**
+[`tests/`](tests/). More test
 than device is deliberate: a 90-cell signing matrix, 28 adversarial
-checks, 17 scripted device sessions, property/fuzz suites cross-checked against independent
+checks, 9 scripted device sessions, property/fuzz suites cross-checked against independent
 implementations, per-module mutation kill-rates — 74–100% on secret-touching modules,
 and 25%→81% on the state machine after mutation-driven test writing
 there exposed and fixed a real bug (typed codex32 entry could never

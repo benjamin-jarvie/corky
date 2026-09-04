@@ -2,7 +2,7 @@
 
 States:
   HOME (2x2: load key / key generation / tools / settings)
-    -> LOAD KEY (A-14's modes: descriptor, xprv, codex32, SeedQR, words;
+    -> LOAD KEY (A-22: descriptor or xprv, typed or scanned;
        scanned or typed) or KEY GENERATION (A-19)
     -> key open in Core -> LOAD PSBT (file channel or QR)
     -> REVIEW -> sign -> RESULT, which offers SIGN ANOTHER (back to LOAD
@@ -38,14 +38,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import signer
 import screens
-import codex32
 import filechannel
 import qrchannel
-import seedqr
 import hal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
-from bip39_shim import load_wordlist  # noqa: E402  (word entry candidates)
 
 
 MAX_KEY_PAYLOAD = 4096          # a descriptor set is a few hundred chars
@@ -203,7 +200,6 @@ class Session:
         self.qr = qr_source or DevQrSource()
         self.passphrase = passphrase
         self.w, self.h = display.width, display.height
-        self.wordlist = load_wordlist()
         #: Master fingerprint of the open wallet, or None. Refreshed
         #: whenever a flow returns, because any of them can open or close
         #: a key.
@@ -339,9 +335,11 @@ class Session:
                 # a second generate in one session read as "it bailed").
                 # Say what went wrong and return to home instead.
                 try:
+                    # A-22: Tools held only codex32 verify and backup, both
+                    # of which moved to the lab. Its tile is now inert.
                     opened = [self.state_seed_menu,  # 0 load key
                               self._seed_generate,   # 1 key generation
-                              self.state_tools       # 2 tools
+                              lambda: False          # 2 tools (empty, A-22)
                               ][selected]()
                 except RuntimeError as exc:
                     self._show_core_error(exc)
@@ -387,18 +385,20 @@ class Session:
         while True:
             self.display.show(screens.seed_menu(self.w, self.h, selected))
             key = self.buttons.read()
+            n = len(screens.SEED_MENU_OPTIONS)
             if key == "u":
-                selected = (selected - 1) % 8
+                selected = (selected - 1) % n
             elif key == "d":
-                selected = (selected + 1) % 8
+                selected = (selected + 1) % n
             elif key == "b":
                 return False
             elif key in ("a", "p"):
                 try:
+                    # PLAN A-22: only what Core understands. Corky hands each
+                    # of these to importdescriptors as an opaque string.
                     return [self._seed_descriptor, self._seed_xprv,
-                            self._seed_descriptor_typed, self._seed_xprv_typed,
-                            self._seed_codex32_scan, self._seed_codex32_type,
-                            self._seed_seedqr, self._seed_words][selected]()
+                            self._seed_descriptor_typed,
+                            self._seed_xprv_typed][selected]()
                 except Exception as exc:
                     # Hold the message: without a key wait the home screen
                     # repaints immediately and the user sees only a flicker.
@@ -412,43 +412,10 @@ class Session:
         backup shows, the session stays open. Same flow as the tools entry."""
         return bool(self._tool_generate())
 
-    def _open_words(self, mnemonic):
-        # S2: the passphrase is asked for here, so every words-based mode
-        # (typed and SeedQR) offers it on the same screen.
-        self.passphrase = self._ask_passphrase()
-        stop = self._busy("checking words, deriving in Core…")
-        try:
-            signer.open_session(self.rpc, mnemonic, self.passphrase)
-        finally:
-            stop()
-        return True
-
-    def _seed_seedqr(self):
-        self.display.show(screens.busy(self.w, self.h, "scan your SeedQR…"))
-        raw = self.qr.scan_key()
-        if len(raw) > MAX_KEY_PAYLOAD:
-            raise RuntimeError("SeedQR payload too large, refusing")
-        return self._open_words(seedqr.decode(raw))
-
-    def _seed_words(self):
-        """Button-driven word entry (see _collect_words for the loop)."""
-        words = self._collect_words()
-        if not words:
-            return False
-        return self._open_words(" ".join(words))
 
 
-    def _pick_seed_length(self):
-        selected = 0
-        while True:
-            self.display.show(screens.seed_length(self.w, self.h, selected))
-            key = self.buttons.read()
-            if key in ("u", "d"):
-                selected = 1 - selected
-            elif key in ("a", "p"):
-                return 12 if selected == 0 else 24
-            elif key == "b":
-                return None
+
+
 
     def _text_entry(self, title, charset, secret=False):
         """Drive the paged text grid for one alphabet.
@@ -504,23 +471,6 @@ class Session:
             elif key == "c":
                 sel = 1              # jump to the action bar
 
-    def _ask_passphrase(self):
-        """S2: offer a BIP39 passphrase before deriving. Returns the
-        passphrase (possibly empty). A passphrase cannot be verified by the
-        device, so the screen says what it does before it is typed."""
-        sel = 0
-        while True:
-            self.display.show(screens.passphrase_prompt(self.w, self.h, sel))
-            key = self.buttons.read()
-            if key in ("l", "r"):
-                sel = 1 - sel
-            elif key in ("b", "c"):
-                return ""
-            elif key in ("a", "p"):
-                if sel == 0:
-                    return ""
-                return self._text_entry("PASSPHRASE", "passphrase",
-                                        secret=True) or ""
 
     def _keymaterial(self, kind):
         """Warning screen (A-14: the QR IS the wallet), then scan."""
@@ -534,6 +484,22 @@ class Session:
                 return payload
             if key in ("b", "c"):
                 return None
+
+    def _scan_key_guarded(self):
+        """The single guarded reader for camera key payloads: length cap
+        and charset check before anything downstream sees it (PLAN A-11).
+
+        A-22 note: this survives the pure-signer cut. It guards the xprv and
+        descriptor scans, which are Core-native forms; only the modes that
+        TRANSFORMED what they read went to the lab.
+        """
+        raw = self.qr.scan_key()
+        if len(raw) > MAX_KEY_PAYLOAD:
+            raise RuntimeError("key payload too large, refusing")
+        text = raw.decode("ascii")
+        if not set(text) <= _KEY_CHARSET:
+            raise RuntimeError("key payload has invalid characters")
+        return text
 
     def _seed_descriptor(self):
         payload = self._keymaterial("descriptor")
@@ -574,210 +540,20 @@ class Session:
         signer.open_session_xprv(self.rpc, payload)
         return True
 
-    # -- codex32 (A-18): import, entry, tools ------------------------------
+    # -- backup display ----------------------------------------------------
 
     @staticmethod
     def _threshold_of(share):
         ch = share[3].lower()
         return int(ch) if ch.isdigit() and ch != "1" else 0
 
-    def _codex32_open(self, shares):
-        """Open the wallet from one codex32 secret or k shares. Pure BIP32:
-        seed -> xprv via the frozen modules; Core does the rest."""
-        self.display.show(screens.busy(self.w, self.h,
-                                       "recovering seed, deriving in Core…"))
-        if len(shares) == 1 and self._threshold_of(shares[0]) == 0:
-            _, seed = codex32.decode_secret(shares[0])
-        else:
-            secret = codex32.recover(shares)
-            _, seed = codex32.decode_secret(secret)
-        xprv = codex32.to_xprv(seed, mainnet=(self.rpc.chain == "main"))
-        signer.open_session_xprv(self.rpc, xprv)
-        return True
 
-    def _scan_key_guarded(self):
-        """The single guarded reader for camera key payloads: length cap
-        and charset check before anything downstream sees it (PLAN A-11)."""
-        raw = self.qr.scan_key()
-        if len(raw) > MAX_KEY_PAYLOAD:
-            raise RuntimeError("key payload too large, refusing")
-        text = raw.decode("ascii")
-        if not set(text) <= _KEY_CHARSET:
-            raise RuntimeError("key payload has invalid characters")
-        return text
 
-    def _seed_codex32_scan(self):
-        self.display.show(screens.codex32_scan(self.w, self.h))
-        payload = self._scan_key_guarded()
-        shares = [ln.strip() for ln in payload.splitlines() if ln.strip()]
-        shares = [codex32.validate(sh) for sh in shares]
-        return self._codex32_open(shares)
 
-    def _seed_codex32_type(self):
-        shares = []
-        need = None
-        self._retry_share = None
-        while need is None or len(shares) < need:
-            self.display.show(screens.codex32_shares(
-                self.w, self.h,
-                tuple(sh[8].upper() for sh in shares), need or "?"))
-            entered = self._codex32_entry_one(self._retry_share)
-            self._retry_share = None
-            if entered is None:
-                return False
-            try:
-                sh = codex32.validate(entered)
-            except codex32.Codex32Error as exc:
-                # Bad checksum or format: offer edit-in-place on the same
-                # string (A re-enters keeping it, B/C abort).
-                self.display.show(screens.codex32_error(
-                    self.w, self.h, str(exc)[:48]))
-                if self.buttons.read() != "a":
-                    return False
-                self._retry_share = entered
-                continue
-            if sh in shares:
-                # A valid but already-held share: retype fresh, not edit.
-                self.display.show(screens.codex32_error(
-                    self.w, self.h, "duplicate share"))
-                if self.buttons.read() != "a":
-                    return False
-                continue
-            t = self._threshold_of(sh)
-            if t == 0:
-                return self._codex32_open([sh])
-            need = need or t
-            shares.append(sh)
-            self.display.show(screens.codex32_verified(
-                self.w, self.h, f"share {len(shares)} of {need}"))
-            self.buttons.read()
-        return self._codex32_open(shares)
 
-    def _codex32_entry_one(self, prefill=None):
-        """Grid entry with an editable caret.
 
-        U/D move the grid row, L/R move the CARET along the typed string
-        (the character shown in gold). A writes the grid letter at the caret
-        and advances, so fresh typing at the end appends and a caret parked
-        mid-string overwrites one character in place. B deletes at the caret,
-        C finishes (empty = abort). `prefill` re-opens a rejected share so
-        only the wrong character is fixed, not all of it retyped. The 'ms1'
-        prefix is fixed and the caret never enters it."""
-        entered = prefill if prefill else "ms1"
-        caret, cursor = len(entered), 0
-        while True:
-            self.display.show(screens.codex32_entry(
-                self.w, self.h, entered, cursor, caret), sensitive=True)
-            key = self.buttons.read()
-            if key == "u":
-                cursor = (cursor - 8) % 32
-            elif key == "d":
-                cursor = (cursor + 8) % 32
-            elif key == "l":
-                cursor = (cursor - 1) % 32
-            elif key == "r":
-                cursor = (cursor + 1) % 32
-            elif key == "p":
-                # Center-press walks the edit caret left, wrapping past the
-                # start back to the append slot: reach any character to fix
-                # it with the grid, using one key.
-                caret = len(entered) if caret <= 3 else caret - 1
-            elif key == "a":
-                ch = screens.BECH32_CHARSET[cursor]
-                if caret == len(entered):
-                    entered += ch
-                else:
-                    entered = entered[:caret] + ch + entered[caret + 1:]
-                caret += 1
-            elif key == "b":
-                if caret < len(entered):
-                    entered = entered[:caret] + entered[caret + 1:]
-                elif len(entered) > 3:
-                    entered = entered[:-1]
-                    caret = len(entered)
-            elif key == "c":
-                return entered if len(entered) > 3 else None
 
-    def state_tools(self) -> bool:
-        """Returns True only when a tool left a wallet open in Core."""
-        selected = 0
-        tools = [self._tool_verify, self._tool_backup]
-        while True:
-            self.display.show(screens.tools_menu(self.w, self.h, selected))
-            key = self.buttons.read()
-            if key == "u":
-                selected = (selected - 1) % len(tools)
-            elif key == "d":
-                selected = (selected + 1) % len(tools)
-            elif key == "b":
-                return False
-            elif key in ("a", "p"):
-                try:
-                    return bool(tools[selected]())
-                except Exception as exc:
-                    self.display.show(screens.result(
-                        self.w, self.h, ok=False, detail=str(exc)[:60]))
-                    self.buttons.read()
-                return False
 
-    def _tool_verify(self):
-        """The zero-re-exposure check: checksum only, nothing derived.
-        Entry is by grid; C on an empty grid aborts (it must not fall
-        through to the camera, which would dead-end on hardware)."""
-        prefill = None
-        while True:
-            entered = self._codex32_entry_one(prefill)
-            if entered is None:
-                return
-            try:
-                codex32.validate(entered)
-                self.display.show(screens.codex32_verified(
-                    self.w, self.h, "checksum valid"))
-                self.buttons.read()
-                return
-            except codex32.Codex32Error as exc:
-                self.display.show(screens.codex32_error(
-                    self.w, self.h, str(exc)[:48]))
-                # A re-enters keeping the string (RE-ENTER), B/C abort.
-                if self.buttons.read() != "a":
-                    return
-                prefill = entered
-
-    def _tool_backup(self):
-        """Words in -> codex32 out (one string, or a 2-of-3 split).
-        Split randomness is derived deterministically from the seed itself
-        (HMAC-SHA512, domain-separated): no device RNG exists or is used,
-        per the no-entropy-story doctrine; deterministic shares re-derive
-        identically, which also makes the backup reproducible."""
-        words = self._collect_words()
-        if not words:
-            return
-        from bip39_shim import mnemonic_to_seed
-        # The FULL 64-byte BIP39 seed. Truncating to 32 would encode a
-        # different master key than the words produce, so a restore from
-        # the share would silently open a DIFFERENT WALLET. codex32
-        # (BIP93) encodes 16-64 byte seeds, so no truncation is needed.
-        # The passphrase is part of the seed: backing up without asking
-        # would encode a DIFFERENT wallet than the words plus passphrase
-        # open. Ask here too, exactly as the load path does.
-        seed = mnemonic_to_seed(" ".join(words), self._ask_passphrase())
-        ident = codex32.derive_identifier(seed)
-        secret = codex32.encode_secret(ident, seed, threshold=0)
-        choice = self._pick_split()
-        if choice is None:
-            return
-        if choice == 0:
-            outputs = [secret]
-        else:
-            outputs = codex32.split(seed, 2, 3, ident,
-                                    codex32.derive_split_entropy(seed, 2, 3))
-        for i, out in enumerate(outputs):
-            if not self._show_backup(out.upper(), i + 1, len(outputs)):
-                return
-        self.display.show(screens.result(
-            self.w, self.h, ok=True,
-            detail="transcribed; kit worksheets own paper"))
-        self.buttons.read()
 
     def _tool_generate(self):
         """Seed generation and usage EXACTLY as a Bitcoin Core wallet
@@ -816,13 +592,13 @@ class Session:
             stop()
         # The backup IS the master xprv, in Core's own encoding, shown in
         # 4-char groups for transcription. No split option: an xprv is a
-        # BIP32 node, not a seed, so codex32 cannot encode it; guardians
-        # of an xprv backup use Kaitiaki or the kit's practices instead.
+        # BIP32 node, not a seed, so there is nothing to split. A-22: the
+        # pure signer's only backup is this string.
         if not self._show_backup(xprv, 1, 1):
             signer.close_session(self.rpc)
             return False
         address = self.rpc.call("getnewaddress", wallet=signer.WALLET)
-        self.display.show(screens.codex32_verified(
+        self.display.show(screens.verified(
             self.w, self.h,
             "first address  " + address[:14] + "…" + address[-6:]))
         self.buttons.read()
@@ -831,15 +607,15 @@ class Session:
     def _show_backup(self, text, index, total):
         """Show one backup string across as many screenfuls as it needs.
 
-        A 127-character codex32 secret and Core's 111-character master xprv
-        both overrun one screen; drawing them as one column asked the user to
-        transcribe characters that were never on the panel. A advances and
+        Core's 111-character master xprv overruns one screen; drawing it as
+        one column asked the user to transcribe characters that were never
+        on the panel. A advances and
         finishes on the last page, B or UP re-shows the previous page for
         checking against paper, C aborts. Returns False on abort."""
         pages = screens.share_pages(text)
         i = 0
         while True:
-            self.display.show(screens.codex32_share_display(
+            self.display.show(screens.backup_page(
                 self.w, self.h, pages[i], index, total,
                 page=i, pages=len(pages)), sensitive=True)
             key = self.buttons.read()
@@ -854,61 +630,7 @@ class Session:
                     return True
                 i += 1
 
-    def _pick_split(self):
-        selected = 0
-        while True:
-            self.display.show(screens.codex32_split_choice(
-                self.w, self.h, selected))
-            key = self.buttons.read()
-            if key in ("u", "d"):
-                selected = 1 - selected
-            elif key in ("a", "p"):
-                return selected
-            elif key == "b":
-                return None
 
-    def _collect_words(self):
-        total = self._pick_seed_length()
-        if total is None:
-            return None
-        words = []
-        while len(words) < total:
-            prefix, gi = "", 0
-            while True:
-                # B on an empty prefix steps back to the previous word, so a
-                # word committed by mistake at position 3 of 24 is fixable
-                # without abandoning the whole entry (D5).
-                candidates = [w for w in self.wordlist
-                              if w.startswith(prefix)][:3]
-                self.display.show(screens.seed_entry(
-                    self.w, self.h, len(words) + 1, total,
-                    prefix, tuple(candidates), gi), sensitive=True)
-                key = self.buttons.read()
-                # 8x4 grid, wrap like the codex32 grid; letters are 0..25.
-                if key == "u":
-                    gi = (gi - 8) % 32
-                elif key == "d":
-                    gi = (gi + 8) % 32
-                elif key == "l":
-                    gi = (gi - 1) % 32
-                elif key == "r":
-                    gi = (gi + 1) % 32
-                elif key == "a":
-                    if gi < 26:
-                        prefix += screens.ALPHABET[gi]
-                elif key == "b":
-                    if prefix:
-                        prefix = prefix[:-1]
-                    elif words:
-                        words.pop()           # undo the previous word
-                        break
-                elif key == "p":
-                    if candidates:            # center-press: take the top word
-                        words.append(candidates[0])
-                        break
-                elif key == "c":
-                    return None
-        return words
 
     # -- PSBT load: stick first, then QR frames ---------------------------
 

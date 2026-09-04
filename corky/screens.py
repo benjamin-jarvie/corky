@@ -300,40 +300,6 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
 ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
 
-def seed_entry(w, h, word_index, total_words, prefix, candidates, grid_cur=0):
-    """A-Z grid word entry (Ben, 2026-09-01): d-pad moves, A types the
-    letter, the candidate list narrows, center-press picks the top word.
-    Same grid model as codex32 entry. Measured cost for a 24-word seed is
-    352 presses against the old dial's 546 (tests/test_ui_cost.py)."""
-    img, d = _frame(w, h, f"SEED  WORD  {word_index} / {total_words}")
-    d.text((int(w * 0.06), int(h * 0.155)), (prefix or "").upper() + "_",
-           font=_font(int(h * 0.075)), fill=CREAM, anchor="lm")
-    # Candidates: the top one sits in a gold box (center-press takes it).
-    cx = int(w * 0.60)
-    for i, word in enumerate(candidates[:3]):
-        y = int(h * (0.135 + i * 0.072))
-        if i == 0:
-            d.rounded_rectangle([cx - int(w * 0.02), y - int(h * 0.03),
-                                 int(w * 0.97), y + int(h * 0.03)],
-                                radius=4, outline=OCHRE)
-        d.text((cx, y), word, font=_font(int(h * 0.05)),
-               fill=CREAM if i == 0 else GREY, anchor="lm")
-    # 8x4 letter grid.
-    cell_w, cell_h = w // 9, int(h * 0.135)
-    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.36)
-    for i, ch in enumerate(ALPHABET):
-        r, c = divmod(i, 8)
-        gx = x0 + c * cell_w + cell_w // 2
-        gy = y0 + r * cell_h + cell_h // 2
-        if i == grid_cur:
-            d.rounded_rectangle([gx - cell_w // 2 + 2, gy - cell_h // 2 + 2,
-                                 gx + cell_w // 2 - 2, gy + cell_h // 2 - 2],
-                                radius=4, outline=OCHRE)
-        d.text((gx, gy), ch.upper(), font=_font(int(h * 0.06)),
-               fill=CREAM if i == grid_cur else GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.955)), "center · pick word",
-           font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
-    return img
 
 
 def busy(w, h, message="checking words, deriving in Core…", phase=0):
@@ -355,15 +321,14 @@ def busy(w, h, message="checking words, deriving in Core…", phase=0):
     return img
 
 
+# PLAN A-22: the pure signer accepts only what Core itself understands. The
+# codex32 and seed-word modes moved to the lab branch with the code that
+# transformed them; nothing here converts anything.
 SEED_MENU_OPTIONS = [
     ("Scan descriptor QR", "pure Core"),
     ("Scan xprv QR", "pure Core"),
     ("Type descriptor", "pure Core"),
     ("Type xprv", "pure Core"),
-    ("Scan codex32", "BIP32-native"),
-    ("Type codex32 share(s)", "BIP32-native"),
-    ("Scan SeedQR", "words via Corky"),
-    ("Type seed words", "words via Corky"),
 ]
 
 
@@ -442,7 +407,7 @@ def scanning(w, h, frame, message, progress=0.0):
 
 
 def seed_menu(w, h, selected=0):
-    """Choose the seed input mode (A-14's modes + SeedQR + codex32/A-18)."""
+    """Choose the key input mode. A-22: only forms Core understands."""
     img, d = _frame(w, h, "LOAD  KEY")
     options = SEED_MENU_OPTIONS
     # Eight modes now (typed xprv/descriptor joined the scanned ones), so
@@ -462,20 +427,6 @@ def seed_menu(w, h, selected=0):
     return img
 
 
-def tools_menu(w, h, selected=0):
-    """Utilities: verify a share, back up a seed, generate one from Core.
-    No sub-lines, no footer legend (Ben, 2026-09-01)."""
-    img, d = _frame(w, h, "TOOLS")
-    options = ["Verify a codex32 share", "Back up seed as codex32"]
-    for i, label in enumerate(options):
-        y = int(h * (0.30 + i * 0.18))
-        if i == selected:
-            d.rounded_rectangle([int(w * 0.04), y - int(h * 0.065),
-                                 int(w * 0.96), y + int(h * 0.065)],
-                                radius=4, outline=OCHRE)
-        d.text((int(w * 0.08), y), label, font=_font(int(h * 0.058)),
-               fill=CREAM if i == selected else GREY, anchor="lm")
-    return img
 
 
 GENERATE_LINES = [
@@ -561,24 +512,14 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
     return img
 
 
-def seed_length(w, h, selected=0):
-    img, d = _frame(w, h, "SEED  LENGTH")
-    for i, label in enumerate(["12 words", "24 words"]):
-        y = int(h * (0.35 + i * 0.18))
-        if i == selected:
-            d.rounded_rectangle([int(w * 0.30), y - int(h * 0.07),
-                         int(w * 0.70), y + int(h * 0.07)], radius=4, outline=OCHRE)
-        d.text((w // 2, y), label, font=_font(int(h * 0.08)),
-               fill=CREAM if i == selected else GREY, anchor="mm")
-    return img
 
 
-# ---- codex32 (BIP93) screens — v1.1, map ticket #5 -------------------------
+# ---- text and grid entry --------------------------------------------------
 
 import sys as _sys
 from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parent))
-from codex32 import CHARSET as BECH32_CHARSET  # single source of truth
+BECH32_CHARSET = "023456789acdefghjklmnpqrstuvwxyz"  # A-22: was imported from codex32
 
 
 # One alphabet per job. A single 64-cell set could not serve all three:
@@ -653,105 +594,14 @@ def passphrase_prompt(w, h, selected=0):
     return img
 
 
-def codex32_scan(w, h):
-    img, d = _frame(w, h, "SCAN  CODEX32  SHARE")
-    d.rectangle([w // 2 - int(h * 0.18), int(h * 0.22),
-                 w // 2 + int(h * 0.18), int(h * 0.22) + int(h * 0.36)],
-                outline=GREY)
-    d.text((w // 2, int(h * 0.40)), "QR", font=_font(int(h * 0.09)),
-           fill=GREY, anchor="mm")
-    # BIP93 does not define a QR format or namespace: the QR just holds the
-    # codex32 string, uppercase (BIP93: "SHOULD use the uppercase form"), and
-    # 128-bit shares fit in 48 characters. Do not imply a named standard.
-    _fit(d, (w // 2, int(h * 0.66)), "plain codex32 text, uppercase",
-         int(h * 0.05), OCHRE, "mm", int(w * 0.92))
-    _fit(d, (w // 2, int(h * 0.735)), "one share per QR, or one per line",
-         int(h * 0.045), GREY, "mm", int(w * 0.92))
-    _fit(d, (w // 2, int(h * 0.80)), "256-bit shares: type them instead",
-         int(h * 0.045), GREY, "mm", int(w * 0.92))
-    _actions(d, w, h, ["BACK", "TYPE INSTEAD"], 1)
-    return img
 
 
-def codex32_entry(w, h, entered="MS12NAMEA320ZYXRPP", cursor=14, caret=None):
-    """bech32 charset as a 4x8 grid; d-pad moves, A writes at the caret.
-    The echo shows a window of the string around the caret (the character
-    being written or edited), highlighted, so a long share still shows the
-    part you are working on. No legend: the grid is the instruction."""
-    img, d = _frame(w, h, "TYPE  SHARE")
-    if caret is None:
-        caret = len(entered)
-    # A 16-char window that keeps the caret in view on a long share.
-    start = max(0, min(caret - 8, len(entered) - 16))
-    end = min(start + 16, len(entered))
-    size = int(h * 0.07)
-    xs = w // 2 - (end - start) * int(w * 0.028)
-    for i in range(start, end + 1):
-        ch = entered[i] if i < len(entered) else "_"
-        edit = i == caret
-        _fit(d, (xs, int(h * 0.17)), ch.upper(), size,
-             OCHRE if edit else CREAM, "mm", int(w * 0.06))
-        xs += int(w * 0.056)
-    d.text((w // 2, int(h * 0.255)),
-           f"{len(entered)} chars · pos {caret - 2}",
-           font=_font(int(h * 0.04)), fill=GREY, anchor="mm")
-    cell_w, cell_h = w // 9, int(h * 0.13)
-    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.34)
-    for i, ch in enumerate(BECH32_CHARSET):
-        r, c = divmod(i, 8)
-        cx = x0 + c * cell_w + cell_w // 2
-        cy = y0 + r * cell_h + cell_h // 2
-        if i == cursor:
-            d.rounded_rectangle([cx - cell_w // 2 + 2, cy - cell_h // 2 + 2,
-                         cx + cell_w // 2 - 2, cy + cell_h // 2 - 2],
-                        radius=4, outline=OCHRE)
-        d.text((cx, cy), ch.upper(), font=_font(int(h * 0.06)),
-               fill=CREAM if i == cursor else GREY, anchor="mm")
-    return img
 
 
-def codex32_shares(w, h, have_ids=("A", "C"), k=3):
-    img, d = _frame(w, h, "COLLECT  SHARES")
-    d.text((w // 2, int(h * 0.30)), f"{len(have_ids)} of {k}",
-           font=_font(int(h * 0.14)), fill=CREAM, anchor="mm")
-    d.text((w // 2, int(h * 0.48)),
-           "held: " + "  ".join(have_ids),
-           font=_font(int(h * 0.06)), fill=OCHRE, anchor="mm")
-    d.text((w // 2, int(h * 0.62)), "each share checksums on entry;",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.69)), "duplicates are refused",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    _actions(d, w, h, ["ABORT", "ADD SHARE"], 1)
-    return img
 
 
-def codex32_error(w, h, detail="checksum failed at position 31"):
-    img, d = _frame(w, h)
-    _status_circle(img, d, w, h, "INVALID", RED)
-    _fit(d, (w // 2, int(h * 0.64)), detail, int(h * 0.055), CREAM, "mm",
-         int(w * 0.92))
-    d.text((w // 2, int(h * 0.72)), "detection only: this device never",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    d.text((w // 2, int(h * 0.78)), "guesses corrections to key material",
-           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
-    _actions(d, w, h, ["BACK", "RE-ENTER"], 1)
-    return img
 
 
-def codex32_split_choice(w, h, selected=0):
-    img, d = _frame(w, h, "BACKUP  AS  CODEX32")
-    options = [("One string", "whole seed, one line"),
-               ("Split k-of-n", "2-of-3 · shares to guardians")]
-    for i, (label, note) in enumerate(options):
-        y = int(h * (0.28 + i * 0.17))
-        if i == selected:
-            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.07),
-                         int(w * 0.94), y + int(h * 0.07)], radius=4, outline=OCHRE)
-        d.text((int(w * 0.10), y), label, font=_font(int(h * 0.065)),
-               fill=CREAM if i == selected else GREY, anchor="lm")
-        d.text((int(w * 0.90), y), note, font=_font(int(h * 0.045)),
-               fill=OCHRE if i == selected else GREY, anchor="rm")
-    return img
 
 
 GROUPS_PER_ROW = 3          # 4-char groups across one line
@@ -762,7 +612,7 @@ CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 def share_pages(text):
     """Split a backup string into screenfuls, in order, losing nothing.
 
-    A 64-byte BIP39 seed encodes to a 127-character codex32 secret and Core's
+    Core's
     master xprv is 111 characters; both are three screenfuls. Drawing them as
     one column ran the last third off the bottom of the panel, so the user was
     asked to transcribe characters that never rendered.
@@ -771,34 +621,6 @@ def share_pages(text):
             for i in range(0, max(len(text), 1), CHARS_PER_PAGE)]
 
 
-def codex32_share_display(w, h,
-                          share="MS12NAMEA320ZYXRPP5QSRJG",
-                          index=1, total=3, page=0, pages=1):
-    """One screenful of a backup string. `share` is already one page's worth
-    (see share_pages); `page`/`pages` drive the position line."""
-    title = f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN"
-    if pages > 1:
-        title = f"SHARE  {index}/{total}  ·  PART  {page + 1}/{pages}"
-    img, d = _frame(w, h, title)
-    groups = [share[i:i + 4] for i in range(0, len(share), 4)]
-    for row_start in range(0, len(groups), GROUPS_PER_ROW):
-        y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
-        _fit(d, (w // 2, y),
-             "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
-             int(h * 0.075), CREAM, "mm", int(w * 0.92))
-    if pages > 1:
-        _fit(d, (w // 2, int(h * 0.79)),
-             f"characters {page * CHARS_PER_PAGE + 1}"
-             f"-{page * CHARS_PER_PAGE + len(share)} of this share",
-             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    else:
-        _fit(d, (w // 2, int(h * 0.79)),
-             "the codex32 kit worksheets own paper",
-             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    _actions(d, w, h,
-             ["ABORT" if page == 0 else "BACK",
-              "NEXT" if page + 1 < pages else "VERIFY"], 1)
-    return img
 
 
 def address_lines(address, per_line=22):
@@ -808,15 +630,6 @@ def address_lines(address, per_line=22):
                       for i in range(0, len(address), per_line))
 
 
-def codex32_verified(w, h, kind="share 2 of 3"):
-    """`kind` may carry newlines (see address_lines); each line is fitted."""
-    img, d = _frame(w, h)
-    _status_circle(img, d, w, h, "VALID", OCHRE)
-    for i, line in enumerate(kind.split("\n")):
-        _fit(d, (w // 2, int(h * (0.64 + i * 0.065))), line,
-             int(h * 0.06), CREAM, "mm", int(w * 0.92))
-    _actions(d, w, h, ["DONE"], 0)
-    return img
 
 
 _LOGO_MASK = None
@@ -850,4 +663,60 @@ def splash(w, h):
          int(h * 0.05), GREY, "mm", int(w * 0.90))
     _fit(d, (cx, int(h * 0.62)), "CORKY", int(h * 0.15), CREAM, "mm",
          int(w * 0.92))
+    return img
+
+# ---- backup display -------------------------------------------------
+# These were named codex32_* because codex32 shares were the first
+# thing paged across the panel. They are generic: A-22 keeps them for
+# Core's master xprv, which is the pure signer's only backup.
+
+def entry_error(w, h, detail="checksum failed at position 31"):
+    img, d = _frame(w, h)
+    _status_circle(img, d, w, h, "INVALID", RED)
+    _fit(d, (w // 2, int(h * 0.64)), detail, int(h * 0.055), CREAM, "mm",
+         int(w * 0.92))
+    d.text((w // 2, int(h * 0.72)), "detection only: this device never",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    d.text((w // 2, int(h * 0.78)), "guesses corrections to key material",
+           font=_font(int(h * 0.045)), fill=GREY, anchor="mm")
+    _actions(d, w, h, ["BACK", "RE-ENTER"], 1)
+    return img
+
+def backup_page(w, h,
+                          share="MS12NAMEA320ZYXRPP5QSRJG",
+                          index=1, total=3, page=0, pages=1):
+    """One screenful of a backup string. `share` is already one page's worth
+    (see share_pages); `page`/`pages` drive the position line."""
+    title = f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN"
+    if pages > 1:
+        title = f"SHARE  {index}/{total}  ·  PART  {page + 1}/{pages}"
+    img, d = _frame(w, h, title)
+    groups = [share[i:i + 4] for i in range(0, len(share), 4)]
+    for row_start in range(0, len(groups), GROUPS_PER_ROW):
+        y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
+        _fit(d, (w // 2, y),
+             "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
+             int(h * 0.075), CREAM, "mm", int(w * 0.92))
+    if pages > 1:
+        _fit(d, (w // 2, int(h * 0.79)),
+             f"characters {page * CHARS_PER_PAGE + 1}"
+             f"-{page * CHARS_PER_PAGE + len(share)} of this share",
+             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    else:
+        _fit(d, (w // 2, int(h * 0.79)),
+             "the codex32 kit worksheets own paper",
+             int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    _actions(d, w, h,
+             ["ABORT" if page == 0 else "BACK",
+              "NEXT" if page + 1 < pages else "VERIFY"], 1)
+    return img
+
+def verified(w, h, kind="share 2 of 3"):
+    """`kind` may carry newlines (see address_lines); each line is fitted."""
+    img, d = _frame(w, h)
+    _status_circle(img, d, w, h, "VALID", OCHRE)
+    for i, line in enumerate(kind.split("\n")):
+        _fit(d, (w // 2, int(h * (0.64 + i * 0.065))), line,
+             int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    _actions(d, w, h, ["DONE"], 0)
     return img

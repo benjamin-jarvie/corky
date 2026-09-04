@@ -1,74 +1,76 @@
-"""Integrity tests: the frozen-module discipline, automated.
+"""A-22's guard: prove nothing on the pure signer transforms a secret.
 
-The README promises the shim and codex32 modules are frozen with their
-hashes pinned in SHIM_HASH, and that the wordlist is refused if tampered.
-Until now that discipline was manual. This test makes it structural: it
-FAILS if a frozen file changes without its pinned hash being re-recorded,
-and proves the wordlist tamper-refusal path actually fires.
 Run: python3 tests/test_integrity.py
+
+This file used to pin hashes for shim/bip39_shim.py, corky/codex32.py and
+corky/seedqr.py, because those three transformed key material and the README
+promised they were frozen. PLAN A-22 removed all three: `main` is a signer
+whose entire job is to carry bytes between a person and Bitcoin Core.
+
+So the promise changed shape. It is no longer "these files are frozen". It is
+**"there are no such files"**, and this suite is what stops that quietly
+becoming untrue. Every check below fails the moment someone reintroduces code
+that computes on a key.
+
+The lab branch carries the removed modules and is not subject to this.
 """
-import hashlib
-import shutil
+import ast
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-fails = []
+PASS = FAIL = 0
 
-def ok(msg): print("ok  ", msg)
-def fail(msg): fails.append(msg); print("FAIL", msg)
 
-# 1. Every line in SHIM_HASH must match the current file content.
-pins = {}
-for line in (ROOT / "SHIM_HASH").read_text().splitlines():
-    if line.strip():
-        h, _, path = line.strip().partition("  ")
-        pins[path] = h
-expected_pinned = {"shim/bip39_shim.py", "corky/codex32.py",
-                   "corky/seedqr.py"}
-if set(pins) == expected_pinned:
-    ok("SHIM_HASH pins exactly the three frozen Layer-1 modules")
-else:
-    fail(f"SHIM_HASH pins {set(pins)}, expected {expected_pinned}")
-for path, pinned in pins.items():
-    actual = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
-    if actual == pinned:
-        ok(f"{path} matches its pinned hash")
+def check(name, ok, detail=""):
+    global PASS, FAIL
+    if ok:
+        PASS += 1
+        print(f"ok   {name}  {detail}")
     else:
-        fail(f"{path} CHANGED without re-pinning (frozen-module discipline "
-             f"violated): pinned {pinned[:12]}.. actual {actual[:12]}..")
+        FAIL += 1
+        print(f"FAIL {name}  {detail}")
 
-# 2. Wordlist matches the canonical BIP39 hash.
-CANON = "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda"
-wl = hashlib.sha256((ROOT / "shim" / "english.txt").read_bytes()).hexdigest()
-if wl == CANON:
-    ok("english.txt matches the canonical BIP39 wordlist hash")
-else:
-    fail("english.txt does not match the canonical BIP39 hash")
 
-# 3. Tamper-refusal actually fires: import the shim from a copy with a
-#    modified wordlist and prove load_wordlist raises.
-tmp = Path(tempfile.mkdtemp(prefix="shim-tamper-"))
-try:
-    shutil.copy(ROOT / "shim" / "bip39_shim.py", tmp / "bip39_shim.py")
-    words = (ROOT / "shim" / "english.txt").read_text().splitlines()
-    words[0] = "tampered"
-    (tmp / "english.txt").write_text("\n".join(words) + "\n")
-    sys.path.insert(0, str(tmp))
-    import importlib
-    tampered = importlib.import_module("bip39_shim")
-    try:
-        tampered.load_wordlist()
-        fail("tampered wordlist was ACCEPTED")
-    except ValueError:
-        ok("tampered wordlist refused with ValueError")
-    finally:
-        sys.path.remove(str(tmp))
-        sys.modules.pop("bip39_shim", None)
-finally:
-    shutil.rmtree(tmp, ignore_errors=True)
+# 1. The three transforming modules, and the wordlist, are gone.
+for gone in ("shim/bip39_shim.py", "shim/english.txt", "corky/codex32.py",
+             "corky/seedqr.py", "SHIM_HASH"):
+    check(f"absent: {gone}", not (ROOT / gone).exists())
+check("absent: the whole shim/ directory", not (ROOT / "shim").exists())
 
-if fails:
-    sys.exit(1)
-print("\nINTEGRITY PASS")
+# 2. No shipped module imports a cryptographic primitive. Corky does no
+#    hashing, no HMAC, no key stretching: Core does all of it.
+BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "ecdsa", "coincurve",
+                  "bip32", "cryptography", "nacl"}
+for src in sorted((ROOT / "corky").glob("*.py")):
+    found = set()
+    for node in ast.walk(ast.parse(src.read_text())):
+        if isinstance(node, ast.Import):
+            found |= {a.name.split(".")[0] for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module.split(".")[0])
+    bad = found & BANNED_IMPORTS
+    check(f"no crypto import: corky/{src.name}", not bad,
+          f"found {sorted(bad)}" if bad else "")
+
+# 3. No key-derivation vocabulary survives in the shipped code. A rename
+#    would not hide the intent; this catches the obvious reintroduction.
+BANNED_TEXT = ("pbkdf2", "mnemonic_to_", "seed_to_xprv", "Bitcoin seed",
+               "BIP39_WORDLIST", "load_wordlist")
+for src in sorted((ROOT / "corky").glob("*.py")):
+    body = src.read_text()
+    hits = [t for t in BANNED_TEXT if t in body]
+    check(f"no derivation code: corky/{src.name}", not hits,
+          f"found {hits}" if hits else "")
+
+# 4. The one thing Corky may do with a key is hand it to Core untouched.
+sig = (ROOT / "corky" / "signer.py").read_text()
+check("signer only imports keys into Core",
+      "importdescriptors" in sig and "open_session_xprv" in sig
+      and "def open_session(" not in sig,
+      "xprv and descriptor paths only, no mnemonic path")
+
+print("\n" + "=" * 62)
+print(f"PASS {PASS}   FAIL {FAIL}")
+print("Layer 1 is empty: no shipped line transforms secret material.")
+sys.exit(1 if FAIL else 0)

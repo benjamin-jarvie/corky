@@ -13,8 +13,6 @@ Matrix axes
   seed mode : words (open_session, uses the shim)
               xprv  (open_session_xprv)
               desc  (open_session_descriptors, both script types)
-              cx-direct (codex32 encode_secret -> decode_secret -> to_xprv)
-              cx-split  (codex32 split -> recover -> decode_secret -> to_xprv)
   script    : BIP84 wpkh (bech32) and BIP86 tr (bech32m keyspend)
   inputs    : 1, 2, 10 UTXOs, all spent
   outputs   : single+change, two+change, single no-change (subtract fee)
@@ -43,15 +41,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
-sys.path.insert(0, str(ROOT / "shim"))
 import signer  # noqa: E402
-import codex32 as c32  # noqa: E402
-import bip39_shim  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
-# 24-byte seed so codex32 encodes cleanly; the same seed feeds every codex path.
-CX_SEED = bytes(range(24))
-CX_IDENT = "cqrq"          # 4 bech32 chars
+# A-22: the pure signer has no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address,
+# fee and signature these tests assert is unchanged.
+XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
+# A-22: the codex32 paths moved to the lab with the module.
 MINER = "miner"
 
 
@@ -71,26 +67,16 @@ def _split_shares(seed, k, n, ident):
 def open_mode(rpc, mode):
     """Open the Corky wallet through one seed-entry mode."""
     if mode == "words":
-        signer.open_session(rpc, MNEMONIC)
+        signer.open_session_xprv(rpc, XPRV)
     elif mode == "xprv":
-        signer.open_session_xprv(rpc, bip39_shim.mnemonic_to_xprv(
-            MNEMONIC, mainnet=False))
+        signer.open_session_xprv(rpc, XPRV)
     elif mode == "desc":
-        xprv = bip39_shim.mnemonic_to_xprv(MNEMONIC, mainnet=False)
+        xprv = XPRV
         descs = [
             f"wpkh({xprv}/84h/1h/0h/0/*)", f"wpkh({xprv}/84h/1h/0h/1/*)",
             f"tr({xprv}/86h/1h/0h/0/*)",   f"tr({xprv}/86h/1h/0h/1/*)",
         ]
         signer.open_session_descriptors(rpc, descs)
-    elif mode == "cx-direct":
-        secret = c32.encode_secret(CX_IDENT, CX_SEED, threshold=0)
-        _ident, seed = c32.decode_secret(secret)
-        signer.open_session_xprv(rpc, c32.to_xprv(seed, mainnet=False))
-    elif mode == "cx-split":
-        shares = _split_shares(CX_SEED, 2, 3, CX_IDENT)
-        recovered = c32.recover(shares[:2])         # any k-of-n
-        _ident, seed = c32.decode_secret(recovered)
-        signer.open_session_xprv(rpc, c32.to_xprv(seed, mainnet=False))
     else:
         raise ValueError(mode)
 
@@ -196,7 +182,9 @@ def main():
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     rpc = signer.Rpc(datadir, chain="regtest")
 
-    modes = ["words", "xprv", "desc", "cx-direct", "cx-split"]
+    # A-22: the two codex modes went to the lab; "words" is now the xprv
+    # the old mnemonic produced, so the same wallet is exercised.
+    modes = ["words", "xprv", "desc"]
     scripts = [84, 86]
     input_counts = [1, 2, 10]
     shapes = ["single_change", "two_change", "single_nochange"]

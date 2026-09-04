@@ -46,7 +46,6 @@ ImageDraw.ImageDraw.text = _measured_text
 # Worst case in every field the flows can actually produce.
 XPRV = ("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvv"
         "NKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi")          # 111 chars
-LONG_C32 = "MS1" + "QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L" * 3 + "QPZRY9X8GF2TVDW0S3JN54KHC"
 ADDR = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"
 OUTPUTS = [(ADDR, 0.03444556), ("bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
                                 21.21212121), (ADDR, 0.1), (ADDR, 0.2)]
@@ -64,24 +63,11 @@ CASES = {
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
-    "seed-entry": lambda w, h: screens.seed_entry(
-        w, h, 24, 24, "consi", ("consider", "control", "convince"), 18),
-    "seed-length": lambda w, h: screens.seed_length(w, h),
     "seed-menu": lambda w, h: screens.seed_menu(w, h, 4),
-    "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
     "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
     "generate-warning": lambda w, h: screens.generate_warning(w, h),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,
                                                                     "descriptor"),
-    "codex32-scan": lambda w, h: screens.codex32_scan(w, h),
-    "codex32-entry": lambda w, h: screens.codex32_entry(w, h, "ms1" + "q" * 40, 31),
-    "codex32-shares": lambda w, h: screens.codex32_shares(w, h, ("A", "C"), 3),
-    "codex32-error": lambda w, h: screens.codex32_error(
-        w, h, "checksum failed at position 31"),
-    "codex32-split": lambda w, h: screens.codex32_split_choice(w, h, 1),
-    "codex32-verified": lambda w, h: screens.codex32_verified(w, h, "share 2 of 3"),
-    "codex32-verified-address": lambda w, h: screens.codex32_verified(
-        w, h, screens.address_lines(ADDR)),
 }
 
 for w, h in [(320, 240), (240, 240)]:
@@ -124,10 +110,11 @@ else:
     ok("splash requests only brand tokens (cream, gold, grey)")
 
 # The backup screens carry strings the flows really produce: a 127-character
-# codex32 secret (64-byte BIP39 seed) and Core's 111-character master xprv.
+# A-22: only Core's 111-character master xprv now; the codex32 string
+# went to the lab with the module that made it.
 # Neither fits one page, so the screen must paginate rather than overrun.
 for w, h in [(320, 240), (240, 240)]:
-    for label, payload in (("xprv", XPRV), ("codex32-127", LONG_C32)):
+    for label, payload in (("xprv", XPRV),):
         pages = screens.share_pages(payload)
         if len(pages) < 2:
             bad(f"{label}: share_pages did not split a {len(payload)}-char string")
@@ -137,7 +124,7 @@ for w, h in [(320, 240), (240, 240)]:
             continue
         for i, page in enumerate(pages):
             _ctx.update(w=w, h=h, name=f"share-{label}-{i}", over=[])
-            screens.codex32_share_display(w, h, page, 1, 1,
+            screens.backup_page(w, h, page, 1, 1,
                                           page=i, pages=len(pages))
             for text, box in _ctx["over"]:
                 bad(f"{w}x{h} share {label} page {i}: {text[:32]!r} at {box}")

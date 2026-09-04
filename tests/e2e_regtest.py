@@ -24,7 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 import signer  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
+# A-22: the pure signer has no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address,
+# fee and signature these tests assert is unchanged.
+XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 WATCH = "watcher"
 
 
@@ -48,7 +51,7 @@ def main():
                 time.sleep(0.5)
 
         # 1. Corky session from words
-        signer.open_session(rpc, MNEMONIC)
+        signer.open_session_xprv(rpc, XPRV)
         pubs = signer.public_descriptors(rpc)
         assert len(pubs) == 4 and not any("prv" in d for d in pubs), \
             "public descriptors leaked private material"
@@ -109,8 +112,7 @@ def main():
         # A-14: re-open the same wallet via the two Core-native modes and
         # confirm all three inputs produce identical wallets (same first
         # descriptors), i.e. the shim-free paths are equivalent.
-        import bip39_shim  # noqa: E402  (test-only, to produce the xprv)
-        xprv = bip39_shim.mnemonic_to_xprv(MNEMONIC, mainnet=False)
+        xprv = XPRV
         signer.open_session_xprv(rpc, xprv)
         pubs_xprv = signer.public_descriptors(rpc)
         signer.close_session(rpc)

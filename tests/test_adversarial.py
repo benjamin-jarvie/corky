@@ -26,15 +26,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
-sys.path.insert(0, str(ROOT / "shim"))
-
-import codex32  # noqa: E402
 import filechannel  # noqa: E402
 import qrchannel  # noqa: E402
 import signer  # noqa: E402
-import bip39_shim  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
+# A-22: the pure signer has no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address,
+# fee and signature these tests assert is unchanged.
+XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 WATCH = "watcher"
 FAILURES = []
 
@@ -67,7 +66,7 @@ def expect_raises(name, excs, fn, *args, **kwargs):
 
 def setup_regtest(rpc):
     """Corky session + coordinator watch wallet funded with real coins."""
-    signer.open_session(rpc, MNEMONIC)
+    signer.open_session_xprv(rpc, XPRV)
     pubs = signer.public_descriptors(rpc)
     rpc.call("createwallet", WATCH, True, True, "", False, True)
     imports = [{"desc": d, "active": True, "timestamp": "now",
@@ -383,67 +382,6 @@ def attack_replay(rpc):
        "no state corruption")
 
 
-# ======================================================================
-#  ATTACK 7 — codex32 adversarial share sets
-# ======================================================================
-#
-#  Attack: hand recover()/validate() defective shares. Expected safe
-#  behavior: each defect RAISES Codex32Error. The module detects errors;
-#  it never returns a wrong seed.
-
-def attack_codex32():
-    seed = bytes(range(16))
-    ent = os.urandom(64)
-    set_test_k2 = codex32.split(seed, 2, 3, "test", ent)
-    set_cash_k2 = codex32.split(seed, 2, 3, "cash", ent)
-    set_test_k3 = codex32.split(seed, 3, 4, "test", ent)
-
-    # sanity: an honest k-of-n recovers the real secret
-    honest = codex32.recover(set_test_k3[:3])
-    assert codex32.decode_secret(honest)[1] == seed, "codex32: honest recover broke"
-    ok("attack7 baseline: honest 3-of-4 recovers the true seed")
-
-    # mismatched identifiers (same threshold, different id)
-    expect_raises("attack7 mismatched-identifiers", codex32.Codex32Error,
-                  codex32.recover, [set_test_k2[0], set_cash_k2[1]])
-    # mismatched thresholds
-    expect_raises("attack7 mismatched-thresholds", codex32.Codex32Error,
-                  codex32.recover, [set_test_k2[0], set_test_k3[1]])
-    # one share short of k
-    expect_raises("attack7 one-share-short", codex32.Codex32Error,
-                  codex32.recover, set_test_k3[:2])
-    # flipped checksum char (mutate the last symbol to a different one)
-    good = set_test_k2[0]
-    swap = "q" if good[-1] != "q" else "p"
-    flipped = good[:-1] + swap
-    expect_raises("attack7 flipped-checksum", codex32.Codex32Error,
-                  codex32.validate, flipped)
-
-
-# ======================================================================
-#  ATTACK 8 — SeedQR / BIP39 shim adversarial mnemonics
-# ======================================================================
-#
-#  Attack: enter a defective mnemonic. Expected safe behavior:
-#  validate_mnemonic raises ValueError. No bad seed reaches Core.
-
-def attack_shim():
-    # bad checksum: valid words, wrong final word
-    bad_checksum = "abandon " * 11 + "abandon"
-    expect_raises("attack8 bad-checksum-word", ValueError,
-                  bip39_shim.validate_mnemonic, bad_checksum)
-    # wrong length: 13 words
-    thirteen = "abandon " * 12 + "about"
-    expect_raises("attack8 thirteen-words", ValueError,
-                  bip39_shim.validate_mnemonic, thirteen)
-    # non-wordlist word
-    nonword = "abandon " * 11 + "zzzz"
-    expect_raises("attack8 non-wordlist-word", ValueError,
-                  bip39_shim.validate_mnemonic, nonword)
-    # and the canonical mnemonic still validates (no false positives)
-    assert bip39_shim.validate_mnemonic(MNEMONIC) == MNEMONIC.strip()
-    ok("attack8 baseline: canonical mnemonic still validates")
-
 
 # ======================================================================
 #  Runner
@@ -479,8 +417,6 @@ def main():
                 time.sleep(0.5)
 
         # No-bitcoind tests first (fast, independent of the daemon).
-        attack_codex32()
-        attack_shim()
 
         setup_regtest(rpc)
         attack_false_fee(rpc)

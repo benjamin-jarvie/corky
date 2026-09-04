@@ -19,7 +19,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
 import signer  # noqa: E402
 import filechannel  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
+# A-22: the pure signer has no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address,
+# fee and signature these tests assert is unchanged.
+XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
 
 def main():
@@ -42,7 +45,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        signer.open_session(rpc, MNEMONIC)
+        signer.open_session_xprv(rpc, XPRV)
         rpc.call("createwallet", "watch", True, True, "", False, True)
         imports = [{"desc": d, "active": True, "timestamp": "now",
                     "range": [0, 200], "internal": "/1/*" in d}

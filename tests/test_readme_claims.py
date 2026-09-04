@@ -38,7 +38,9 @@ def code_lines(path):
 
 README = (ROOT / "README.md").read_text()
 
-LAYER1 = ["shim/bip39_shim.py", "corky/codex32.py", "corky/seedqr.py"]
+# A-22: Layer 1 is empty on main. tests/test_integrity.py is the guard
+# that keeps it empty; this file only has to stop claiming otherwise.
+LAYER1 = []
 LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
           "corky/hal.py"]
 LAYER3 = ["corky/signer.py", "corky/filechannel.py", "corky/qrchannel.py"]
@@ -95,7 +97,7 @@ if c is not None:
         bad(f"total functional: README {c}, actual {total}")
 
 # Test lines
-tests = sorted((ROOT / "tests").glob("*.py")) + [ROOT / "shim" / "test_shim.py"]
+tests = sorted((ROOT / "tests").glob("*.py"))
 tl = sum(code_lines(f) for f in tests)
 c = claimed(r"\*\*Test code: ([\d,]+) lines", "test code")
 if c is not None:

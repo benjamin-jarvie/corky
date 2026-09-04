@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky")); sys.path.insert(0, str(ROOT / "shim"))
+sys.path.insert(0, str(ROOT / "corky"))
 import signer  # noqa: E402
 
 fails = []
@@ -84,15 +84,13 @@ def main():
 
         # 5. No Python RNG in shipped modules (screens excepted: Pillow
         # imports random internally; screens never sees entropy).
-        for mod in ["signer", "codex32", "seedqr", "filechannel", "qrchannel", "main", "hal"]:
+        # A-22: codex32 and seedqr left main with the rest of Layer 1.
+        for mod in ["signer", "filechannel", "qrchannel", "main", "hal"]:
             src = (ROOT / ("corky/%s.py" % mod)).read_text()
             for bad_import in ["os.urandom", "import random", "import secrets"]:
                 if bad_import in src:
                     bad(f"{mod}.py contains {bad_import}")
-        src = (ROOT / "shim/bip39_shim.py").read_text()
-        for bad_import in ["os.urandom", "import random", "import secrets"]:
-            if bad_import in src:
-                bad(f"bip39_shim.py contains {bad_import}")
+        # A-22: shim/ is gone. There is no shipped module outside corky/.
         ok("no Python RNG in any shipped module")
     finally:
         try: rpc.call("stop"); daemon.wait(timeout=30)

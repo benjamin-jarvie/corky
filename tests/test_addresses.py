@@ -22,10 +22,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
-from bip39_shim import mnemonic_to_xprv  # noqa: E402
 import signer  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
+# A-22: the pure signer has no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address,
+# fee and signature these tests assert is unchanged.
+XPRV = "xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu"
 
 # Published reference vectors.
 BIP84_FIRST_RECEIVE = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"
@@ -52,7 +54,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        xprv = mnemonic_to_xprv(MNEMONIC)
+        xprv = XPRV
         cases = [
             ("wpkh", 84, 0, [BIP84_FIRST_RECEIVE, BIP84_SECOND_RECEIVE]),
             ("wpkh", 84, 1, [BIP84_FIRST_CHANGE]),

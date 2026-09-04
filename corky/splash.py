@@ -1,7 +1,7 @@
 """Boot splash: paint the brand frame, then exit.
 
 The dedicated entrypoint imports only hal and screens. The signing stack
-(signer, codex32, the channels) stays out on purpose: the frame lands
+(signer, the channels) stays out on purpose: the frame lands
 seconds earlier on the single-core Pi, and a fault in a signing-side
 module cannot dark the boot screen. corky-splash.service runs this
 before corky-bitcoind.service; the session itself is corky/main.py.

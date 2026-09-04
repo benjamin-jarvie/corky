@@ -5,15 +5,13 @@ then drives Bitcoin Core over RPC. Core does all key derivation, all PSBT
 parsing, all fee arithmetic and all signing. Every function here is plumbing.
 
 The front end (screen/camera) calls exactly four things per session:
-    open_session(mnemonic, passphrase)  -> wallet loaded in Core
+    open_session_xprv(xprv) / open_session_descriptors(descs)
     describe_psbt(psbt_b64)             -> dict for the review screen
     sign_psbt(psbt_b64)                 -> signed PSBT (base64)
     close_session()                     -> wallet unloaded (ramdisk wipe is
                                            the real teardown at power-off)
 """
 
-import hashlib
-import hmac
 import json
 import re
 import shutil
@@ -23,8 +21,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
-from bip39_shim import mnemonic_to_xprv  # noqa: E402  (the one non-Core step)
 
 def _json_decimal(obj):
     if isinstance(obj, Decimal):
@@ -124,10 +120,6 @@ def _import(rpc, descriptors):
         raise RuntimeError(f"importdescriptors failed: {failures}")
 
 
-def open_session(rpc, mnemonic, passphrase=""):
-    """Input mode 3 (default): BIP39 words. The only path that uses the shim."""
-    xprv = mnemonic_to_xprv(mnemonic, passphrase, mainnet=(rpc.chain == "main"))
-    _import(rpc, build_descriptors(rpc, xprv))
 
 
 def open_session_xprv(rpc, xprv):
