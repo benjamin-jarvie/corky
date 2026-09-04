@@ -1,7 +1,7 @@
 # 05 What BIP-85 in Tools produces, and how it refuses to be mistaken for a backup
 
 Labels: wayfinder:grilling (HITL)
-Blocked by: 03
+Blocked by: none (03 closed 2026-09-04)
 
 ## Question
 

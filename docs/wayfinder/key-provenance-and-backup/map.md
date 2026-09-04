@@ -85,6 +85,14 @@ flow can produce a backup of a wallet other than the one it says.
   Python verbatim. Borrow only CRC padding as a reader heuristic, and the
   spec's four-character-window entry rules.
 
+- [03 What does the session record about where its key came from](tickets/03-what-provenance-records.md)
+  — the XFP and an exact origin string, never the words or the seed. A flow
+  needing the seed asks for a retype and refuses unless the derived XFP
+  matches, which closes the wrong-wallet hazard at zero exposure cost, catches
+  the 1-in-16 mnemonic BIP39's checksum lets through, and doubles as the
+  recovery drill Corky lacks. Provenance lives as long as the wallet; a wallet
+  Corky did not load this session is closed at startup.
+
 ## Not yet specified
 
 - What the recovery card must carry, and whether Corky prints or displays it.
@@ -96,8 +104,10 @@ flow can produce a backup of a wallet other than the one it says.
 - Calculating a final word from 11 or 23, so dice and seed-picker cards can
   be finished on the device. Corky's generate screen calls dice the default
   and cannot finish a dice seed. Roughly 350 lines, mostly in Layers 1 and 2.
-- A recovery drill: create a backup, then restore from it before coins exist.
-  Bails does this. Nothing in Corky does.
+- Whether the retype-and-verify decided in "What does the session record
+  about where its key came from" is drill enough, or whether generation also
+  needs Bails' fuller version: show the backup, discard it, rebuild the wallet
+  only from what the user re-enters.
 - Whether the review screen should show the XFP too, not only home.
 - An address explorer in Tools, beyond the first few shown at export time.
 - Whether the four-character grouping and head/tail colouring decided for

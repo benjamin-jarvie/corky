@@ -1,7 +1,7 @@
 # 06 Getting the watch-only descriptor out, and proving it landed
 
 Labels: wayfinder:grilling (HITL)
-Blocked by: 03
+Blocked by: none (03 closed 2026-09-04)
 
 ## Question
 

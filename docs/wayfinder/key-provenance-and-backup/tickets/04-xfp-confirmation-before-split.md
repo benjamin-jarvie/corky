@@ -1,7 +1,7 @@
 # 04 What the XFP confirmation shows before a split
 
 Labels: wayfinder:grilling (HITL)
-Blocked by: 03
+Blocked by: none (03 closed 2026-09-04)
 
 ## Question
 
