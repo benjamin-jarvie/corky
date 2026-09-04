@@ -45,3 +45,34 @@ Decide, with Ben:
 
 Related: `screens.address_lines` already exists for wrapping an address onto
 the panel.
+
+## Decided already (Ben, 2026-09-04)
+
+**Never truncate. Group in fours, with a space between groups.** Colour the
+first four and the last four differently from the middle, to make comparison
+against a coordinator quicker.
+
+This matches the codex32 spec's own display rule, `docs/wallets.md`: data
+"should be displayed in uppercase with visually distinct four-character
+windows". Corky already groups codex32 shares in fours through
+`share_pages`; `screens.address_lines` does not group at all, it hard-wraps
+every 22 characters.
+
+One caution to carry into the design rather than ignore. **Highlighting the
+head and tail is exactly the shortcut address-replacement malware relies
+on**: a swapped address that matches on the first and last four passes a
+glance. The colour should make a full comparison easier to track, not offer
+a shortcut that replaces it. Worth deciding whether the middle stays plainly
+legible and equally weighted, and whether the screen says anything about
+checking all of it.
+
+Open sub-questions this leaves:
+
+- Which colours. OCHRE and CREAM are the existing palette; a third would be
+  new.
+- Whether the same grouping and colouring applies to the xpub and the
+  descriptor on export, not only to addresses. The descriptor is long and
+  carries a checksum, so it may want different treatment.
+- Whether uppercase applies to addresses. The spec's rule is about codex32.
+  Bech32 addresses are case-insensitive but conventionally lowercase, and
+  uppercase changes the QR encoding mode.

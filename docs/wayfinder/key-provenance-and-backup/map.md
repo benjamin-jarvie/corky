@@ -51,6 +51,13 @@ flow can produce a backup of a wallet other than the one it says.
 
 ## Decisions so far
 
+- [01 Should Generate make the seed first, the way Bails does](tickets/01-bails-ordering.md)
+  — the ordering is sound and costs almost no new code; Bails' implementation
+  must NOT be ported (scrypt needs 1 GiB, secrets in argv, Electrum, Tails).
+  Core's entropy is Bails' scrypt SALT, not the seed. Its BIP-85 is zero code.
+  Its recovery drill is real and worth taking. The decision itself is now
+  [07 Does Generate change ordering](tickets/07-does-generate-change-ordering.md).
+
 - **Backup story (Ben, 2026-09-04).** Default backup is Core's master xprv.
   BIP-85 is a separate Tools operation, never on the default path. The choice
   between them appears at backup time ONLY if the user deliberately derived a
@@ -78,6 +85,9 @@ flow can produce a backup of a wallet other than the one it says.
   Bails does this. Nothing in Corky does.
 - Whether the review screen should show the XFP too, not only home.
 - An address explorer in Tools, beyond the first few shown at export time.
+- Whether the four-character grouping and head/tail colouring decided for
+  addresses should also apply to the xpub, the descriptor, and the xprv
+  backup, which today uses a different pagination path (`share_pages`).
 - Whether Corky should verify a descriptor it is GIVEN (a coordinator handing
   back a watch-only descriptor to check against the loaded key), not only
   export its own.
