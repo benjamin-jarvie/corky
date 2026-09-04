@@ -8,6 +8,7 @@ import spidev
 import RPi.GPIO as GPIO
 import time
 import array
+import numpy as _np          # CORKY: RGB565 packing, see show_image
 from dataclasses import dataclass
 
 
@@ -148,19 +149,26 @@ class ST7789:
         time.sleep(0.01)
         
     def SetWindows(self, Xstart, Ystart, Xend, Yend):
+        # CORKY MODIFICATION. Upstream hardcodes both high octets to 0x00,
+        # which is correct only while every coordinate is below 256. Corky's
+        # primary panel is the SeedSigner+ 2.8" at 320x240 (HARDWARE.md), and
+        # there (320 - 1) & 0xff is 63: the driver would send 320x240 pixels
+        # into a 64-column window. Send the real 16-bit coordinates. For a
+        # 240x240 panel every high octet is still 0x00, so this is identical
+        # to upstream on the pocket build.
         #set the X coordinates
         self.command(0x2A)
-        self.data(0x00)               #Set the horizontal starting point to the high octet
-        self.data(Xstart & 0xff)      #Set the horizontal starting point to the low octet
-        self.data(0x00)               #Set the horizontal end to the high octet
-        self.data((Xend - 1) & 0xff) #Set the horizontal end to the low octet 
-        
+        self.data((Xstart >> 8) & 0xff)
+        self.data(Xstart & 0xff)
+        self.data(((Xend - 1) >> 8) & 0xff)
+        self.data((Xend - 1) & 0xff)
+
         #set the Y coordinates
         self.command(0x2B)
-        self.data(0x00)
-        self.data((Ystart & 0xff))
-        self.data(0x00)
-        self.data((Yend - 1) & 0xff )
+        self.data((Ystart >> 8) & 0xff)
+        self.data(Ystart & 0xff)
+        self.data(((Yend - 1) >> 8) & 0xff)
+        self.data((Yend - 1) & 0xff)
 
         self.command(0x2C)    
     
@@ -171,10 +179,22 @@ class ST7789:
         if imwidth != self.width or imheight != self.height:
             raise ValueError('Image must be same dimensions as display \
                 ({0}x{1}).' .format(self.width, self.height))
-        # convert 24-bit RGB-8:8:8 to gBRG-3:5:5:3; then per-pixel byteswap to 16-bit RGB-5:6:5
-        arr = array.array("H", Image.convert("BGR;16").tobytes())
-        arr.byteswap()
-        pix = arr.tobytes()
+        # CORKY MODIFICATION. Upstream did:
+        #     arr = array.array("H", Image.convert("BGR;16").tobytes())
+        #     arr.byteswap()
+        # Pillow 11 warns "BGR;16 is deprecated and will be removed in Pillow
+        # 12", and Pillow 12 has removed it: the call raises "image has wrong
+        # mode". The Pi is on 11.1.0 so it still works there today and breaks
+        # on the next bump, and it already cannot run on a current dev machine,
+        # so the conversion could not be tested off the device at all.
+        #
+        # Same output, computed directly: RGB-8:8:8 to big-endian RGB-5:6:5.
+        # tests/test_display_driver.py pins the bytes; equivalence with the
+        # old path was checked on the board on 2026-09-03, all 65536 values.
+        rgb = _np.asarray(Image.convert("RGB"), dtype=_np.uint16)
+        pix = ((((rgb[:, :, 0] & 0xF8) << 8)
+                | ((rgb[:, :, 1] & 0xFC) << 3)
+                | (rgb[:, :, 2] >> 3)).astype(">u2").tobytes())
         self.SetWindows ( 0, 0, self.width, self.height)
         GPIO.output(self._dc,GPIO.HIGH)
         self._spi.writebytes2(pix)	

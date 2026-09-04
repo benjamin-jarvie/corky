@@ -70,7 +70,10 @@ class ImageQrSource:
         raise NotImplementedError
 
     def scan_key(self):
-        raise RuntimeError("camera not yet wired (M1); use the USB stick")
+        # The camera works (M1); SeedQR entry through it does not. Every
+        # stopping rule for a key scan is M2 work, so this stays closed
+        # rather than shipping a scan with no abort and no timeout.
+        raise RuntimeError("SeedQR scanning not wired yet (M2); type the seed")
 
     def scan_psbt_frames(self):
         for image in self.images():
@@ -85,19 +88,46 @@ class ImageQrSource:
 
 
 class CameraQrSource(ImageQrSource):
-    """Device QR source. Capture is the M1 hardware deliverable.
+    """Device QR source: picamera2 into pyzbar.
 
-    Everything above this line is built and tested (tests/m1). All that is
-    missing is picamera2 producing frames at ~512x384, ~10fps
-    (hw/HARDWARE.md:75).
+    Measured on a Zero 2 W with an ov5647, 2026-09-04: 512x384 at 30fps,
+    three times hw/HARDWARE.md's 10fps target, for both RGB888 and YUV420.
+
+    YUV420, because zbar works in greyscale. capture_array returns
+    (height * 3 // 2, width) for that format, and the first `height` rows
+    are the Y plane, which is the greyscale image already. Handing zbar an
+    RGB frame only pays for a conversion it would do itself.
     """
 
+    SIZE = (512, 384)          # hw/HARDWARE.md:75
+    BUFFERS = 4
+
+    def __init__(self):
+        # Why there is no camera, when there is no camera. Read by the
+        # caller; nothing here decides what to do about it.
+        self.unavailable = None
+
     def images(self):
-        # Yields nothing until capture lands, which is what the pre-M1 source
-        # did. state_load then falls through to the USB stick instead of
-        # crashing. Raising here would take the whole app down on a board with
-        # no camera, which is strictly worse than the behaviour it replaced.
-        return iter(())
+        try:
+            from picamera2 import Picamera2
+            cam = Picamera2()
+            cam.configure(cam.create_video_configuration(
+                main={"size": self.SIZE, "format": "YUV420"},
+                buffer_count=self.BUFFERS))
+            cam.start()
+        except Exception as exc:
+            # A board with no camera must fall through to the USB stick, not
+            # take the whole app down (I-8). The caller gets an empty stream
+            # and its no-progress timeout does the rest.
+            self.unavailable = f"{type(exc).__name__}: {exc}"
+            return
+        width, height = self.SIZE
+        try:
+            while True:
+                yield cam.capture_array("main")[:height, :width]
+        finally:
+            cam.stop()
+            cam.close()
 
 
 class DevQrSource:
