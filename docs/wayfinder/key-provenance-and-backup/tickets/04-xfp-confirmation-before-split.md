@@ -1,7 +1,9 @@
 # 04 What the XFP confirmation shows before a split
 
-Labels: wayfinder:grilling (HITL)
+Labels: wayfinder:prototype (HITL)
 Blocked by: none (03 closed 2026-09-04)
+Assignee: claude (claimed 2026-09-04)
+Status: CLOSED 2026-09-04
 
 ## Question
 
@@ -30,3 +32,60 @@ Decide:
    that cannot say which key is open invites signing with the wrong one.
 5. What the abort path is, and whether it differs from KEY2 and KEY3
    elsewhere (hw/HARDWARE.md: back one page versus abort the flow).
+
+## Resolution (Ben, 2026-09-04)
+
+**Variant C: the fingerprint, where the key came from, and notice that a
+retype is coming.** Prototype at `scratchpad/proto/confirm_variants.py`,
+rendered at the real 320x240 with Corky's own type and palette.
+
+    SPLIT THIS KEY?
+
+         668B 2262
+    loaded from typed words
+    you will retype them to confirm
+
+         BACK    SPLIT
+
+It answers the two questions that matter at that moment: **which key**, and
+**why this one can be split**. And it sets up the retype rather than
+surprising the user with it, which matters because a Core-generated key
+reaches a refusal instead and should see that coming.
+
+Rejected: the full variant, with script types, both derivation paths and
+network. Every fact a recovery needs, on the screen that authorises the
+backup, is a real argument. But four of its five rows are identical for every
+Corky key, so they carry no signal at the moment of choosing, and they are
+recoverable from the descriptor export, which is a different screen with a
+different job.
+
+Rejected: the fingerprint alone. Cleanest, but silent about why this key is
+splittable and about the retype.
+
+### The identifier stays ours
+
+Restated so it is not reopened: the XFP appears on this **transient** screen,
+never on the **paper**. BIP93 defines no identifier convention, and the XFP is
+public in every PSBT and descriptor, so putting it on a share links that share
+to an on-chain wallet and its balance. Corky keeps
+`sha256(b"corky-id" + seed)[:4]`.
+
+### Finding: head-and-tail colouring does nothing to an XFP
+
+Ben's rule for long strings is four-character groups with the first and last
+group coloured differently. **An XFP is 8 characters, so it makes exactly two
+groups, and the first and the last are both of them.** The whole string comes
+out in the accent colour and the rule distinguishes nothing.
+
+It is a rule for long strings: addresses, xpubs and descriptors, per "Getting
+the watch-only descriptor out, and proving it landed". It should not be
+applied mechanically to short identifiers. Four-character grouping still helps
+an XFP; the colouring does not.
+
+### Left open, deliberately
+
+Whether the review screen shows the XFP so every signature also states which
+key. Ben was offered that bundled with C and took C alone, so it stays in the
+map's fog as its own question rather than being assumed either way.
+
+Closed.

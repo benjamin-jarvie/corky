@@ -52,7 +52,12 @@ flow can produce a backup of a wallet other than the one it says.
     defeating the point that a single share is useless. Corky's
     `sha256(b"corky-id" + seed)[:4]` is domain-separated and one-way. Verified
     2026-09-04; corrects an earlier recommendation of mine.
-11. **BIP-85 is the only route from a Core key to words**, and the words open a
+11. **Head-and-tail colouring does nothing to an 8-character string.** The
+    four-char grouping rule colours the first and last group differently; an
+    XFP has exactly two groups, so both are coloured and nothing is
+    distinguished. The rule is for addresses, xpubs and descriptors. Grouping
+    still helps short identifiers; the colouring does not.
+12. **BIP-85 is the only route from a Core key to words**, and the words open a
    DIFFERENT wallet. Entropy Lab does exactly this and says so plainly.
 
 ## Decisions so far
@@ -92,6 +97,11 @@ flow can produce a backup of a wallet other than the one it says.
   the 1-in-16 mnemonic BIP39's checksum lets through, and doubles as the
   recovery drill Corky lacks. Provenance lives as long as the wallet; a wallet
   Corky did not load this session is closed at startup.
+
+- [04 What the XFP confirmation shows before a split](tickets/04-xfp-confirmation-before-split.md)
+  — the fingerprint, the origin, and notice that a retype is coming. Which key
+  and why this one can be split, nothing else; the rest lives on the export
+  screen. The XFP goes on this transient screen and never on paper.
 
 ## Not yet specified
 
