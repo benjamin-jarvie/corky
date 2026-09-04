@@ -79,6 +79,32 @@ echo "   enable boot-to-corky with: sudo systemctl enable --now corky"
 # SPI for the display hat
 raspi-config nonint do_spi 0 || true
 
+# Corky is headless: the panel is a 320x240 ST7789 on SPI, driven by
+# hw/vendor/st7789.py, so the firmware's GPU split buys nothing.
+#
+# Measured on a Zero 2 W, 2026-09-03, one reboot per row:
+#
+#   config                    total  avail  vc_sm    err lines
+#   stock (vc4 on, split 64)   415    276   OK        0
+#   vc4 OFF, split 64          414    281   OK        0
+#   vc4 on,  split 32          447    307   OK        0
+#   vc4 off, split 32          446    309   OK        0
+#   vc4 off, split 48          430    294   OK        0
+#   vc4 off, split 16          462    334   BROKEN    5
+#
+# Two things that table settles. Disabling the vc4 KMS overlay gains
+# nothing at all (414 against 415), so it is left alone and the HDMI
+# console keeps working. And 16 is below the floor: the VideoCore
+# services die with "vc_sm_cma_vchi_init: failed to open VCHI service",
+# which takes bcm2835_isp with them, and that is the ISP libcamera uses.
+# 32 is the smallest split that keeps them healthy.
+CFG=/boot/firmware/config.txt
+if ! grep -q "^gpu_mem=" "$CFG"; then
+    cp -n "$CFG" "$CFG.pre-corky"     # one file to put the stock split back
+    printf '\n# Corky: headless signer. 32 is the floor; 16 starves the\n# VideoCore services that bcm2835_isp needs.\ngpu_mem=32\n' >> "$CFG"
+    echo "   gpu_mem=32, +32MB of RAM (takes effect on reboot)"
+fi
+
 echo
 echo "PROVISION DONE (dev image). Sanity check:"
 echo "  cd /opt/corky && python3 shim/test_shim.py && python3 m0/m0_gate.py"

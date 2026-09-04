@@ -127,7 +127,15 @@ def _sample(stop, track):
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--inputs", type=int, default=250)
-    n = args.parse_args().inputs
+    # How many outputs each funding transaction has. Every input's
+    # non_witness_utxo is the whole transaction that paid it, so this sets
+    # the PSBT's size per input and it dominates everything downstream.
+    # Measured 2026-09-03: 100 gives 2778 bytes per input, 2 gives 378, a
+    # factor of 7.3. 100 models consolidating exchange batch withdrawals,
+    # which is the real worst case. 2 models ordinary payments.
+    args.add_argument("--funding-batch", type=int, default=100)
+    parsed = args.parse_args()
+    n, batch = parsed.inputs, parsed.funding_batch
 
     swap = swap_active_mb()
     if swap:
@@ -177,10 +185,10 @@ def main():
                        for _ in range(min(n, 200))]
         sent = 0
         while sent < n:
-            batch = {corky_addrs[(sent + i) % len(corky_addrs)]: 0.01
-                     for i in range(min(100, n - sent))}
-            rpc.call("send", batch, wallet="miner")
-            sent += len(batch)
+            pay = {corky_addrs[(sent + i) % len(corky_addrs)]: 0.01
+                   for i in range(min(batch, n - sent))}
+            rpc.call("send", pay, wallet="miner")
+            sent += len(pay)
             rpc.call("generatetoaddress", 1, mine_addr)
         utxos = len(rpc.call("listunspent", wallet=signer.WALLET))
         report["corky utxos funded"] = utxos
@@ -203,6 +211,7 @@ def main():
                           {"fee_rate": 5, "subtractFeeFromOutputs": [0]},
                           True, wallet=signer.WALLET)
         report["stress psbt inputs"] = len(inputs)
+        report["funding batch (outputs per tx)"] = batch
         review = signer.describe_psbt(rpc, funded["psbt"])
         signed = signer.sign_psbt(rpc, funded["psbt"])
         assert signed["complete"], "stress PSBT did not fully sign"
