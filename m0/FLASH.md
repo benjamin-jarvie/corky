@@ -100,8 +100,24 @@ Temperature is in the report because ORDER.md drops the heatsink to save
 fail the gate. An `under-voltage` line is different: it means the supply is
 weak, and a weak supply spoils every other number above it.
 
-Reference point: the same run on the Mac shows bitcoind RSS about 99MB, so
-the expectation is a pass with room to spare. If it fails, the fallback
-ladder in PLAN.md (zram first) applies before any hardware change.
+## 6. What a Zero 2 W actually does (measured 2026-09-03)
+
+All on `gpu_mem=32`, swap off. `--funding-batch` sets how many outputs each
+funding transaction has, which sets the PSBT size per input, because every
+input carries the whole transaction that paid it as its `non_witness_utxo`.
+
+| inputs | funding shape | PSBT | bitcoind | Corky | headroom | |
+|---|---|---|---|---|---|---|
+| 250 | 2 (ordinary payments) | 92KB | 65MB | 21MB | 226MB | PASS |
+| 500 | 2 | 184KB | 70MB | 26MB | 206MB | PASS |
+| 1000 | 2 | 368KB | 82MB | 32MB | 184MB | PASS |
+| 250 | 100 (exchange batches) | 980KB | 126MB | 64MB | 97MB | FAIL |
+
+The default is 100, which is the worst case and the one that fails, by 3MB.
+Do not read the failure as "512MB is not enough". The same board signs a
+thousand ordinary inputs with 184MB spare. See PLAN.md A-21.
+
+The old reference figure here said bitcoind RSS about 99MB, taken from the
+Mac. It was wrong in a way the Mac could not show: see ISSUES.md I-10.
 
 Paste the report block back to Claude and M0 is closed either way.

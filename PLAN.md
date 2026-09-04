@@ -267,6 +267,51 @@
   in your own hands. A-19 adds an option; it does not move the recommendation.
 
 
+- **A-21: M0 ran on the board (2026-09-03). The verdict depends on the PSBT's
+  shape, not on its input count.** First run: FAIL, 48MB of headroom against
+  the 100MB line. The cause was not the board. It was reserving 64MB for a GPU
+  it never uses, on a device whose only panel is a 320x240 ST7789 on SPI.
+
+  **`gpu_mem=32`, and the KMS overlay stays.** Six configurations measured, one
+  reboot each. Disabling `vc4-kms-v3d` gains nothing at all, 414MB against
+  415MB, so it is left enabled and the HDMI console keeps working. Every
+  megabyte comes from the split. `gpu_mem=16` gains the most and is below the
+  floor: it kills the VideoCore services with `vc_sm_cma_vchi_init: failed to
+  open VCHI service (-22)`, which takes `bcm2835_isp` with it, and that is the
+  ISP libcamera uses. A control run on the stock config prints
+  `[vc_sm_connected_init]: installed successfully` with no error lines, so the
+  regression was ours. 32 is the smallest split that stays healthy: 447MB
+  usable, 307MB free at idle, `picamera2` imports, both spidev nodes present.
+
+  **What the gate then measured, all at 250 inputs on `gpu_mem=32`:**
+
+  | funding shape | PSBT | bitcoind | Corky | headroom | |
+  |---|---|---|---|---|---|
+  | 2 outputs per tx (ordinary payments) | 92KB | 65MB | 21MB | **226MB** | PASS |
+  | 100 outputs per tx (exchange batches) | 980KB | 126MB | 64MB | 97MB | FAIL |
+
+  Same board, same input count, 131MB apart. Every input's `non_witness_utxo`
+  is the whole transaction that paid it, so the funding shape sets the PSBT
+  size per input: 378 bytes against 2778, a factor of 7.3.
+
+  **Two things this settles.** The 100MB rule was written as though bitcoind
+  were the only consumer; Corky's own process is a third of the total at the
+  worst case, and nobody had measured it. And the old harness hard-coded 100
+  outputs per funding transaction to fund quickly, which accidentally modelled
+  consolidating exchange batch withdrawals. That is a real worst case, so it
+  stays the default, but `--funding-batch` now makes the shape visible and
+  selectable, and the report prints it.
+
+  **The pocket build's honest ceiling: it signs 250 ordinary inputs with more
+  than double the required headroom, and falls 3MB short of the line on 250
+  batch-withdrawal inputs.** A-15 already ruled that M0's 512MB question gates
+  the pocket build and not v1, and v1 is the CM4 with 2GB.
+
+  Reducing Corky's 64MB is the one fix that makes Corky better rather than the
+  board bigger: `describe_psbt` parses the full `decodepsbt` document, which
+  at the worst case expands 25,000 output objects it never reads, when all it
+  needs is `tx.vout` and the fee. Not attempted. Its own ticket.
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,
