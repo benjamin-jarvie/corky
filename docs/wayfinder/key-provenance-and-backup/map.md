@@ -38,9 +38,15 @@ flow can produce a backup of a wallet other than the one it says.
 6. **The spec sanctions encrypting recovery progress**: "Wallets MAY encrypt
    and store recovery progress... outside of the scope of this
    specification." That is partial shares mid-restore, NOT storing a seed.
-7. **XFP exists**: `signer.master_fingerprint`, read from public descriptors,
+7. **Core writes standard output descriptors**, so a Core-generated key's
+   xpub is ordinary everywhere: Sparrow, Bull Bitcoin, Green and Core all
+   read `wpkh([XFP/84h/1h/0h]tpub.../0/*)#checksum`. Nothing about Core
+   generation makes the export unusual. Verified 2026-09-04.
+8. **`deriveaddresses` is side-effect free**; `getnewaddress` advances the
+   wallet index. Verified against Core 31.1: keypool 4000 before and after.
+9. **XFP exists**: `signer.master_fingerprint`, read from public descriptors,
    shown on home since 2026-09-04.
-8. **BIP-85 is the only route from a Core key to words**, and the words open a
+10. **BIP-85 is the only route from a Core key to words**, and the words open a
    DIFFERENT wallet. Entropy Lab does exactly this and says so plainly.
 
 ## Decisions so far
@@ -71,6 +77,10 @@ flow can produce a backup of a wallet other than the one it says.
 - A recovery drill: create a backup, then restore from it before coins exist.
   Bails does this. Nothing in Corky does.
 - Whether the review screen should show the XFP too, not only home.
+- An address explorer in Tools, beyond the first few shown at export time.
+- Whether Corky should verify a descriptor it is GIVEN (a coordinator handing
+  back a watch-only descriptor to check against the loaded key), not only
+  export its own.
 
 ## Out of scope
 

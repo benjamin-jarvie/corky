@@ -2,6 +2,7 @@
 
 Labels: wayfinder:research (AFK)
 Blocked by: none
+Assignee: claude (claimed 2026-09-04)
 
 ## Question
 
