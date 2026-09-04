@@ -312,6 +312,45 @@
   at the worst case expands 25,000 output objects it never reads, when all it
   needs is `tx.vout` and the fee. Not attempted. Its own ticket.
 
+- **A-22: Corky forks. `main` is a pure signer with ZERO code that touches
+  secrets (Ben, 2026-09-04).**
+
+  JW Weatherman, told Corky is a tiny UI over Core: *"your only focus should
+  be in minimizing any additional code you add. As soon as code review is
+  required you are half way to a rug product... If you can add no code at all
+  that's the ideal. Next best is the tiniest UI needed and absolutely nothing
+  more."*
+
+  Measured the same day. Layer 1, the code that transforms secret material,
+  was 342 lines: the 50-line BIP39 shim, 254 lines of codex32 and 38 of
+  SeedQR. **codex32 alone was 74% of it.**
+
+  **The decision: `main` carries none of them. Layer 1 becomes zero lines.**
+
+  Keys reach Core three ways, and Corky transforms nothing on any of them:
+  Core generates one with its own RNG (A-19), or the user supplies an **xprv**
+  or a **descriptor**, typed or scanned, which Corky passes to
+  `importdescriptors` as an opaque string. Bitcoin Core has no BIP39 and never
+  will, so the shim existed only to accept a seed phrase.
+
+  The claim stops being "read one page" and becomes **"there is nothing to
+  read"**.
+
+  **The cost, stated plainly.** Corky cannot accept a 12 or 24 word seed
+  phrase. Nobody can bring the words from an existing hardware wallet. A
+  backup is Core's 111-character master xprv, not words, and it cannot be
+  split. Ben took that cost knowingly: the purity is the product.
+
+  **The lab branch** carries everything removed, plus everything the
+  key-provenance map decided, plus silent payments later. It is for Ben and
+  the few who read code and want the device to do more than generate and sign.
+  It merges `main` forward, so every signer fix reaches it and no fix is ever
+  applied twice.
+
+  Consequences for this plan: A-18's codex32 backup, A-14's SeedQR input mode
+  and the BIP39 word-entry flow all move to the lab. M4's "metal-backed seed"
+  means an xprv on metal for `main`.
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,
