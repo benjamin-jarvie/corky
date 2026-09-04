@@ -283,22 +283,22 @@ no elliptic-curve math anywhere, hashes pinned in
 Enter by descriptor or xprv and even this layer is bypassed: pure Core.
 Words-only users trust Core + 54 lines — the original pitch, still true.
 
-**Layer 2 — sees secrets, computes nothing with them. 1458 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1471 lines.**
 The device's body: menus, screens, buttons. It routes and displays
 secret material during entry but performs no cryptography on it.
-[`corky/main.py`](corky/main.py) (809) ·
+[`corky/main.py`](corky/main.py) (822) ·
 [`corky/screens.py`](corky/screens.py) (579) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
 
-**Layer 3 — never touches secrets at all. 390 lines.**
-[`corky/signer.py`](corky/signer.py) (161) drives Core over RPC;
+**Layer 3 — never touches secrets at all. 402 lines.**
+[`corky/signer.py`](corky/signer.py) (173) drives Core over RPC;
 [`corky/filechannel.py`](corky/filechannel.py) (45) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
 bytes — Core is the only parser, by law
 ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,202 lines** (3,391 with blanks/comments).
+**Total functional code: 2,227 lines** (3,457 with blanks/comments).
 A bug in layers 2–3 can annoy you; it cannot leak what it never
 algebraically touches.
 
