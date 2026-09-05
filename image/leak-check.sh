@@ -176,6 +176,26 @@ else
     say "device is about to hold a real key. That step is one way: it takes"
     say "SSH away."
 fi
+# ---- is this board what the repository says it is? ------------------
+# Not a leak, and it lives here because this is the one screen a person
+# opens to ask whether the device is set up right. On 2026-09-05 the USB
+# stick channel had never worked on the board: provision.sh installs a
+# udev rule and a mount unit for it, and this board was flashed before
+# those lines existed, so a stick would never have mounted and Bitcoin
+# Core, which reads no QR, had no way to be given anything.
+say ""
+say "-- provisioning, is the board current --"
+for f in /etc/systemd/system/corky.service \
+         /etc/systemd/system/corky-bitcoind.service \
+         /etc/systemd/system/corky-usb@.service \
+         /etc/udev/rules.d/99-corky-usb.rules; do
+    if [ -f "$f" ]; then
+        ok "$(basename "$f")" "installed"
+    else
+        bad "$(basename "$f")" "MISSING, re-run provision.sh"
+    fi
+done
+
 say ""
 say "None of this says the wireless chip is unpowered. Only removing the"
 say "part says that, and on the Zero 2 W the radio is a separate component"
