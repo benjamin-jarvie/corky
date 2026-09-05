@@ -130,6 +130,14 @@ documentation, and someone can go and build it without another decision.
   hygiene, not a hazard).
 - Whether Corky should ever show change addresses.
 
+- [R7 Card slots, USB, and where the private key is allowed to go](tickets/R7-slots-and-media.md)
+  — no CM4 configuration has two usable card slots: Lite boots from its one
+  slot, and an eMMC module ignores the slot entirely. But eMMC solves it
+  better than a second slot would, since the boot device is soldered and
+  the OS need not live in RAM. Correction to the premise: USB host already
+  works on the Zero, so paper-only is a choice rather than a constraint.
+  Awaiting Ben's word before anything is deleted.
+
 ## Open, and they are the way out of this map
 
 - [N1 The card comes out and the signer keeps running](tickets/N1-card-removable.md)
