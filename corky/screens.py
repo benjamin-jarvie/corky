@@ -223,20 +223,9 @@ def home(w, h, selected=0, xfp=None):
 
 def settings_menu(w, h, selected=0):
     """Settings holds power off, and grows over time. No legend."""
-    img, d = _frame(w, h, "SETTINGS")
-    icons = ["power", "about"]
-    for i, label in enumerate(SETTINGS_OPTIONS):
-        y = int(h * (0.34 + i * 0.20))
-        active = i == selected
-        if active:
-            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.075),
-                                 int(w * 0.94), y + int(h * 0.075)],
-                                radius=4, outline=OCHRE)
-        _icon(d, int(w * 0.14), y, int(h * 0.06), icons[i],
-              CREAM if active else GREY)
-        d.text((int(w * 0.24), y), label, font=_font(int(h * 0.062)),
-               fill=CREAM if active else GREY, anchor="lm")
-    return img
+    return _menu(w, h, "SETTINGS",
+                 [(label, "", "normal") for label in SETTINGS_OPTIONS],
+                 selected, icons=["power", "about"])
 
 
 def about(w, h):
@@ -354,18 +343,9 @@ def channel_menu(w, h, selected=0):
     ran while you were fetching a stick and the scan had nowhere to show
     what it could see.
     """
-    img, d = _frame(w, h, "LOAD  TRANSACTION")
-    for i, (label, note) in enumerate(CHANNEL_OPTIONS):
-        y = int(h * (0.36 + i * 0.20))
-        if i == selected:
-            d.rounded_rectangle([int(w * 0.06), y - int(h * 0.085),
-                                 int(w * 0.94), y + int(h * 0.085)],
-                                radius=6, outline=OCHRE, width=2)
-        _fit(d, (int(w * 0.12), y), label, int(h * 0.065),
-             CREAM if i == selected else GREY, "lm", int(w * 0.55))
-        _fit(d, (int(w * 0.88), y), note, int(h * 0.042),
-             OCHRE if i == selected else GREY, "rm", int(w * 0.28))
-    return img
+    return _menu(w, h, "LOAD  TRANSACTION",
+                 [(label, note, "normal") for label, note in CHANNEL_OPTIONS],
+                 selected)
 
 
 # The camera sits at 90 degrees to the panel on this build, and Ben chose to
@@ -417,26 +397,50 @@ def scanning(w, h, frame, message, progress=0.0):
     return img
 
 
-def _menu(w, h, title, rows, selected):
+# Every list screen puts the top of its first row here, whatever it holds
+# (Ben, 2026-09-05, from the board). The divider under the title sits at
+# 0.11, and the old geometry put a four-row selection box at 0.063, so the
+# highlight drew straight through the title and the line under it. Two
+# menus had their own geometry as well and started at 0.34 and 0.36, so
+# every menu began at a different height.
+MENU_TOP = 0.16          # top edge of the first row's box
+MENU_BOTTOM = 0.95       # bottom edge the last row may not pass
+MENU_BOX = 0.085         # the tallest a row box may be, half-height
+
+
+def _menu(w, h, title, rows, selected, icons=None):
     """One list screen for every menu: rows of (label, note, tone), tone
-    "normal" or "red". Rows are pitched to fit the panel, so six rows and
-    three rows both land inside 240 pixels."""
+    "normal" or "red". `icons` optionally names one glyph per row.
+
+    The first row's box starts at MENU_TOP on every screen, so the menus do
+    not shift under you as you move between them. Rows below it are spread
+    over the space that is left, so six rows and two rows both fit.
+    """
     img, d = _frame(w, h, title)
-    top, bottom = 0.155, 0.94
-    pitch = (bottom - top) / max(len(rows) - 1, 1)
-    pitch = min(pitch, 0.2)
+    n = max(len(rows), 1)
+    slot = (MENU_BOTTOM - MENU_TOP) / n
+    # Pixels, not fractions, and measured from a fixed top. Deriving the
+    # box from a centre and a half-height rounded differently for each row
+    # count, so menus started a pixel apart (caught by test_screen_fit).
+    first_top = int(h * MENU_TOP)
+    box_h = int(2 * min(slot * 0.42, MENU_BOX) * h)
     for i, (label, note, tone) in enumerate(rows):
-        y = int(h * (top + i * pitch))
+        box_top = first_top + int(i * slot * h)
+        y = box_top + box_h // 2
         active = i == selected
         if active:
-            d.rounded_rectangle([int(w * 0.04), y - int(h * pitch * 0.46),
-                                 int(w * 0.96), y + int(h * pitch * 0.46)],
+            d.rounded_rectangle([int(w * 0.04), box_top,
+                                 int(w * 0.96), box_top + box_h],
                                 radius=4, outline=OCHRE)
         colour = CREAM if active else GREY
         if tone == "red":
             colour = RED if not active else "#D9433B"
-        _fit(d, (int(w * 0.08), y), label, int(h * 0.052), colour, "lm",
-             int(w * 0.58))
+        x = int(w * 0.08)
+        if icons:
+            _icon(d, int(w * 0.11), y, int(h * 0.055), icons[i], colour)
+            x = int(w * 0.20)
+        _fit(d, (x, y), label, int(h * 0.052), colour, "lm",
+             int(w * 0.58) - (x - int(w * 0.08)))
         _fit(d, (int(w * 0.92), y), note, int(h * 0.04),
              OCHRE if active else GREY, "rm", int(w * 0.30))
     return img

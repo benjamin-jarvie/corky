@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 export PYTHONDONTWRITEBYTECODE=1
 find . -name __pycache__ -not -path "./hw/vendor/*" -exec rm -rf {} + 2>/dev/null || true
 PY="arch -arm64 python3"
-SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_keyscan.py"
+SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_buttons.py tests/test_keyscan.py"
 SUITES_NODE="tests/test_addresses.py tests/e2e_regtest.py tests/e2e_filechannel.py tests/e2e_session.py tests/test_generate.py tests/test_matrix.py tests/test_adversarial.py tests/test_keys.py tests/e2e_keys.py tests/test_no_persistence.py tests/test_export.py tests/test_backup.py"
 FAILED=0
 # Static checks first, because they are seconds and the suites are minutes.
@@ -23,8 +23,20 @@ if $PY -m ruff --version >/dev/null 2>&1; then
 else
   echo "(not run: ruff, vulture, mypy. python3 -m pip install --user -r requirements-dev.txt, on the DEV machine only.)"
 fi
+# A failing suite used to print its name and nothing else, so the first
+# thing anyone did was run it again by hand. Keep the output and show the
+# tail, because TESTING.md says find out why before making it pass.
+LOGDIR=$(mktemp -d)
 for t in $SUITES_FAST ${RUN_NODE:+$SUITES_NODE}; do
-  if $PY "$t" >/dev/null 2>&1; then echo "PASS $t"; else echo "FAIL $t"; FAILED=1; fi
+  LOG="$LOGDIR/$(basename "$t").log"
+  if $PY "$t" >"$LOG" 2>&1; then
+    echo "PASS $t"
+  else
+    echo "FAIL $t"
+    sed 's/^/      | /' "$LOG" | tail -12
+    echo "      | full output: $LOG"
+    FAILED=1
+  fi
 done
 [ -z "$RUN_NODE" ] && echo "(fast suites only; RUN_NODE=1 ./run_tests.sh adds the bitcoind suites)"
 # The Sparrow suites hold the only real-data coverage of the QR surfaces:

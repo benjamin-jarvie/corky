@@ -88,17 +88,32 @@ class DeviceButtons:
                 return key
             time.sleep(0.02)
 
+    #: When more than one contact is closed, this decides. A deliberate
+    #: press beats a direction, because pushing the centre of a five-way
+    #: stick can close a direction on the way down, and the old code
+    #: returned whichever pin came first in the dictionary, which was "u".
+    #: On the board that made a centre press on Tools read as up (Ben,
+    #: 2026-09-05).
+    PRIORITY = ("press", "a", "b", "c")
+
     def pressed(self):
         """Whatever is down right now, or None. Does not block.
 
         The polling loops (waiting on a stick, running the camera) must stay
         responsive to Back while doing their own work, so they cannot sit
         inside read().
+
+        One press gives one event. The wait is for EVERY contact to open,
+        not just the one that was chosen, so a direction still held from
+        the same movement does not fire again the moment this returns.
         """
         import time
-        for key, pin in self.PINS.items():
-            if self._gpio.input(pin) == self._gpio.LOW:
-                while self._gpio.input(pin) == self._gpio.LOW:
-                    time.sleep(0.01)          # wait for release (debounce)
-                return "p" if key == "press" else key
-        return None
+        low = [k for k, pin in self.PINS.items()
+               if self._gpio.input(pin) == self._gpio.LOW]
+        if not low:
+            return None
+        chosen = next((k for k in self.PRIORITY if k in low), low[0])
+        while any(self._gpio.input(pin) == self._gpio.LOW
+                  for pin in self.PINS.values()):
+            time.sleep(0.01)                  # wait for release (debounce)
+        return "p" if chosen == "press" else chosen

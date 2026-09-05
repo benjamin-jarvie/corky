@@ -98,6 +98,58 @@ CASES = {
                                                                     "descriptor"),
 }
 
+# ---- every menu starts in the same place, and below its own divider ----
+# Found on the board 2026-09-05: the selection box on a four-row menu was
+# drawn through the title and the line under it, and two menus had their own
+# geometry so each one began at a different height. This looks for the
+# highlight colour above the divider, which is what that bug looks like in
+# pixels, and pins that the first row lands identically on every menu.
+MENUS = {
+    "load key": lambda w, h: screens.load_key_menu(w, h, 0),
+    "keys": lambda w, h: screens.keys_menu(w, h, [("corky", "d2b7e45c")], 0),
+    "key": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 0),
+    "tools": lambda w, h: screens.tools_menu(w, h, 0),
+    "settings": lambda w, h: screens.settings_menu(w, h, 0),
+    "channel": lambda w, h: screens.channel_menu(w, h, 0),
+    "export": lambda w, h: screens.export_menu(w, h, 0),
+    "backup": lambda w, h: screens.backup_menu(w, h, 0),
+    "script type": lambda w, h: screens.export_script_menu(w, h, ("wpkh", "tr"), 0),
+}
+
+
+def _ochre_rows(img):
+    """Every row of pixels that carries the highlight colour."""
+    want = tuple(int(screens.OCHRE[i:i + 2], 16) for i in (1, 3, 5))
+    px = img.load()
+    rows = set()
+    for y in range(img.height):
+        for x in range(0, img.width, 3):
+            if px[x, y] == want:
+                rows.add(y)
+                break
+    return rows
+
+
+for w, h in [(320, 240), (240, 240)]:
+    divider = int(h * 0.11)
+    tops = {}
+    for name, render in MENUS.items():
+        rows = _ochre_rows(render(w, h))
+        if not rows:
+            bad(f"{w}x{h} {name}: nothing is highlighted at all")
+            continue
+        top = min(rows)
+        tops[name] = top
+        if top <= divider:
+            bad(f"{w}x{h} {name}: the highlight reaches y={top}, "
+                f"through the divider at y={divider}")
+    if len(set(tops.values())) == 1:
+        ok(f"{w}x{h}: all {len(tops)} menus start their first row at "
+           f"y={next(iter(tops.values()))}, below the divider at {divider}")
+    else:
+        bad(f"{w}x{h}: menus start at different heights: {tops}")
+
+
 for w, h in [(320, 240), (240, 240)]:
     for name, render in CASES.items():
         _ctx.update(w=w, h=h, name=name, over=[])
