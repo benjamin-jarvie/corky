@@ -63,7 +63,7 @@ CASES = {
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
-    "load-key-menu": lambda w, h: screens.load_key_menu(w, h, 2),
+
     "keys-menu": lambda w, h: screens.keys_menu(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
@@ -74,11 +74,11 @@ CASES = {
     "leak-clear": lambda w, h: screens.leak_report(
         w, h, [("Wi-Fi driver", "not loaded", "normal")] * 24, 0),
     "leak-failures": lambda w, h: screens.leak_report(
-        w, h, [("Wi-Fi overlay", "not set", "red"),
-               ("Bluetooth driver", "loaded", "red"),
-               ("Swap", "ON, key pages can reach the card", "red"),
-               ("Serial console", "on the GPIO header", "red"),
-               ("USB device mode", "active, can pretend to be a disk", "red"),
+        w, h, [("Wi-Fi overlay", "not set", "leak"),
+               ("Bluetooth driver", "loaded", "leak"),
+               ("Swap", "ON, key pages reach the card", "leak"),
+               ("Serial console", "on the GPIO header", "leak"),
+               ("USB device mode", "active, can be a disk", "leak"),
                ("Core networking", "off", "normal")], 3),
     "export-menu": lambda w, h: screens.export_menu(w, h, 4),
     "export-script-menu": lambda w, h: screens.export_script_menu(
@@ -108,7 +108,6 @@ CASES = {
 # highlight colour above the divider, which is what that bug looks like in
 # pixels, and pins that the first row lands identically on every menu.
 MENUS = {
-    "load key": lambda w, h: screens.load_key_menu(w, h, 0),
     "keys": lambda w, h: screens.keys_menu(w, h, [("corky", "d2b7e45c")], 0),
     "key": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 0),
     "tools": lambda w, h: screens.tools_menu(w, h, 0),

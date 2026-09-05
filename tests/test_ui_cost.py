@@ -58,7 +58,7 @@ class ScriptedButtons:
 def named_screens(display):
     """Paint names instead of images, so a session's screen order is
     assertable without rendering."""
-    for name in ("home", "load_key_menu", "keys_menu", "result", "busy", "review",
+    for name in ("home", "keys_menu", "result", "busy", "review",
                  "settings_menu"):
         setattr(screens, name,
                 (lambda n: lambda *a, **k: n)(name))
@@ -152,17 +152,17 @@ else:
 
 # --- D6: a failing seed mode must hold its message ------------------------
 _real = {n: getattr(screens, n) for n in
-         ("home", "load_key_menu", "keys_menu", "result", "busy", "review",
+         ("home", "keys_menu", "result", "busy", "review",
           "settings_menu")}
 display = named_screens(RecordingDisplay())
-# R,A opens the Keys tile, which is a screen of its own even with nothing
-# loaded (Ben, 2026-09-05). Then A picks Load a key, A picks Scan a key, A
-# accepts the warning, and the scan fails because this machine has no
-# camera. ONE key dismisses the error. C leaves Keys for home, then D,R,A,A
-# goes to settings and powers off. If the error is not held, the dismissing
-# A falls through into the next screen and the script runs out.
-buttons = ScriptedButtons(["r", "a"] + ["a", "a", "a"] + ["a"] + ["c"] +
-                          ["d", "r", "a", "a"])
+# R,A opens the Keys tile. The list is flat now (Ben, 2026-09-05), so D
+# moves from New key to Scan a key, A picks it, A accepts the warning, and
+# the scan fails because this machine has no camera. ONE key dismisses the
+# error. C leaves Keys for home, then D,R,A,A goes to settings and powers
+# off. If the error is not held, the dismissing A falls through and the
+# script runs out.
+buttons = ScriptedButtons(["r", "a"] + ["d", "a"] + ["a"] + ["a"] +
+                          ["c"] + ["d", "r", "a", "a"])
 session = corky_main.Session(display, buttons, FakeRpc())
 session.qr = corky_main.CameraQrSource()
 raised = None
@@ -183,7 +183,7 @@ if raised is not None:
 elif not (painted[0] == "home"
           and "result" in painted
           and painted[painted.index("result") + 1] == "keys_menu"
-          and painted.count("load_key_menu") >= 1):
+          and painted.count("keys_menu") >= 2):
     bad(f"unexpected screen order after a failing key mode: {painted}")
 else:
     ok("a failing key mode holds its error, then returns to Keys")

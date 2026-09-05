@@ -318,15 +318,6 @@ def busy(w, h, message="working…", phase=0):
 # PLAN A-22: the pure signer accepts only what Core itself understands. The
 # codex32 and seed-word modes moved to the lab branch with the code that
 # transformed them; nothing here converts anything.
-# Load a key (ticket 07). One scan entry: what the camera read decides
-# whether it is an xprv or a descriptor (ticket 05). Restore from file
-# joins the list with ticket 13.
-LOAD_KEY_OPTIONS = [
-    ("Scan a key", "xprv or descriptor"),
-    ("Type descriptor", "pure Core"),
-    ("Type xprv", "pure Core"),
-    ("Restore from file", "stick or card"),
-]
 
 
 CHANNEL_OPTIONS = [("Scan QR", "camera"), ("USB stick", "/mnt/usb")]
@@ -437,17 +428,26 @@ def _menu(w, h, title, rows, selected, icons=None):
             d.rounded_rectangle([int(w * 0.04), box_top,
                                  int(w * 0.96), box_top + box_h],
                                 radius=4, outline=OCHRE)
+        # Three tones. "red" paints the LABEL, for an action that destroys
+        # something. "leak" paints the STATE on the right, because there the
+        # thing is innocent and what it is doing is the alarm (Ben,
+        # 2026-09-05). Both columns are the same size: the right one was
+        # smaller and unreadable on the panel.
         colour = CREAM if active else GREY
+        note_colour = OCHRE if active else GREY
         if tone == "red":
             colour = RED if not active else "#D9433B"
+        elif tone == "leak":
+            note_colour = "#D9433B" if active else RED
         x = int(w * 0.08)
         if icons:
             _icon(d, int(w * 0.11), y, int(h * 0.055), icons[start + i], colour)
             x = int(w * 0.20)
-        _fit(d, (x, y), label, int(h * 0.052), colour, "lm",
-             int(w * 0.56) - (x - int(w * 0.08)))
-        _fit(d, (int(w * 0.92), y), note, int(h * 0.04),
-             OCHRE if active else GREY, "rm", int(w * 0.30))
+        size = int(h * 0.052)
+        _fit(d, (x, y), label, size, colour, "lm",
+             int(w * 0.52) - (x - int(w * 0.08)))
+        _fit(d, (int(w * 0.92), y), note, size, note_colour, "rm",
+             int(w * 0.36))
     if n > MENU_ROWS:
         # Where you are in the list, on the right edge, like any scrollbar.
         track_top, track_h = first_top, int(MENU_ROWS * pitch * h)
@@ -456,13 +456,6 @@ def _menu(w, h, title, rows, selected, icons=None):
         d.rectangle([w - 4, track_top, w - 3, track_top + track_h], fill="#3A352E")
         d.rectangle([w - 5, bar_y, w - 2, bar_y + bar_h], fill=OCHRE)
     return img
-
-
-def load_key_menu(w, h, selected=0):
-    """Load a key. A-22: only forms Core understands."""
-    return _menu(w, h, "LOAD  A  KEY",
-                 [(label, note, "normal") for label, note in LOAD_KEY_OPTIONS],
-                 selected)
 
 
 # SeedSigner's per-seed menu, in Core's words (ticket 07).
@@ -474,7 +467,7 @@ KEY_MENU_OPTIONS = [
     ("Discard key", "Core forgets it"),
 ]
 
-TOOLS_OPTIONS = [("Check for leaks", "every way off")]
+TOOLS_OPTIONS = [("Check for leaks", "")]
 
 
 def leak_report(w, h, rows, cursor=0):
@@ -486,7 +479,7 @@ def leak_report(w, h, rows, cursor=0):
     and A, B or C leaves, and there is no action bar inventing a second way
     to do the same thing (Ben, 2026-09-05).
     """
-    leaks = sum(1 for _label, _state, tone in rows if tone == "red")
+    leaks = sum(1 for _label, _state, tone in rows if tone == "leak")
     title = "LEAK  CHECK"
     if rows:
         title = (f"LEAK  CHECK  ·  {leaks} OF {len(rows)}" if leaks
@@ -494,11 +487,17 @@ def leak_report(w, h, rows, cursor=0):
     return _menu(w, h, title, rows, cursor)
 
 
-# What the KEYS screen offers below the loaded keys. New key lives here
-# rather than under Tools, because making a key is a thing you do to your
-# keys and Tools is for the device (Ben, 2026-09-05).
-KEYS_ACTIONS = [("Load a key", "scan, type or restore"),
-                ("New key", "Core's own RNG")]
+# What the KEYS screen offers below the loaded keys, flat (Ben,
+# 2026-09-05: "so we don't have to nest"). New key first, then every way
+# to bring an existing one in. The LOAD A KEY screen it replaces held four
+# rows, and one of them was always the one you wanted.
+KEYS_ACTIONS = [
+    ("New key", "Core's own RNG"),
+    ("Scan a key", "xprv or descriptor"),
+    ("Type descriptor", "pure Core"),
+    ("Type xprv", "pure Core"),
+    ("Restore from file", "stick or card"),
+]
 
 
 def keys_menu(w, h, keys, selected=0):

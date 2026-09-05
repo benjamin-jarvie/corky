@@ -200,19 +200,25 @@ class DevQrSource:
         return bool(self.psbt_path or self.key_path)
 
     def strings(self):
-        """The dev stand-in for a camera: the key file, then the PSBT
-        frames. `scannable` promises whichever of the two exists, so this
-        must yield from either rather than insisting on the key file."""
+        """The dev stand-in for a camera pointed at anything: the key file
+        if there is one, else the PSBT frames. `scannable` promises
+        whichever exists.
+
+        The key file comes first and the PSBT frames do NOT follow it. A
+        camera sees one thing at a time, and yielding both put the key file
+        into the PSBT assembler as a junk frame, where the tick that
+        skipped it also ate a button press (found 2026-09-05).
+        """
         if self.key_path:
             yield Path(self.key_path).read_text()
+            return
         if self.psbt_path:
-            for frame in Path(self.psbt_path).read_text().split():
-                yield frame
-        if not (self.key_path or self.psbt_path):
-            raise RuntimeError("no --qr-key or --qr-psbt in this dev session")
+            yield from Path(self.psbt_path).read_text().split()
+            return
+        raise RuntimeError("no --qr-key or --qr-psbt in this dev session")
 
     def scan_psbt_frames(self):
-        """Iterates UR frames (one per line in the dev file)."""
+        """UR frames only, one per line in the dev file. Never the key."""
         if not self.psbt_path:
             return iter(())
         return iter(Path(self.psbt_path).read_text().split())
@@ -551,17 +557,20 @@ class Session:
             if selected is None:
                 return None
             action = selected - len(keys)
-            if action == 0:                           # Load a key
-                if not self.state_load_key():
-                    continue
-            elif action == 1:                         # New key
-                if not self._tool_generate():
+            if action >= 0:
+                if not self._load_key(action):
                     continue
             else:
                 self.key = keys[selected].name
             outcome = self.state_key_menu(self.key)
             if outcome in (POWER_OFF, TO_HOME):
                 return outcome
+            # Come back to the key you were just working with, not to the
+            # row number you happened to be on. Loading a key adds a row at
+            # the top, so the old number pointed at something else.
+            self._refresh_keys()
+            selected = next((i for i, k in enumerate(self.keys)
+                             if k.name == self.key), 0)
 
     def state_key_menu(self, name):
         """One key's menu, in Core's words (ticket 07). Export and
@@ -871,22 +880,24 @@ class Session:
 
     # -- loading a key: the four Core-native forms (ticket 07) ------------
 
-    def state_load_key(self) -> bool:
-        selected = self._pick(
-            lambda sel: screens.load_key_menu(self.w, self.h, sel),
-            len(screens.LOAD_KEY_OPTIONS))
-        if selected is None:
-            return False
+    def _load_key(self, action) -> bool:
+        """One of the ways to get a key, chosen from the Keys screen.
+
+        Flat, with no LOAD A KEY screen between (Ben, 2026-09-05). The
+        order matches screens.KEYS_ACTIONS: make one, or bring one in four
+        ways. PLAN A-22: every way in hands Core a string it understands,
+        and Corky transforms none of them.
+        """
+        ways = [self._tool_generate,
+                self._key_by_scan,
+                self._key_descriptor_typed,
+                self._key_xprv_typed,
+                self._key_from_file]
         try:
-            # PLAN A-22: only what Core understands. Corky hands each of
-            # these to importdescriptors as an opaque string.
-            return [self._key_by_scan,
-                    self._key_descriptor_typed,
-                    self._key_xprv_typed,
-                    self._key_from_file][selected]()
+            return bool(ways[action]())
         except self.HANDLED as exc:
-            # Hold the message: without a key wait the home screen repaints
-            # immediately and the user sees only a flicker.
+            # Hold the message: without a key wait, the Keys screen
+            # repaints at once and the user sees only a flicker.
             self._hold(str(exc)[:60])
             return False
 
@@ -1116,7 +1127,7 @@ class Session:
                 continue
             verdict, label, state = parts[0], parts[1], parts[2]
             if verdict == "FAIL":
-                leaks.append((label, state, "red"))
+                leaks.append((label, state, "leak"))
             elif verdict == "ok":
                 clear.append((label, state, "normal"))
         rows = leaks + clear          # what you opened this for comes first

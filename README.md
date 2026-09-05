@@ -202,6 +202,66 @@ That is the price of the property today: Corky is DIY while we perfect
 it. An assembled device would change the labor, not the architecture,
 and may come later.
 
+## Where the randomness comes from, and where ours cannot reach
+
+Corky's one generation path asks Bitcoin Core for the key, so it inherits
+Core's entropy and nothing else. This is what Core actually does, read out
+of `src/random.cpp` and `src/randomenv.cpp` at the v31.1 tag, and then what
+that means on a board with no network, no disk activity and no user typing.
+
+**What Core mixes in, every time it seeds:**
+
+| Source | What it is |
+|---|---|
+| The operating system | `getrandom(2)` on Linux, the kernel's own pool |
+| CPU instructions | `RDRAND` and `RDSEED`, when the processor has them |
+| A high-resolution counter | the cycle counter, read repeatedly |
+| The stack pointer | where this call happens to be in memory |
+| An events pool | timings Core itself has accumulated |
+| Dynamic environment | every clock, resource usage, and on Linux the contents of `/proc/diskstats`, `/proc/vmstat`, `/proc/schedstat`, `/proc/zoneinfo`, `/proc/meminfo`, `/proc/softirqs`, `/proc/stat` and its own `/proc/self/status` |
+| Static environment | the host name, the kernel version, the environment block, the address of its own functions, the network interfaces and their addresses, and the device details of `/` |
+| Strengthening | at startup it runs the mixer in a loop for 100 milliseconds, so the result depends on how fast this exact machine is |
+
+Everything is folded into SHA-512 and mixed into a pool. No single source
+has to be good on its own.
+
+**Where this board is thinner than a desktop, and it is worth knowing:**
+
+- **No network interfaces to speak of.** A hardened Corky has no radio, so
+  the interface list Core hashes is almost empty, and the addresses on it
+  are not unique to you.
+- **No disk activity.** The datadir is a tmpfs and nothing else writes, so
+  `/proc/diskstats` is close to still.
+- **A quiet machine.** Nothing else is running, which is the point of the
+  device, and it is also what a general-purpose desktop has that this does
+  not: a hundred processes making unpredictable timing.
+- **`RDRAND` and `RDSEED` do not exist on ARM.** Those are x86
+  instructions. On this board that row of the table is simply absent.
+- **A fresh boot every time.** The device is stateless, so Core's own
+  events pool starts empty on every session rather than accumulating.
+
+**What is the same, and it is the part that matters most:** the kernel's
+`getrandom` is the same call, seeded by the same kinds of interrupt timing,
+and on a Raspberry Pi it is also fed by the SoC's own hardware random
+number generator through the kernel. The cycle counter, the strengthening
+loop and the SHA-512 mixing are identical, because it is the same Core
+binary doing them.
+
+**What Corky adds: nothing.** It calls `createwallet` and Core does the
+rest. There is no Python `random`, no `os.urandom`, no dice entry, no
+camera noise, no timing of your button presses. A test fails if any of
+those appear. That is a deliberate refusal to improve on Core, not an
+oversight, because a homemade entropy source is exactly the kind of thing
+that looks clever and loses money.
+
+**And the honest bottom line, unchanged.** Software entropy cannot be
+audited by looking at its output. A compromised generator and a good one
+produce the same-looking bytes. That is as true of Core's as of anyone's.
+Cards and dice remain the documented default here, and they are the only
+path where the unauditable step happens in your own hands. Generating on
+the device is an option, and this section is what you are accepting when
+you take it.
+
 ## Against the honest alternative: Core on an air-gapped laptop
 
 The people most likely to pick this apart already have a better answer than
@@ -517,12 +577,12 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1959 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1955 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1005) ·
-[`corky/screens.py`](corky/screens.py) (567) ·
+[`corky/main.py`](corky/main.py) (1002) ·
+[`corky/screens.py`](corky/screens.py) (566) ·
 [`corky/signer.py`](corky/signer.py) (313) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
@@ -537,11 +597,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,207 lines** (3,770 with blanks/comments).
+**Total functional code: 2,203 lines** (3,780 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,939 lines — none of it ships on the device.**
+**Test code: 3,943 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,
