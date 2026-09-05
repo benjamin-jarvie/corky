@@ -138,6 +138,12 @@ documentation, and someone can go and build it without another decision.
   works on the Zero, so paper-only is a choice rather than a constraint.
   Awaiting Ben's word before anything is deleted.
 
+- [N5 Will a RAM-resident image actually fit on the Zero 2 W](tickets/N5-ram-image-budget.md)
+  — not proven and tight enough to doubt. 644MB of package closure against
+  447MB of RAM, so it needs a purpose-built image rather than a switch; a
+  stripped one lands near 374MB of 447 on an estimate, leaving about 70MB.
+  Second time today the 512MB ceiling decided something.
+
 ## Open, and they are the way out of this map
 
 - [N4 Sync butlers-playground](tickets/N4-sync-the-fork.md) — the fork is
