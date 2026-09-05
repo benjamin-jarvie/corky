@@ -138,7 +138,8 @@ def main():
 
         # 4. A generated key, discarded, leaves nothing either. Its xprv
         #    was never typed by anyone, so this covers the A-19 path.
-        gen_name, gen_xprv = signer.generate_wallet(rpc)
+        gen_name = signer.generate_wallet(rpc)
+        gen_xprv = signer.master_xprv(rpc, wallet=gen_name)
         if hits(datadir, gen_xprv):
             ok("sanity: the generated key is on disk while loaded")
         else:
@@ -152,7 +153,8 @@ def main():
         # 5. close_session clears every slot, not just the current one.
         keys = []
         for _ in range(3):
-            n, x = signer.generate_wallet(rpc)
+            n = signer.generate_wallet(rpc)
+            x = signer.master_xprv(rpc, wallet=n)
             keys.append(x)
         signer.close_session(rpc)
         survivors = [x[:12] for x in keys if hits(datadir, x)]

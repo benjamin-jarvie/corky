@@ -50,7 +50,7 @@ def main():
         # 1. Only the two script types Corky hands out addresses from ever
         #    leave the device. A Core-generated wallet also carries legacy
         #    pkh and sh(wpkh) descriptors, and those must not be exported.
-        gen_name, _ = signer.generate_wallet(rpc)
+        gen_name = signer.generate_wallet(rpc)
         pubs = signer.export_descriptors(rpc, gen_name)
         kinds = sorted({d.split("(")[0] for d in pubs})
         if kinds == ["tr", "wpkh"]:

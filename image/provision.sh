@@ -95,6 +95,66 @@ mkdir -p /mnt/usb
 systemctl daemon-reload
 echo "   enable boot-to-corky with: sudo systemctl enable --now corky"
 
+CFG0="${CFG0:-/boot/firmware/config.txt}"
+[ -f "$CFG0" ] || CFG0=/boot/config.txt
+
+echo "== nothing writes secrets to the card, and no console leaves the board"
+# SWAP. This is the worst leak path on the device and it was open until
+# 2026-09-05. Raspberry Pi OS enables swap by default, so the Python heap
+# holding a key can be paged to the SD card, which defeats the whole
+# "nothing persists" claim. m0/FLASH.md told the operator to run
+# `swapoff -a` by hand for the gate, and noted it comes back at reboot.
+# A signer must never have swap at all.
+systemctl disable --now dphys-swapfile 2>/dev/null || true
+systemctl mask dphys-swapfile 2>/dev/null || true
+apt-get purge -y -qq dphys-swapfile 2>/dev/null || true
+# Trixie: systemd-zram-generator owns dev-zram0.swap and recreates it.
+systemctl mask dev-zram0.swap swap.target 2>/dev/null || true
+rm -f /etc/systemd/zram-generator.conf
+printf '[swap]\nzram-size = 0\n' > /etc/systemd/zram-generator.conf
+swapoff -a 2>/dev/null || true
+sed -i '/\sswap\s/d' /etc/fstab 2>/dev/null || true
+
+# THE JOURNAL. Core quotes keys back in its errors and Corky redacts them,
+# but a journal on the card is still a permanent record of a session.
+# Keep it in RAM, where it dies with the power like everything else.
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/corky-volatile.conf <<'JEOF'
+[Journal]
+Storage=volatile
+RuntimeMaxUse=16M
+JEOF
+rm -rf /var/log/journal
+
+# THE SERIAL CONSOLE. Raspberry Pi OS puts a login console on GPIO pins 8
+# and 10 by default. Three wires and physical access is a root shell on a
+# device holding a key. The panel is the only interface this device has.
+CMDLINE="${CMDLINE:-/boot/firmware/cmdline.txt}"
+[ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
+if [ -f "$CMDLINE" ]; then
+    sed -i 's/console=serial0,[0-9]*//g; s/console=ttyAMA0,[0-9]*//g; s/  */ /g' "$CMDLINE"
+fi
+systemctl disable --now serial-getty@ttyAMA0.service serial-getty@ttyS0.service 2>/dev/null || true
+systemctl mask serial-getty@ttyAMA0.service serial-getty@ttyS0.service 2>/dev/null || true
+grep -q "^enable_uart=0" "$CFG0" 2>/dev/null || echo "enable_uart=0" >> "${CFG0:-/boot/firmware/config.txt}"
+
+# USB. The Zero's port can be a HOST or a DEVICE. As a device it can
+# enumerate to a computer as a network card, a serial port or a disk, all
+# of which are ways off this board. Force host mode and refuse the gadget
+# drivers.
+grep -q "^dtoverlay=dwc2,dr_mode=host" "${CFG0:-/boot/firmware/config.txt}" || \
+    echo "dtoverlay=dwc2,dr_mode=host" >> "${CFG0:-/boot/firmware/config.txt}"
+cat > /etc/modprobe.d/corky-no-gadget.conf <<'GEOF'
+# Corky: this device is a USB host. It is never a USB device.
+blacklist g_ether
+blacklist g_serial
+blacklist g_mass_storage
+blacklist g_multi
+blacklist libcomposite
+blacklist usb_f_ecm
+blacklist usb_f_rndis
+GEOF
+
 echo "== radios off at every layer the OS controls"
 # PLAN v1 promised this and nothing implemented it until 2026-09-05.
 #
@@ -105,9 +165,8 @@ echo "== radios off at every layer the OS controls"
 # SDIO host controller while the chip keeps its power
 # (docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md). Only
 # removing the part is physics. This is everything short of that.
-CFG="${CFG:-/boot/firmware/config.txt}"
 for ov in disable-wifi disable-bt; do
-    grep -q "^dtoverlay=$ov" "$CFG" || echo "dtoverlay=$ov" >> "$CFG"
+    grep -q "^dtoverlay=$ov" "$CFG0" || echo "dtoverlay=$ov" >> "$CFG0"
 done
 
 # 2. The drivers cannot load, so nothing binds even if an overlay is lost.

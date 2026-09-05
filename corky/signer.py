@@ -468,7 +468,7 @@ def sign_psbt(rpc: "Rpc", psbt_b64: str, wallet: str = WALLET) -> dict:
     return {"psbt": result["psbt"], "complete": result["complete"]}
 
 
-def generate_wallet(rpc: "Rpc") -> tuple[str, str]:
+def generate_wallet(rpc: "Rpc") -> str:
     """A-19: seed generation and usage EXACTLY as a Bitcoin Core wallet.
 
     `createwallet` makes Core generate its master key with its own RNG
@@ -478,20 +478,30 @@ def generate_wallet(rpc: "Rpc") -> tuple[str, str]:
     out of the descriptors Core wrote. Nothing of ours sits between
     Core's RNG and the backup: no extraction, no hashing, no reshaping.
 
-    Returns (wallet name, master xprv). The new key takes the next free
-    slot beside the keys already loaded (ticket 03); at the cap the slot
-    lookup refuses with a message the home screen can show. Raises if the
-    descriptors do not all share one master key (they always do for
-    Core-generated wallets; the check is a sanity assertion, not entropy
-    verification).
+    Returns the wallet name, and NOTHING ELSE (Ben, 2026-09-05). It used to
+    return the master xprv too, so a key Core had just made was pulled back
+    out into Corky's memory at the moment of birth, whether or not anyone
+    ever asked to see it. A key generated here and backed up to an
+    encrypted file is now never read out of Core at all. `master_xprv` is
+    still there for the paper backup, which asks for it when the user
+    chooses to look at it.
+
+    The new key takes the next free slot beside the keys already loaded
+    (ticket 03); at the cap the slot lookup refuses with a message the home
+    screen can show. Raises if the descriptors do not all share one master
+    key (they always do for Core-generated wallets; the check is a sanity
+    assertion, not entropy verification).
     """
     name = _next_slot(rpc)
     rpc.call("createwallet", name)
     try:
-        return name, master_xprv(rpc, name)
+        # One read, discarded immediately: it is the sanity check that all
+        # the descriptors share a master, not a value anyone keeps.
+        master_xprv(rpc, name)
     except RuntimeError:
         _drop_wallet(rpc, name)
         raise
+    return name
 
 
 def master_xprv(rpc: "Rpc", wallet: str = WALLET) -> str:

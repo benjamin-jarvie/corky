@@ -429,15 +429,19 @@ def main():
         print("ok   T: the descriptor grid can express a real Core descriptor")
 
         # ---- Session G: exact-Core generation from the tools menu (A-19) --
-        # home selected=0 = generate key, a = select, a = accept the
-        # tradeoff, then one a per screenful of the master xprv (111 chars
-        # paginates into three), a = leave the verify screen, b = abort the
-        # PSBT load loop the generated key drops us into.
+        # Tools, New key, accept the tradeoff, then the BACKUP CHOICE. The
+        # paper backup is now the second option (Ben, 2026-09-05), so this
+        # session takes it deliberately: d then a, then one a per screenful
+        # of the master xprv (111 characters paginate into three), then the
+        # address screen, then back out.
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
-                       "da" + "a" + "a" + "a" * xprv_pages + "a" + "b" + "b" + "draa",
-                       fg)   # Tools, New key, accept, pages, verify, back, back, power off
+                       "da" + "a" + "a"           # Tools, New key, accept
+                       + "da"                     # backup menu -> On paper
+                       + "a" * xprv_pages + "a"   # the pages, then the address
+                       + "b" + "b" + "draa",
+                       fg)
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
         assert _has(fg, _render(scr.generate_warning)), \
             "G: the tradeoff screen was never shown before generation"
@@ -446,7 +450,9 @@ def main():
             "G: Core was not asked to create the wallet"
         assert not (rpc.wallet_dir / signer.WALLET).exists(), \
             "G: the session wallet was not deleted at teardown"
-        print("ok   G: Core-RNG generation -> master-xprv backup -> wallet open "
+        assert _has(fg, _render(scr.backup_menu, 0)), \
+            "G: the backup choice was never offered after generation"
+        print("ok   G: Core-RNG generation -> backup choice -> wallet open "
               "in Core -> both wallets gone at teardown")
 
         print("\nSESSION PASS: xprv-QR, typed xprv, typed descriptor, "

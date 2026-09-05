@@ -770,15 +770,18 @@ class Session:
         return text
 
     def _backup(self, name, xfp):
-        """Two backups (ticket 04): the key on paper, or a file another
-        computer running Core can restore."""
+        """Two backups (ticket 04). The file is offered first, because Core
+        writes it and the key never passes through Corky to make it. The
+        paper backup is the one exposure that is a choice: it asks Core for
+        the key so a screen can draw it. Returns True if a backup was made.
+        """
         i = self._pick(lambda sel: screens.backup_menu(self.w, self.h, sel),
                        len(screens.BACKUP_OPTIONS))
         if i is None:
-            return
+            return False
         if i == 0:
-            return self._backup_paper(name, xfp)
-        return self._backup_file(name)
+            return self._backup_file(name)
+        return self._backup_paper(name, xfp)
 
     def _backup_file(self, name):
         """Core's own encryptwallet then backupwallet. The medium is asked
@@ -786,16 +789,17 @@ class Session:
         different decision from one on a stick you take away."""
         passphrase = self._ask_passphrase("BACKUP  PASSPHRASE")
         if passphrase is None:
-            return
+            return False
         dest = self._choose_channel()
         if dest is None:
-            return
+            return False
         stop = self._busy("Bitcoin Core is encrypting your backup…")
         try:
             out = signer.backup_encrypted(self.rpc, name, passphrase, dest)
         finally:
             stop()
         self._hold(f"{out.name} written", ok=True)
+        return True
 
     def _key_from_file(self):
         """Load a key from a Core wallet backup on a stick or a card."""
@@ -823,7 +827,7 @@ class Session:
         """The paper backup: Core's master xprv for this key, in
         four-character groups over as many pages as it needs."""
         xprv = signer.master_xprv(self.rpc, wallet=name)
-        self._show_backup(xprv, f"KEY  {(xfp or '').upper()}")
+        return self._show_backup(xprv, f"KEY  {(xfp or '').upper()}")
 
     def _discard(self, name, xfp):
         """Discard key asks first; BACK is pre-selected. Returns True when
@@ -1112,16 +1116,22 @@ class Session:
                 return False
         stop = self._busy("Bitcoin Core is generating your key…")
         try:
-            name, xprv = signer.generate_wallet(self.rpc)
+            name = signer.generate_wallet(self.rpc)
         finally:
             stop()
         self.key = name
-        # The backup IS the master xprv, in Core's own encoding, shown in
-        # 4-char groups for transcription. No split option: an xprv is a
-        # BIP32 node, not a seed, so there is nothing to split. A-22: the
-        # pure signer's only backup is this string.
+        # The paper backup is the master xprv in Core's own encoding, in
+        # four-character groups. No split option: an xprv is a BIP32 node
+        # rather than a seed, so there is nothing to split. It is now the
+        # SECOND option, because the file backup never reads the key out of
+        # Core (Ben, 2026-09-05).
         xfp = signer.master_fingerprint(self.rpc, wallet=name)
-        if not self._show_backup(xprv, f"KEY  {(xfp or '').upper()}"):
+        # The backup CHOICE, not the paper one by default (Ben, 2026-09-05).
+        # A key Core has just made can be backed up to an encrypted file
+        # without ever being drawn on a screen, and that is now the first
+        # option. A key with no backup at all is a key nobody can recover,
+        # so refusing to back it up still discards it.
+        if not self._backup(name, xfp):
             signer.close_key(self.rpc, name)     # only the key just made
             return False
         # The first receive address in full, so the transcription can be

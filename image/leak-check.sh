@@ -1,7 +1,7 @@
 #!/bin/bash
-# Corky: what the OS can tell you about the radios, and what it cannot.
+# Corky: every way data could leave this board, and what the OS can prove.
 #
-# Run this ON THE DEVICE, as root:   sudo bash /opt/corky/image/radio-check.sh
+# Run this ON THE DEVICE, as root:   sudo bash /opt/corky/image/leak-check.sh
 #
 # READ THIS BEFORE YOU TRUST THE RESULT.
 #
@@ -26,7 +26,7 @@ ok()   { printf "  ok    %s\n" "$1"; PASS=$((PASS+1)); }
 bad()  { printf "  FAIL  %s\n" "$1"; FAIL=$((FAIL+1)); }
 note() { printf "        %s\n" "$1"; }
 
-echo "Corky radio check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
+echo "Corky leak check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
 echo
 echo "1. Firmware overlays"
 CFG=/boot/firmware/config.txt
@@ -108,7 +108,78 @@ else
 fi
 
 echo
-echo "7. Bitcoin Core's own networking"
+echo "7. Swap, the worst path off this board"
+if [ -n "$(swapon --show 2>/dev/null)" ]; then
+    bad "SWAP IS ON. Key pages can be written to the card."
+    note "$(swapon --show 2>/dev/null | tail -n +2)"
+else
+    ok "no swap is active"
+fi
+for unit in dphys-swapfile dev-zram0.swap swap.target; do
+    STATE=$(systemctl is-enabled "$unit" 2>/dev/null || echo absent)
+    case "$STATE" in
+        masked|absent|disabled) ok "$unit is $STATE" ;;
+        *) bad "$unit is $STATE and could bring swap back at reboot" ;;
+    esac
+done
+if grep -qE '\sswap\s' /etc/fstab 2>/dev/null; then
+    bad "/etc/fstab still has a swap entry"
+else
+    ok "/etc/fstab has no swap entry"
+fi
+
+echo
+echo "8. The journal, which keeps a record of sessions"
+if [ -d /var/log/journal ]; then
+    bad "/var/log/journal exists, so the journal is written to the card"
+else
+    ok "no persistent journal directory"
+fi
+if grep -rqs "Storage=volatile" /etc/systemd/journald.conf.d/ /etc/systemd/journald.conf; then
+    ok "journald is set to keep the log in RAM"
+else
+    bad "journald is not set to Storage=volatile"
+fi
+
+echo
+echo "9. Consoles and ports that are not the panel"
+CMDLINE=/boot/firmware/cmdline.txt
+[ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
+if grep -qE "console=(serial0|ttyAMA0|ttyS0)" "$CMDLINE" 2>/dev/null; then
+    bad "a serial console is on the GPIO header: three wires is a root shell"
+else
+    ok "no serial console in $CMDLINE"
+fi
+for unit in serial-getty@ttyAMA0.service serial-getty@ttyS0.service; do
+    STATE=$(systemctl is-enabled "$unit" 2>/dev/null || echo absent)
+    case "$STATE" in
+        masked|absent|disabled) ok "$unit is $STATE" ;;
+        *) bad "$unit is $STATE" ;;
+    esac
+done
+if [ -e /sys/class/udc ] && [ -n "$(ls /sys/class/udc 2>/dev/null)" ]; then
+    bad "a USB device controller is active: this board can pretend to be a"
+    note "network card, a serial port or a disk to any computer it is plugged into"
+else
+    ok "no USB device controller: the port is a host, not a device"
+fi
+if [ -f /etc/modprobe.d/corky-no-gadget.conf ]; then
+    ok "the USB gadget drivers are blacklisted"
+else
+    bad "no USB gadget blacklist"
+fi
+if command -v tvservice >/dev/null 2>&1 || [ -d /sys/class/drm ]; then
+    ATTACHED=$(grep -l "^connected" /sys/class/drm/*/status 2>/dev/null | wc -l)
+    if [ "$ATTACHED" -eq 0 ]; then
+        ok "no display is attached over HDMI"
+    else
+        note "$ATTACHED HDMI output(s) connected. The panel is SPI, so HDMI"
+        note "carries only the boot console. Unplug it for a signing session."
+    fi
+fi
+
+echo
+echo "10. Bitcoin Core's own networking"
 CONF=/etc/corky-bitcoin.conf
 if grep -q "^networkactive=0" "$CONF" 2>/dev/null; then
     ok "$CONF sets networkactive=0"
@@ -124,10 +195,16 @@ else
     echo "$FAIL of $((PASS+FAIL)) checks FAILED. The OS can still drive a radio."
 fi
 echo
-echo "This says the operating system is not driving the wireless hardware."
-echo "It does NOT say the chip is unpowered. Only removing the part says"
-echo "that, and on the Zero 2 W the radio is a separate component beside"
-echo "the processor, so removal is possible. A device that has to be"
+echo "This says the operating system is not driving any way off this board:"
+echo "no radio, no swap to the card, no journal on the card, no console on"
+echo "the header, and no USB device mode."
+echo
+echo "It does NOT say the wireless chip is unpowered. Only removing the"
+echo "part says that, and on the Zero 2 W the radio is a separate component"
+echo "beside the processor, so removal is possible. A device that has to be"
 echo "silent by physics is a device with the part taken off."
+echo
+echo "What no script can check: the activity LED can be modulated, and the"
+echo "power line and the panel both emit. Those need a room, not a config."
 echo "==================================================================="
 exit $FAIL

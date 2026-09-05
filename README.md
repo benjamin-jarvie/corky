@@ -81,9 +81,11 @@ fails if any shipped module so much as imports a cryptographic library.
 1. **On the way in.** What you type on the grid, or what the camera reads,
    is a string in Python until it reaches Core through `bitcoin-cli
    -stdin`. Never the command line, so it is never in a process listing.
-2. **On the way to paper.** For a backup, Corky asks Core for the master
-   key and renders it as pixels. This is the one time a key is pulled
-   **out** of Core for a reason that is not cryptographic.
+2. **On the way to paper, and only if you ask.** The paper backup asks
+   Core for the master key and renders it as pixels. This is the one time
+   a key is pulled **out** of Core for a reason that is not cryptographic,
+   which is why the encrypted file backup is the first option and this one
+   is the second.
 3. **The backup passphrase**, typed on the grid, on its way to Core's own
    `encryptwallet`.
 
@@ -114,7 +116,7 @@ Corky's claim is not "trustless". It is: **you trust Bitcoin Core's wallet
 implementation instead of a rewrite of it, and nothing else of ours computes
 on your key, because there is no such code to compute with.**
 
-## The radios, and the two claims that are not the same claim
+## Every way off this board, and the two claims that are not the same claim
 
 The image turns the wireless hardware off at every layer the operating
 system controls: the `disable-wifi` and `disable-bt` overlays in
@@ -124,7 +126,7 @@ chip up, and `wpa_supplicant`, `bluetooth`, `hciuart` and the network
 managers disabled and masked. Bitcoin Core is separately started with
 `networkactive=0`.
 
-`sudo bash /opt/corky/image/radio-check.sh`, on the device, checks all of
+`sudo bash /opt/corky/image/leak-check.sh`, on the device, checks all of
 it and prints a verdict.
 
 **A clean run proves the OS is not driving the radio. It does not prove
@@ -211,12 +213,13 @@ boot memory remanence is a real attack against that, and the answer to it
 is to power the device off, which is also the answer to everything else on
 this device. It is an M3 question and it is not solved here.
 
-**The one exposure that is a choice, not a necessity.** Getting a key IN
-requires it to pass through memory. Showing a paper backup does not: for a
-key Core generated, Corky asks Core for the master key purely to draw it
-on the screen. The encrypted file backup has no such step, because Core
-writes that file itself. If you never need words on paper, using only the
-file backup removes an entire exposure.
+**The one exposure that was a choice is now the second option.** Getting a
+key IN requires it to pass through memory. Showing a paper backup does
+not: it asks Core for the master key purely to draw it on a screen. So the
+encrypted file backup is offered first, and `generate_wallet` no longer
+returns the key at all. A key Core generates and you back up to a file is
+**never read out of Core**. Choose the paper backup and it is, once, on
+purpose, and the menu says which one costs you that.
 
 ## The trade-offs, before critics find them
 
@@ -396,13 +399,13 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1909 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1911 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (971) ·
+[`corky/main.py`](corky/main.py) (972) ·
 [`corky/screens.py`](corky/screens.py) (556) ·
-[`corky/signer.py`](corky/signer.py) (312) ·
+[`corky/signer.py`](corky/signer.py) (313) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
 
@@ -416,11 +419,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,157 lines** (3,637 with blanks/comments).
+**Total functional code: 2,159 lines** (3,657 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,775 lines — none of it ships on the device.**
+**Test code: 3,789 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

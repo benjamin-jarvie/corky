@@ -166,7 +166,8 @@ def main():
             bad("the owning key could not complete its own transaction")
 
         # 5. Generate takes the next free slot and keeps the loaded keys.
-        name_c, xprv_c = signer.generate_wallet(rpc)
+        name_c = signer.generate_wallet(rpc)
+        xprv_c = signer.master_xprv(rpc, wallet=name_c)
         after = signer.loaded_keys(rpc)
         if name_c == "corky-3" and [k.name for k in after] == ["corky", "corky-2", "corky-3"]:
             ok("generate_wallet took slot corky-3 and kept the other two")

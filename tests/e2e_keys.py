@@ -187,9 +187,10 @@ def main():
         # no Load-a-key detour at all.
         script = ("a"                             # Scan tile: xprv -> key menu
                   + "dda" + "a" + "dda" + "b"     # Receiving addresses -> segwit -> page on, back
-                  + "da" + "a" + "aaa"            # Backup key -> On paper -> 3 pages
+                  + "da" + "da" + "aaa"           # Backup key -> On paper (2nd) -> 3 pages
                   + "da" + "ra"                   # Discard key -> confirm: DISCARD
-                  + "da" + "a" + "a" + "aaa" + "a"  # Tools -> New key -> proceed -> 3 pages -> address
+                  + "da" + "a" + "a"              # Tools -> New key -> proceed
+                  + "da" + "aaa" + "a"            # backup choice -> On paper -> 3 pages -> address
                   + "b" + "b"                     # key menu -> keys list -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -200,7 +201,10 @@ def main():
             "K3: scanning an xprv did not land on that key's menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), "K3: A's key menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 3)), "K3: Backup key highlighted"
-        assert _has(fr, _render(scr.backup_menu, 0)), "K3: the backup chooser"
+        assert _has(fr, _render(scr.backup_menu, 0)), \
+            "K3: the backup chooser, with the file backup first"
+        assert _has(fr, _render(scr.backup_menu, 1)), \
+            "K3: On paper is the second row now, and was selected"
         # The dev display blanks every sensitive frame (hal.DevDisplay), so
         # the three xprv pages are three blank frames in a row, and the
         # backup page itself is pinned by test_screen_fit.
@@ -305,7 +309,7 @@ def main():
         stick6 = work / "stick6"; stick6.mkdir()
         phrase = text_keys("passphrase", "hunter2")
         script = ("ra" + "a" + "a"                    # Key -> Scan a key -> warning
-                  + "ddda" + "da" + phrase + "a" + "a"  # Backup key -> To a file -> type -> medium -> dismiss
+                  + "ddda" + "a" + phrase + "a" + "a"  # Backup key -> To a file (1st) -> type -> channel -> dismiss
                   + "da" + "ra"                       # Discard key -> DISCARD
                   + "ra" + "ddda" + "a" + phrase      # Key -> Restore from file -> pick -> type
                   + "b" + "b" + "draa")
@@ -317,7 +321,8 @@ def main():
         assert len(backups) == 1, f"K6: backup not written: {list(stick6.iterdir())}"
         assert xfp_a in backups[0].name, f"K6: wrong name {backups[0].name}"
         fr6 = work / "framesK6"
-        assert _has(fr6, _render(scr.backup_menu, 1)), "K6: the backup chooser"
+        assert _has(fr6, _render(scr.backup_menu, 0)), \
+            "K6: the backup chooser, with the file backup pre-selected"
         assert _has(fr6, _render(scr.restore_menu, [backups[0].name], 0)), \
             "K6: the restore chooser listed the backup by fingerprint"
         assert _has(fr6, _render(scr.result, ok=True,
