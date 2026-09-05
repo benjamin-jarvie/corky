@@ -218,6 +218,41 @@ that is not ours.
 
 Final state: 27 suites green, including the 81 interop checks.
 
+## The board, answered (2026-09-05)
+
+Ben asked whether a Zero 2 exists with no radio, because that board fits
+the enclosure and the CM4 does not. Full findings, primary sources only:
+[research/pi-zero-radio.md](research/pi-zero-radio.md).
+
+**No Zero 2 without the W was ever sold, and no Zero-class board has been
+released since 2021.** The only radio-free board in the 65 x 30 mm form
+factor is the ORIGINAL Pi Zero, still in production to at least January
+2030, and v1.3 has the camera connector.
+
+**It cannot run our Bitcoin Core.** The original Zero is ARMv6. Core's
+release builds are `aarch64-linux-gnu` and `arm-linux-gnueabihf`, and the
+release build sets no `-march`, so the 32-bit binary carries the standard
+armhf baseline, which is ARMv7. Running Core on ARMv6 means building it
+ourselves, and then the binary is one that only we have verified, instead
+of the official one with eleven signatures checked out of band. That trade
+is the whole project in reverse. This is the same conclusion Ben reached
+when he rejected the Zero 1.3 for its cross-compile burden.
+
+**The useful finding: the Zero 2 W's radio is a separate component.** The
+RP3A0 system-in-package holds only the processor die, the memory die and
+capacitors. The radio is a Synaptics part beside it, so it can be reached
+without touching the processor. That supports the decision already
+recorded in the zero2w-m0-fixes map, that the pocket build instructs
+physical removal.
+
+**Two cautions for whoever does the removal.** Raspberry Pi changed the
+part from SYN43436SXKUBG to SYN43436PXKUBG on 1 November 2025 and ships
+four Wi-Fi firmware variants, so the board in hand must be inspected
+rather than assumed. And `dtoverlay=disable-wifi` disables the SDIO host
+controller only; nothing in the documentation says the radio loses power.
+A real hardware disable pin is documented for the Compute Modules, not for
+the Zero 2 W.
+
 ## Not yet specified
 
 - Whether the backup passphrase needs a minimum length or a warning line.
