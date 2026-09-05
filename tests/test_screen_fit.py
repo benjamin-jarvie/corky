@@ -67,10 +67,10 @@ CASES = {
     "keys-menu": lambda w, h: screens.keys_menu(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
-               ("corky-5", "ba4c8bd5")], 6),
+               ("corky-5", "ba4c8bd5")], 5),
     "keys-menu-empty": lambda w, h: screens.keys_menu(w, h, [], 0),
-    "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 4),
-    "tools-menu": lambda w, h: screens.tools_menu(w, h, 0),
+    "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 3),
+    "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
     "leak-clear": lambda w, h: screens.leak_report(
         w, h, [("Wi-Fi driver", "not loaded", "normal")] * 24, 0),
     "leak-failures": lambda w, h: screens.leak_report(

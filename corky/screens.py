@@ -176,7 +176,11 @@ def _frame(w, h, title=None):
 # SeedSigner's four: Scan, Seeds, Tools, Settings (Ben, 2026-09-04, map
 # e2e-before-testers ticket 02). Key generation lives under Tools, where
 # SeedSigner keeps "New seed".
-HOME_TILES = [("scan", "qrcode"), ("keys", "key"),
+# Tiles are jobs, not devices (Ben, 2026-09-05). The camera is a means:
+# Sign uses it for a transaction, Keys for a key, Tools to check an
+# address. Naming the first tile after the camera made it the place
+# everything happened, and then no word fitted it.
+HOME_TILES = [("sign", "qrcode"), ("keys", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
 
@@ -459,15 +463,18 @@ def _menu(w, h, title, rows, selected, icons=None):
 
 
 # SeedSigner's per-seed menu, in Core's words (ticket 07).
+# Four things that belong to a key. Sign transaction left on 2026-09-05:
+# the Sign tile does it, from the camera or a stick, and a second door to
+# the same room only made you choose which door.
 KEY_MENU_OPTIONS = [
-    ("Sign transaction", "QR or stick"),
     ("Export public key", "for a coordinator"),
     ("Receiving addresses", "Core derives"),
     ("Backup key", "paper or file"),
     ("Discard key", "Core forgets it"),
 ]
 
-TOOLS_OPTIONS = [("Check for leaks", "")]
+TOOLS_OPTIONS = [("Check for leaks", ""),
+                 ("Check an address", "")]
 
 
 def leak_report(w, h, rows, cursor=0):
@@ -491,12 +498,19 @@ def leak_report(w, h, rows, cursor=0):
 # 2026-09-05: "so we don't have to nest"). New key first, then every way
 # to bring an existing one in. The LOAD A KEY screen it replaces held four
 # rows, and one of them was always the one you wanted.
+# No notes. Each row is a plain thing you can do, and a three-word note
+# beside it either repeated the row or tried to explain a screen that
+# explains itself properly a press later (Ben, 2026-09-05).
+#
+# Type descriptor is gone: a descriptor lives as a printed QR, not as
+# words on steel, so Scan a key covers it, and typing 111 characters on a
+# five-way pad to avoid holding up a card is not a trade anyone makes.
+# Type xprv stays because it is the only way back from a paper backup.
 KEYS_ACTIONS = [
-    ("New key", "Core's own RNG"),
-    ("Scan a key", "xprv or descriptor"),
-    ("Type descriptor", "pure Core"),
-    ("Type xprv", "pure Core"),
-    ("Restore from file", "stick or card"),
+    ("New key", ""),
+    ("Scan a key", ""),
+    ("Type xprv", ""),
+    ("Restore from file", ""),
 ]
 
 

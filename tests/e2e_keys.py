@@ -166,7 +166,7 @@ def main():
                    + "b"         # KEYS -> home
                    + "draa")     # settings -> power off
         r = run_device(datadir, script1, work / "framesK1", qr_key=key_a)
-        assert r.returncode == 0, f"K1 failed:\n{r.stderr[-1500:]}"
+        assert r.returncode == 0, f"K1 rc={r.returncode}\n{r.stderr[-900:]}"
         assert _has(work / "framesK1", _render(
             scr.result, ok=False, detail=f"key {xfp_a} is already loaded")), \
             "K1: the duplicate refusal was never shown"
@@ -180,10 +180,13 @@ def main():
         # B among two keys: the key screen appears with B pre-selected,
         # confirm, review, sign, QR out, power off.
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan -> warning
-                  + "a" + "a"                     # Sign transaction, dismiss the refusal
+                  + "b" + "b"                     # key menu -> Keys -> home
+                  + "a" + "a"                     # Sign tile: nobody owns it, dismiss
                   + "ra" + keys_press(1, "Type xprv")
                   + text_keys("xprv", xprv_b)
-                  + "a" + "a" + "a" + "ra")          # Sign transaction, confirm B, sign, power off
+                  + "b" + "b"                     # key menu -> Keys -> home
+                  + "a"                           # Sign tile
+                  + "a" + "a" + "ra")             # confirm B, sign, power off
         r = run_device(datadir, script, work / "framesK2",
                        qr_key=key_a, qr_psbt=frames_b)
         assert r.returncode == 0, f"K2 failed:\n{r.stderr[-1500:]}"
@@ -205,15 +208,15 @@ def main():
         # and lands on its menu with no detour. Then Receiving addresses,
         # Backup key on paper, Discard key. Then Tools, which holds the leak
         # check alone. Then Keys, New key, which is the first row there now.
-        script = ("a"                             # Scan tile: xprv -> key menu
-                  + "dda" + "a" + "dda" + "b"     # Receiving addresses -> segwit -> page on, back
+        script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan a key -> warning
+                  + "da" + "a" + "dda" + "b"      # Receiving addresses -> segwit -> page on, back
                   + "da" + "da" + "aaa"           # Backup key -> On paper (2nd) -> 3 pages
                   + "da" + "ra"                   # Discard key -> confirm: DISCARD
                   + "da" + "a" + "c"              # Tools -> Check for leaks -> C leaves
                   + "b"                           # Tools -> home
                   + "ra" + keys_press(0, "New key")   # Keys -> New key
                   + "a"                           # accept the generate warning
-                  + "da" + "aaa" + "a"            # backup choice -> On paper -> 3 pages -> address
+                  + "da" + "aaa"                  # backup choice -> On paper -> 3 pages
                   + "b" + "b"                     # key menu -> keys -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -223,7 +226,7 @@ def main():
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), \
             "K3: scanning an xprv did not land on that key's menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), "K3: A's key menu"
-        assert _has(fr, _render(scr.key_menu, xfp_a, 3)), "K3: Backup key highlighted"
+        assert _has(fr, _render(scr.key_menu, xfp_a, 2)), "K3: Backup key highlighted"
         assert _has(fr, _render(scr.backup_menu, 0)), \
             "K3: the backup chooser, with the file backup first"
         assert _has(fr, _render(scr.backup_menu, 1)), \
@@ -248,7 +251,7 @@ def main():
             "K3: the KEYS screen offers New key first with nothing loaded"
         assert _has(fr, _render(scr.busy, "checking every way off this board…")), \
             "K3: the leak check never ran"
-        assert _has(fr, _render(scr.key_menu, xfp_a, 2)), \
+        assert _has(fr, _render(scr.key_menu, xfp_a, 1)), \
             "K3: Receiving addresses highlighted"
         assert _has(fr, _render(scr.export_script_menu, ("wpkh", "tr"), 0)), \
             "K3: Receiving addresses asked which script type"
@@ -293,7 +296,7 @@ def main():
         signer.close_session(rpc)
         stick5 = work / "stick5"; stick5.mkdir()
         script = ("ra" + "da" + "a"                   # Keys -> Scan a key -> warning
-                  + "da" + "a" + "a"                  # Export public key -> Sparrow -> segwit
+                  + "a" + "a" + "a"                   # Export public key (1st) -> Sparrow -> segwit
                   + "a"                               # leave the QR
                   + "a" * desc_pages                  # the descriptor as text
                   + "a" * 3                           # three address pages
@@ -337,7 +340,7 @@ def main():
         stick6 = work / "stick6"; stick6.mkdir()
         phrase = text_keys("passphrase", "hunter2")
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan -> warning
-                  + "ddda" + "a" + phrase + "a" + "a"  # Backup key -> To a file (1st) -> type -> channel -> dismiss
+                  + "dda" + "a" + phrase + "a" + "a"  # Backup key (3rd) -> To a file -> type -> channel -> dismiss
                   + "da" + "ra"                       # Discard key -> DISCARD
                   + "ra" + keys_press(0, "Restore from file")
                   + "a" + phrase                  # pick the backup, type the passphrase
@@ -374,7 +377,8 @@ def main():
         stick7 = work / "stick7"; stick7.mkdir()
         (stick7 / "junk.psbt").write_bytes(b"this is not a transaction" * 8)
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan -> warning
-                  + "a"                 # Sign transaction -> the stick
+                  + "b" + "b"           # key menu -> Keys -> home
+                  + "a"                 # Sign tile -> the stick
                   + "a"                 # dismiss whatever it says
                   + "draa")
         r = run_device(datadir, script, work / "framesK7",
@@ -395,7 +399,9 @@ def main():
         # a script key. The spare "a" is the tick on which the loop repaints
         # with the reason, and C then leaves.
         script8 = ("ra" + keys_press(0, "Scan a key") + "a"
-                   + "a" + "a" + "c" + "draa")
+                   + "b" + "b"          # key menu -> Keys -> home
+                   + "a"                # Sign tile -> the stick
+                   + "a" + "c" + "draa")
         r = run_device(datadir, script8, work / "framesK8",
                        qr_key=key_a, stick=stick8)
         assert r.returncode == 0, (f"K8: an empty PSBT file crashed the "

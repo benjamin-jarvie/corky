@@ -1,16 +1,19 @@
 """Corky's session state machine: the program the device boots into.
 
-States (SeedSigner's shape, map e2e-before-testers tickets 02 and 07):
-  HOME (2x2: scan / key / tools / settings)
-    SCAN  -> the camera: a transaction for the current key
-    KEY   -> the loaded keys by fingerprint, or LOAD A KEY (A-22: a
-             descriptor or an xprv, scanned or typed)
-          -> one key's menu: sign transaction, export public key,
-             receiving addresses, backup key, discard key
-    TOOLS -> NEW KEY (A-19: Core's own RNG), then that key's menu
-    -> sign: LOAD PSBT (QR or stick) -> REVIEW -> sign -> RESULT, which
-       offers SIGN ANOTHER or POWER OFF. Back returns to HOME with the
-       keys still loaded (D7).
+States. Every tile is a JOB, not a device (Ben, 2026-09-05). The camera is
+a means: Sign uses it for a transaction, Keys for a key, Tools to check an
+address. Naming the first tile after the camera made it the place
+everything happened, and then no word fitted it.
+
+  HOME (2x2: sign / keys / tools / settings)
+    SIGN  -> a transaction, from the camera or a stick
+          -> REVIEW -> sign -> RESULT, which offers SIGN ANOTHER or
+             POWER OFF. Back returns to HOME, keys still loaded (D7).
+    KEYS  -> the loaded keys by fingerprint, then New key, Scan a key,
+             Type xprv, Restore from file (A-22: only forms Core reads)
+          -> one key: export public key, receiving addresses, backup
+             key, discard key
+    TOOLS -> the device, not your keys: check for leaks, check an address
   Power off lives in SETTINGS (PLAN A-15c).
 
 Every screen comes from screens.py, every wallet operation from signer.py,
@@ -103,11 +106,8 @@ class ImageQrSource:
     #: The most recent frame, for a viewfinder. None until one arrives.
     last_image = None
 
-    #: A camera is always a channel worth offering for a PSBT, and always
-    #: something the Scan tile can point at. The dev source overrides both,
-    #: because a dev run reads files and may have neither.
+    #: A camera is always a channel worth offering for a PSBT.
     available = True
-    scannable = True
 
     def images(self):
         raise NotImplementedError
@@ -193,21 +193,14 @@ class DevQrSource:
         that exist."""
         return bool(self.psbt_path)
 
-    @property
-    def scannable(self):
-        """The Scan tile takes whatever is in front of the lens, which in
-        a dev run is either file."""
-        return bool(self.psbt_path or self.key_path)
-
     def strings(self):
-        """The dev stand-in for a camera pointed at anything: the key file
-        if there is one, else the PSBT frames. `scannable` promises
-        whichever exists.
+        """The dev stand-in for a camera pointed at a static code: the key
+        file if there is one, else the PSBT frames.
 
-        The key file comes first and the PSBT frames do NOT follow it. A
-        camera sees one thing at a time, and yielding both put the key file
-        into the PSBT assembler as a junk frame, where the tick that
-        skipped it also ate a button press (found 2026-09-05).
+        One source at a time. A camera sees one thing, and yielding the key
+        file AND the frames from here put the key into the PSBT assembler
+        as a junk frame, where the tick that skipped it also ate a button
+        press (found 2026-09-05).
         """
         if self.key_path:
             yield Path(self.key_path).read_text()
@@ -429,8 +422,8 @@ class Session:
                 # message and no way back (found on the board, 2026-09-04).
                 # Say what went wrong and return to home instead.
                 try:
-                    outcome = [self.state_scan,    # 0 scan
-                               self.state_keys,    # 1 key
+                    outcome = [self.state_sign,    # 0 sign
+                               self.state_keys,    # 1 keys
                                self.state_tools,   # 2 tools
                                ][selected]()
                 except self.HANDLED as exc:
@@ -473,42 +466,41 @@ class Session:
             if outcome != SIGN_AGAIN:
                 return outcome
 
-    def state_scan(self):
-        """The Scan tile: the camera, and whatever it sees (ticket 05).
+    def state_sign(self):
+        """The Sign tile: a transaction, from the camera or a stick.
 
-        One code decides what happens. UR frames are a transaction, an
-        extended private key or a descriptor is a key to load, and an
-        address is checked against every loaded key. Anything else is
-        counted and skipped, as a stray code on a desk should be.
+        One job, one home. The camera used to be the tile, which made it
+        the place everything happened and left no word that fitted it
+        (Ben, 2026-09-05). It is a means now, used here for a transaction,
+        under Keys for a key, and under Tools to check an address.
         """
-        if not getattr(self.qr, "scannable", True):
-            self._hold("no camera on this build")
+        self._refresh_keys()
+        if not self.keys:
+            self._hold("load a key first")
             return None
+        return self._sign_loop(self.state_load)
+
+    def _tool_check_address(self):
+        """Point the camera at an address and ask Core whose it is.
+
+        The one question a coordinator cannot answer for you: whether the
+        address on that other screen belongs to a key in your hand.
+        """
+        self._refresh_keys()
+        if not self.keys:
+            self._hold("load a key first")
+            return
         try:
-            kind, payload = self._scan_until("hold any QR in view",
-                                             _classify_qr)
+            _kind, payload = self._scan_until(
+                "hold the address QR in view",
+                lambda p: "address" if _classify_qr(p) == "address" else None)
         except qrchannel.ScanAborted:
-            return None
+            return
         except qrchannel.ScanTimeout as exc:
-            self._hold(str(exc))
-            return None
-        try:
-            if kind == "transaction":
-                # The assembler owns a multi-frame scan, so hand the whole
-                # job back to it rather than trying to splice this frame in.
-                return self._sign_loop(self._load_by_qr)
-            if kind == "address":
-                return self._check_address(payload)
-            text = self._guard_key_payload(payload)
-            if kind == "xprv":
-                self.key = signer.open_session_xprv(self.rpc, text)
-            else:
-                self.key = signer.open_session_descriptors(
-                    self.rpc, text.splitlines())
+            return self._hold(str(exc))
         except self.HANDLED as exc:
-            self._show_core_error(exc)
-            return None
-        return self.state_key_menu(self.key)
+            return self._show_core_error(exc)
+        self._check_address(payload)
 
     def _check_address(self, payload):
         """Whose address is this? Core answers, per loaded key (ticket 05).
@@ -583,18 +575,13 @@ class Session:
                 start=selected)
             if selected is None:
                 return None
-            if selected == 0:                         # Sign transaction
-                self.key = name
-                outcome = self._sign_loop(self.state_load)
-                if outcome in (POWER_OFF, TO_HOME):
-                    return outcome
-            elif selected == 1:
+            if selected == 0:
                 self._export(name)
-            elif selected == 2:
+            elif selected == 1:
                 self._browse_addresses(name)
-            elif selected == 3:
+            elif selected == 2:
                 self._backup(name, xfp)
-            elif selected == 4 and self._discard(name, xfp):
+            elif selected == 3 and self._discard(name, xfp):
                 return TO_HOME
 
     def state_tools(self):
@@ -608,6 +595,8 @@ class Session:
                 return None
             if choice == 0:
                 self._tool_leak_check()
+            elif choice == 1:
+                self._tool_check_address()
 
     # -- export the public key (ticket 12) ---------------------------------
 
@@ -890,7 +879,6 @@ class Session:
         """
         ways = [self._tool_generate,
                 self._key_by_scan,
-                self._key_descriptor_typed,
                 self._key_xprv_typed,
                 self._key_from_file]
         try:
@@ -1074,19 +1062,6 @@ class Session:
             raise RuntimeError("key payload has invalid characters")
         return text
 
-    def _key_descriptor_typed(self):
-        """S3: a descriptor typed on the grid, for a camera-less build or a
-        descriptor that never existed as a QR."""
-        text = self._text_entry("PRIVATE  DESCRIPTOR", "descriptor")
-        if not text:
-            return False
-        stop = self._busy("importing into Core…")
-        try:
-            self.key = signer.open_session_descriptors(self.rpc, [text])
-        finally:
-            stop()
-        return True
-
     def _key_xprv_typed(self):
         """S3: an xprv typed on the grid."""
         text = self._text_entry("BIP32  EXTENDED  PRIVATE  KEY", "xprv")
@@ -1194,11 +1169,12 @@ class Session:
         if not self._backup(name, xfp):
             signer.close_key(self.rpc, name)     # only the key just made
             return False
-        # The first receive address in full, so the transcription can be
-        # checked later against any wallet restored from it. Never
-        # truncated, and never getnewaddress: that advances the wallet's
-        # index every time the screen is drawn (ticket 06).
-        self._show_addresses(name, "wpkh", count=1)
+        # No address screen here (Ben, 2026-09-05). One address with no
+        # instruction is not a check, and it fired after a FILE backup
+        # too, where there is nothing to check: Core wrote that file and
+        # nothing was transcribed. The comparison that means something is
+        # in Export, which shows three addresses in full beside the
+        # public key the coordinator is about to be given.
         return True
 
     def _show_backup(self, text, label):
@@ -1449,7 +1425,7 @@ class Session:
                     page, refused = (page + 1) % pages, True
                     seen.add(page)
                     continue
-                return self.state_sign(psbt, source, wallet)
+                return self._sign_and_deliver(psbt, source, wallet)
             elif key == "b":
                 return TO_HOME       # back to home, key still loaded (D7)
             elif key == "c" or (key in ("a", "p") and sel == 0):
@@ -1458,7 +1434,7 @@ class Session:
                 self.buttons.read()
                 return TO_HOME
 
-    def state_sign(self, psbt, source, wallet):
+    def _sign_and_deliver(self, psbt, source, wallet):
         stop = self._busy("signing in Core…")
         try:
             signed = signer.sign_psbt(self.rpc, psbt, wallet=wallet)
