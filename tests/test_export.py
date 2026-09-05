@@ -58,11 +58,30 @@ def main():
         else:
             bad(f"a generated key presented "
                 f"{signer.available_kinds(rpc, gen_name)}")
-        if signer.available_kinds(rpc, name) == ("wpkh", "tr"):
-            ok("a key that arrived by xprv presents BIP84 and BIP86")
+        # A key that arrives by xprv must present what a key Core
+        # generated presents, or restoring your own paper backup shows you
+        # half your wallet. Assert the ROUND TRIP, not the list: generate,
+        # take the paper backup, restore it, and every policy must derive
+        # the same addresses (TESTING.md rule 1).
+        gen_kinds = signer.available_kinds(rpc, gen_name)
+        gen_addrs = {k: signer.receive_addresses(rpc, gen_name, k, 3)
+                     for k in gen_kinds}
+        paper = signer.master_xprv(rpc, wallet=gen_name)
+        signer.close_key(rpc, gen_name)
+        back = signer.open_session_xprv(rpc, paper)
+        back_kinds = signer.available_kinds(rpc, back)
+        back_addrs = {k: signer.receive_addresses(rpc, back, k, 3)
+                      for k in back_kinds}
+        if back_kinds != gen_kinds:
+            bad(f"a restored key presents {back_kinds}, not {gen_kinds}")
+        elif back_addrs != gen_addrs:
+            differ = [k for k in gen_addrs if gen_addrs[k] != back_addrs[k]]
+            bad(f"a restored key derives different addresses for {differ}")
         else:
-            bad(f"an imported key presented "
-                f"{signer.available_kinds(rpc, name)}")
+            ok("a key restored from its own paper backup presents all four "
+               "policies and derives the same addresses")
+        signer.close_key(rpc, back)
+        gen_name = signer.generate_wallet(rpc)
 
         # Whatever it presents, nothing exported may carry a private key.
         leaked = [d for d in signer.export_descriptors(rpc, gen_name)

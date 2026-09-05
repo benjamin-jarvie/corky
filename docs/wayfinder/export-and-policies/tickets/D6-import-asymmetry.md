@@ -1,6 +1,6 @@
 # D6 A restored key has fewer policies than the key it restores
 
-Type: `wayfinder:grilling`, HITL. Unblocked. Related: D1.
+Type: `wayfinder:grilling`, HITL. **Closed 2026-09-05.** Related: D1.
 
 ## Question
 
@@ -20,8 +20,31 @@ Core would find and spend them, but Corky would not show them under
 Receiving addresses and would not sign for them.
 
 The device no longer crashes on this: `signer.available_kinds` reports what
-a key has and the panel offers only that (T0). What is undecided is
-whether the asymmetry should exist at all.
+a key has and the panel offers only that (T0).
+
+## Answer
+
+The asymmetry is gone. `build_descriptors` now builds all four, so a key
+that arrives by scan or by typing presents exactly what a key Core
+generated presents.
+
+**Cost, measured on the board rather than guessed:** a four-pair wallet is
+44kB against 20kB for two, and the node's resident memory does not move
+(55,644kB against 55,712kB, which is noise). 24kB per key, five slots,
+512MB of RAM. There was no trade to make.
+
+**One claim of mine was wrong and is corrected here.** I wrote that
+"another Bitcoin Core would find and spend them". It would not. Core has
+no derivation-path scanning: a descriptor wallet watches the descriptors
+you import and nothing else, so recovering a legacy address means building
+and importing that descriptor by hand, in Core exactly as in Corky. What
+WOULD have found them without being told is a wallet that scans the
+standard paths on restore, which Sparrow, Electrum and BlueWallet all do.
+The coins were never unrecoverable. They were invisible to the device that
+generated them, which is bad enough.
+
+`tests/test_export.py` asserts the round trip: generate, take the paper
+backup, restore it, and every policy derives the same addresses.
 
 To decide:
 

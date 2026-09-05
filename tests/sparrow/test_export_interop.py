@@ -28,14 +28,14 @@ def main():
     r = Results()
     work = Path(tempfile.mkdtemp(prefix="corky-export-interop-"))
     with Regtest(mine=1) as net:
-        # Every policy this key HAS, not every policy Core can make. The
-        # harness key arrives by import, and an imported key gets BIP84
-        # and BIP86 only, while a key Core generates gets all four. That
-        # asymmetry is map ticket D1; what this suite proves is that
-        # whatever the key presents, Sparrow reads it.
+        # Every policy this key HAS. The harness key arrives by import,
+        # and since map ticket D6 an imported key is built with all four,
+        # like a generated one, so restoring a paper backup gives back the
+        # whole wallet rather than half of it.
         kinds = signer.available_kinds(net.rpc, net.wallet)
-        r.record("the harness key presents the policies it was built with",
-                 kinds == ("wpkh", "tr"), str(kinds))
+        r.record("an imported key presents all four policies, like a "
+                 "generated one",
+                 kinds == signer.EXPORT_ORDER, str(kinds))
         for kind in kinds:
             desc = signer.export_descriptor(net.rpc, net.wallet, kind)
             core_addrs = signer.receive_addresses(net.rpc, net.wallet, kind, 5)

@@ -51,6 +51,24 @@ documentation, and someone can go and build it without another decision.
   (`tests/sparrow/test_export_interop.py`, 37 checks). T1, T2 and T3 are
   unblocked.
 
+- [R2 How much entropy Corky actually has](tickets/R2-entropy-level.md) —
+  a single number is not obtainable and anyone offering one is guessing.
+  Measured instead: the hardware generator is clean (7.9998 bits/byte,
+  chi-square 244 on df 255), boot entropy differs across reboots EVEN with
+  the saved seed frozen to a constant, and three separate boots produced
+  three different first keys. The evidence says "working and unverifiable
+  in principle", not "low". Generation stays an option; cards and dice
+  stay the default.
+- [R3 Which script policies each coordinator accepts](tickets/R3-coordinator-policies.md)
+  — read from each coordinator's own source. Sparrow, BlueWallet and Green
+  take all four. Bull Bitcoin takes three and has no taproot anywhere in
+  its source, which corrects the earlier desk research. Green refuses a
+  UR-encoded descriptor and wants the plain string, which is what Corky
+  sends.
+- [D6 A restored key has fewer policies than the key it restores](tickets/D6-import-asymmetry.md)
+  — closed by removing the asymmetry. `build_descriptors` builds all four;
+  measured cost is 24kB per key and no change in resident memory.
+
 ## Not yet specified
 
 - What the export screen sequence becomes once the policy list is settled.
@@ -60,9 +78,10 @@ documentation, and someone can go and build it without another decision.
   coordinator turns out to need a format we do not emit, that reopens.
 - Whether the boot microSD becomes a named channel, and if so at which
   path. It touches PLAN A-23, so it is a decision, not a config change.
-- What the M3 read-only image does about the saved random seed. Sharp
-  enough to name, not yet sharp enough to ticket: it depends on whether
-  M3 is read-only root or an overlay.
+- What the M3 read-only image does about the saved random seed. R2 showed
+  it is not load-bearing, so this is hygiene rather than a hazard: a
+  constant file shipped on every device, contributing nothing. Remove it
+  in provisioning when M3's shape is decided.
 - Whether the change branch should ever be shown. Receiving addresses is
   receive-only on purpose, and that stands, but D1 may make the policy
   list long enough that the reason wants restating on the panel.

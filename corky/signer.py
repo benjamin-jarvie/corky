@@ -67,7 +67,22 @@ Key = namedtuple("Key", "name xfp")
 
 # Account-level derivation, hardened, per BIP84/BIP86. Coin type 0' mainnet,
 # 1' for test networks, per SLIP-44.
-PURPOSES = (84, 86)
+#: The BIP purpose and descriptor function for each of Core's four script
+#: policies, in the order the panel walks them. A key that arrives by scan
+#: or by typing is built with ALL of these, so it presents what a key Core
+#: generated presents.
+#:
+#: It was (84, 86) until 2026-09-05, which meant restoring your own paper
+#: backup gave you two of the four policies the key controls. Coins on a
+#: legacy or nested address were still the key's and still spendable by
+#: anyone who imported the right descriptor, and Corky showed neither the
+#: address nor the balance. Measured on the board: four pairs is a 44kB
+#: wallet against 20kB for two, and the node's RSS does not move. 24kB per
+#: key against 512MB of RAM is not a reason to hide half a wallet.
+PURPOSE_FUNCS = ((44, "pkh({key})"),
+                 (49, "sh(wpkh({key}))"),
+                 (84, "wpkh({key})"),
+                 (86, "tr({key})"))
 
 
 class Rpc:
@@ -137,13 +152,18 @@ class Rpc:
 
 
 def build_descriptors(rpc: "Rpc", xprv: str) -> list[dict]:
-    """BIP84 + BIP86 receive/change descriptors, checksummed by Core."""
+    """All four policies, receive and change, checksummed by Core.
+
+    BIP44 legacy, BIP49 nested segwit, BIP84 native segwit and BIP86
+    taproot, which is what `createwallet` makes, so a key that arrives by
+    scan or by typing presents the same wallet as one Core generated.
+    """
     coin = 0 if rpc.chain == "main" else 1
     descs = []
-    for purpose in PURPOSES:
-        func = "wpkh" if purpose == 84 else "tr"
+    for purpose, shape in PURPOSE_FUNCS:
         for change in (0, 1):
-            raw = f"{func}({xprv}/{purpose}h/{coin}h/0h/{change}/*)"
+            raw = shape.format(
+                key=f"{xprv}/{purpose}h/{coin}h/0h/{change}/*")
             # getdescriptorinfo's "checksum" field covers the descriptor as
             # given (private form); its "descriptor" field is the public form.
             checksum = rpc.call("getdescriptorinfo", raw,

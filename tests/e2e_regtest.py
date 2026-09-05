@@ -53,8 +53,15 @@ def main():
         # 1. Corky session from an xprv
         signer.open_session_xprv(rpc, XPRV)
         pubs = signer.public_descriptors(rpc)
-        assert len(pubs) == 4 and not any("prv" in d for d in pubs), \
-            "public descriptors leaked private material"
+        # Two claims, two messages. They used to share one, so a change in
+        # the COUNT reported a private-key LEAK, which is the loudest
+        # possible wrong answer to look at (2026-09-05).
+        leaked = [d for d in pubs if any(p in d for p in signer.XPRV_PREFIXES)]
+        assert not leaked, \
+            f"public descriptors leaked private material: {leaked[0][:40]}"
+        assert len(pubs) == 2 * len(signer.EXPORT_ORDER), \
+            (f"expected a receive and change descriptor for each of "
+             f"{signer.EXPORT_ORDER}, got {len(pubs)}")
         print(f"ok   session open; {len(pubs)} public descriptors exported")
 
         # 2. Coordinator: watch-only wallet from public descriptors
@@ -124,8 +131,13 @@ def main():
         signer.open_session_descriptors(rpc, [raw84, raw84c])
         pubs_desc = signer.public_descriptors(rpc)
         signer.close_session(rpc)
-        assert [d for d in pubs if "wpkh" in d] == pubs_desc, \
-            "descriptor mode derived a different wallet"
+        # startswith, not `in`: "wpkh" is a substring of "sh(wpkh(" too,
+        # so this matched four descriptors the moment nested segwit was
+        # added and reported a different wallet (2026-09-05).
+        native = [d for d in pubs if d.startswith("wpkh(")]
+        assert native == pubs_desc, \
+            f"descriptor mode derived a different wallet: {len(native)} " \
+            f"native descriptors against {len(pubs_desc)} imported"
         print("ok   descriptor entry mode: identical wallet, no shim, "
               "no assumed paths")
 
