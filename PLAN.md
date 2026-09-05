@@ -215,6 +215,32 @@
   version said software entropy could not be audited at all, which was
   wrong, and it was wrong in a place with no room to correct it.
 
+  **A-19b: Core's RNG is the only way to create a key here, and the
+  "cards and dice by default" claim was false (Ben, 2026-09-05).** He
+  asked whether Core's RNG is safe as a default over dice, and noted that
+  cards cannot work because this is BIP32 and not BIP39. Checking it
+  showed the README had been claiming a path that does not exist.
+
+  Dice cannot make a key on this device. Turning rolls into a key is BIP32
+  master derivation, HMAC-SHA512 over the entropy, and two things would
+  have to be true for that: Corky would need a cryptographic primitive,
+  which A-22 forbids and `tests/test_integrity.py` enforces; or Core would
+  need an RPC that accepts raw entropy, and `sethdseed` went with the
+  legacy wallets. Confirmed against v31.1 on the board: `help sethdseed`
+  answers "unknown command". `tests/test_generate.py` now watches that
+  fact, so if a future Core reopens the door the dice question reopens
+  with it.
+
+  So the choice is Core generating the key here, or bringing an xprv made
+  on another machine and trusting that machine's RNG. The README said
+  "cards and dice by default" in one place and "out of scope for v1:
+  dice entropy" sixty lines below. The second was right. Both are now
+  consistent, and the entropy is stated in numbers rather than adjectives:
+  the kernel credits the SoC generator a full bit per bit and it delivers
+  about 950,000 credited bits per second against a 256-bit requirement.
+  The honest caveat is concentration, not scarcity: fewer independent
+  sources sit behind those bits than on a laptop (map R2, R4).
+
   A-19's substance is untouched: `createwallet` makes the master key with
   Core's own RNG, Corky signs with that same wallet, and no line of ours
   sits between the two. Backup key is a row on the key's own menu, taken

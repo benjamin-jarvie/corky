@@ -25,19 +25,26 @@ the long version is [articles/two-backups.md](articles/two-backups.md)).
 Corky is a position taken in each phase, and the guiding principle across
 all three: **relocate trust to places where lying is hard.**
 
-- **Generation: cards and dice by default, Bitcoin Core by choice.** A
-  compromised random number generator is undetectable from its output, so
-  Corky writes no RNG of its own and ships none: no `os.urandom`, no
-  `random`, no `secrets`, enforced by a test. The recommended path is
-  unchanged. Seeds are born in the physical world (SeedPicker-style cards,
-  or dice with cross-checked mapping) where the one unverifiable step is
-  performed by your own hands, and everything downstream is deterministic,
-  so a lying device gets caught. One opt-in tool sits beside that: Corky
-  can ask **Bitcoin Core** to generate a key, in a throwaway wallet it then
-  uses for signing, and hand you the master private key itself as the backup,
-  read verbatim from Core's descriptors (PLAN A-19) — key generation and
-  usage exactly as a Core wallet. That is
-  a choice about who you trust with software entropy, not a verification
+- **Generation: Bitcoin Core's RNG, because on this device there is no
+  other way.** Corky writes no RNG of its own and ships none: no
+  `os.urandom`, no `random`, no `secrets`, enforced by a test. It asks
+  **Bitcoin Core** to generate a key, in a wallet it then signs with, and
+  hands you the master private key itself as the backup, read verbatim
+  from Core's descriptors (PLAN A-19).
+
+  This README used to say cards and dice were the default. **That was
+  wrong and it is corrected here.** Dice cannot make a key on this device.
+  Turning dice rolls into a key needs BIP32 master derivation, which is
+  HMAC-SHA512, and Corky imports no cryptographic primitive anywhere
+  (A-22), while Core's `sethdseed` went with the legacy wallets and is
+  gone from v31.1. Cards are a BIP39 technique, and the Core-only build
+  has no BIP39 at all. The claim survived from before the A-22 cut, when
+  the shim and codex32 were still in the tree.
+
+  So the real choice is: let Core generate the key here, on a board with
+  its radios physically disabled and the key alive only in RAM; or bring
+  an xprv made on another machine, trusting that machine's RNG instead.
+  The second is not obviously safer. That is
   win — Core's RNG is no more auditable at runtime than anyone else's, it
   is simply the most reviewed counterparty on offer. Core cannot make BIP39
   words and Corky will not invent them.
@@ -188,8 +195,8 @@ actually use your device after you bought it from them."
 Corky has that property structurally, because there is no vendor in the
 loop at all:
 
-- **Key generation** needs no app and no server: cards, dice, words, a
-  codex32 share set, or Bitcoin Core's own RNG on the device.
+- **Key generation** needs no app and no server: Bitcoin Core's own RNG
+  on the device, or an xprv you made elsewhere and bring in.
 - **Signing** speaks PSBT files and BC-UR QR codes: any coordinator,
   any decade.
 - **"Firmware" updates** are a pinned image you build and flash
@@ -285,10 +292,28 @@ is checkable by you.
 
 So the accurate claim is narrower and stronger: **the software is
 auditable and verified; the silicon and the kernel under it are not, and
-the result is unfalsifiable either way.** Cards and dice do not fix the
-software, which was never the weak part. They move the unpredictable step
-out of the machine entirely, into something you watch happen. That is why
-they remain the documented default, and it is the whole of the difference.
+the result is unfalsifiable either way.**
+
+**How much entropy is there, in numbers.**
+`/sys/class/misc/hw_random/rng_quality` reads 1024 on the board: the
+kernel credits the SoC's generator a full bit of entropy per bit read, and
+it delivers about 950,000 credited bits per second. The kernel needs 256
+bits, once, for the life of the boot. Quantity is not the constraint and
+never was.
+
+What is narrower here than on a laptop is the number of independent
+sources behind those bits. Eight interrupt sources carry real counts, led
+by the timer and the SD card, where a laptop adds keyboard timing, mouse
+timing, disk seeks and network interrupts. **The risk is concentration,
+not scarcity**: if the ring oscillator were compromised in a way that
+still passed the statistical tests, there is less else on this board to
+save you. Measurements and method:
+[map R2](docs/wayfinder/export-and-policies/tickets/R2-entropy-level.md)
+and [R4](docs/wayfinder/export-and-policies/tickets/R4-rng-default.md).
+
+Dice would move the unpredictable step out of the machine, into something
+you watch happen. On a device that could use them that is the stronger
+answer. This one cannot: see the generation bullet at the top.
 
 ## Against the honest alternative: Core on an air-gapped laptop
 
@@ -666,7 +691,7 @@ bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,378 lines — none of it ships on the device.**
+**Test code: 4,390 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

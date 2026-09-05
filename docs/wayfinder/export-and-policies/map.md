@@ -69,6 +69,16 @@ documentation, and someone can go and build it without another decision.
   — closed by removing the asymmetry. `build_descriptors` builds all four;
   measured cost is 24kB per key and no change in resident memory.
 
+- [R4 Is Core's RNG safe to have, and safe as the default](tickets/R4-rng-default.md)
+  — "thin" was the wrong word: the kernel credits the SoC generator a full
+  bit per bit, about 950,000 bits per second against a 256-bit
+  requirement. The real caveat is concentration, fewer independent sources
+  than a laptop, not scarcity. And the dice comparison rests on a path
+  that does not exist: `sethdseed` is gone from Core v31.1 and A-22
+  forbids the primitive, so dice cannot make a key here at all. The README
+  claimed cards and dice were the default AND that dice entropy was out of
+  scope. Corrected, and recorded as PLAN A-19b.
+
 ## Not yet specified
 
 - What the export screen sequence becomes once the policy list is settled.

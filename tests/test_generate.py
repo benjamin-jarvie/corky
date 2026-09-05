@@ -93,6 +93,33 @@ def main():
                     bad(f"{mod}.py contains {bad_import}")
         # A-22: shim/ is gone. There is no shipped module outside corky/.
         ok("no Python RNG in any shipped module")
+
+        # A-19b: Core's RNG is the ONLY way to create a key here, and the
+        # README says so. What makes that true is that Core offers no door
+        # for raw entropy: `sethdseed` went with the legacy wallets. Dice
+        # cannot make a key without one, because turning rolls into a key
+        # is HMAC-SHA512 and nothing in corky/ may import it.
+        #
+        # If a future Core reopens that door, this fails, and the dice
+        # question is worth reopening with it. That is the point of the
+        # check: it is a watch on an upstream fact the README leans on,
+        # not a guard against our own code.
+        # Core answers `help <missing>` with a string, not an error, so
+        # the text is what has to be read. A first version of this check
+        # treated any successful call as "the RPC exists" and fired on a
+        # Core that does not have it.
+        try:
+            answer = str(rpc.call("help", "sethdseed"))
+        except RuntimeError as exc:
+            answer = str(exc)
+        has_entropy_rpc = "unknown command" not in answer
+        if has_entropy_rpc:
+            bad("Core accepts raw entropy again (sethdseed): the README's "
+                "claim that Core's RNG is the only on-device path, and the "
+                "reasoning that rules dice out, both need revisiting")
+        else:
+            ok("Core offers no raw-entropy import, so Core's RNG is the "
+               "only way to create a key on this device")
     finally:
         try: rpc.call("stop"); daemon.wait(timeout=30)
         except Exception: daemon.kill()
