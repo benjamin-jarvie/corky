@@ -263,12 +263,22 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
 
 
 def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
-           actions_sel=None):
-    """The end of a signing run. When actions_sel is given, the screen
-    offers SIGN ANOTHER / POWER OFF instead of ending the session."""
+           actions_sel=None, label=None):
+    """The end of a signing run, and every other message the device parks.
+
+    `label` names what happened. It defaulted to SIGNED for anything that
+    went well, so writing a watch-only wallet file drew a large SIGNED
+    over "corky-7b6e6f0e-watch.dat written" and nothing had been signed
+    (Ben, on the board, 2026-09-05). Signing passes SIGNED; everything
+    else says DONE.
+
+    When actions_sel is given, the screen offers SIGN ANOTHER / POWER OFF
+    instead of ending the session.
+    """
+    if label is None:
+        label = "SIGNED" if ok else "FAILED"
     img, d = _frame(w, h)
-    _status_circle(img, d, w, h, "SIGNED" if ok else "FAILED",
-                   OCHRE if ok else RED)
+    _status_circle(img, d, w, h, label, OCHRE if ok else RED)
     _fit(d, (w // 2, int(h * 0.68)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
     if actions_sel is not None:

@@ -352,9 +352,12 @@ def main():
                 f"K5: receive address {i} was never shown in full"
         written = list(stick5.glob("corky-*-watch.dat"))
         assert len(written) == 1, f"K5: watch-only file not written: {written}"
-        assert _has(fr5, _render(scr.result, ok=True,
+        assert _has(fr5, _render(scr.result, ok=True, label="DONE",
                                  detail=f"{written[0].name} written")), \
-            "K5: the device did not say where the file went"
+            "K5: the device did not say where the file went, under DONE"
+        assert not _has(fr5, _render(scr.result, ok=True,
+                                     detail=f"{written[0].name} written")), \
+            "K5: writing a wallet file still draws SIGNED"
         assert xfp_a in written[0].name, \
             f"K5: the file is not named by fingerprint: {written[0].name}"
         print(f"ok   K5: export -> QR, text, three addresses, and "
@@ -388,7 +391,7 @@ def main():
             "K6: encrypt or not is asked before the passphrase"
         assert _has(fr6, _render(scr.restore_menu, [backups[0].name], 0)), \
             "K6: the restore chooser listed the backup by fingerprint"
-        assert _has(fr6, _render(scr.result, ok=True,
+        assert _has(fr6, _render(scr.result, ok=True, label="DONE",
                                  detail=f"{backups[0].name} written")), \
             "K6: the device did not say the backup was written"
         # The key that came back is the same key, and it is usable.

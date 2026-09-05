@@ -35,6 +35,7 @@ in a process listing.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 import threading
@@ -477,8 +478,14 @@ class Session:
 
     def _hold(self, detail, ok=False):
         """Park a message until a key is pressed (D6: a message the user
-        cannot read is a message the user cannot act on)."""
-        self.display.show(screens.result(self.w, self.h, ok=ok, detail=detail))
+        cannot read is a message the user cannot act on).
+
+        DONE, not SIGNED: this screen carries every message the device
+        parks, and only one of them is a signature.
+        """
+        self.display.show(screens.result(self.w, self.h, ok=ok,
+                                         detail=detail,
+                                         label="DONE" if ok else "FAILED"))
         self.buttons.read()
 
     #: Everything a load, a review or a signature can fail with that is
@@ -662,13 +669,34 @@ class Session:
                 return sel
 
     def _file_channels(self):
-        """The file channels that exist right now, in offer order."""
+        """The file channels that exist right now, in offer order.
+
+        On the device a channel counts only when something is MOUNTED
+        there. `/mnt/usb` is an ordinary directory on the boot card when no
+        stick is in the port, so a directory test said "stick" whether or
+        not a stick existed: the file went to the SD card's root
+        filesystem, and the screen said it was written, naming no place
+        (Ben, on the board, 2026-09-05, found as a watch-only file sitting
+        in /mnt/usb with no stick attached).
+
+        That is worse than a wrong word for the ENCRYPTED KEY BACKUP,
+        which takes this same chooser. PLAN A-23 permits a key on the card
+        only when the user asks for the card. Believing they had chosen a
+        removable stick is not asking.
+
+        In dev there is nothing mounted anywhere, so a directory is the
+        channel; the mount rule is the device's, and
+        tests/test_channels.py runs it by faking the mount check.
+        """
         found = []
-        if self.stick_dir and self.stick_dir.is_dir():
-            found.append(("stick", self.stick_dir))
-        if self.card_dir and self.card_dir.is_dir():
-            found.append(("card", self.card_dir))
+        for name, path in (("stick", self.stick_dir), ("card", self.card_dir)):
+            if path and path.is_dir() and self._is_mounted(path):
+                found.append((name, path))
         return found
+
+    def _is_mounted(self, path):
+        """Is anything actually mounted at `path`? Only asked on device."""
+        return os.path.ismount(path) if self.on_device else True
 
     def _choose_channel(self):
         """Where a file goes. Asked every time (ticket 04). None if the
