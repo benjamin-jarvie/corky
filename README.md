@@ -12,8 +12,10 @@ and offline. Key derivation, PSBT parsing, fee computation and transaction
 signing are done by the same reviewed C++ code that runs the Bitcoin network's
 reference node. No reimplementation of wallet logic.
 
-The device holds nothing. The wallet lives on a ramdisk, the seed is entered
-each session (an xprv or a descriptor), and power-off wipes everything.
+The device holds nothing. The wallet lives on a ramdisk, the key is entered
+each session, and power-off wipes everything. A key arrives as an **xprv**,
+which is your private key written the standard way, or as a **descriptor**,
+which is that key plus the rules for deriving addresses from it.
 
 ## What Corky aims to achieve
 
@@ -28,11 +30,11 @@ all three: **relocate trust to places where lying is hard.**
   Corky writes no RNG of its own and ships none: no `os.urandom`, no
   `random`, no `secrets`, enforced by a test. The recommended path is
   unchanged. Seeds are born in the physical world (SeedPicker-style cards,
-  or dice with cross-checked mapping) where the one unauditable step is
+  or dice with cross-checked mapping) where the one unverifiable step is
   performed by your own hands, and everything downstream is deterministic,
   so a lying device gets caught. One opt-in tool sits beside that: Corky
   can ask **Bitcoin Core** to generate a key, in a throwaway wallet it then
-  uses for signing, and hand you Core's own master xprv as the backup,
+  uses for signing, and hand you the master private key itself as the backup,
   read verbatim from Core's descriptors (PLAN A-19) — key generation and
   usage exactly as a Core wallet. That is
   a choice about who you trust with software entropy, not a verification
@@ -108,7 +110,8 @@ bytes between you and Bitcoin Core:
 
 **The cost, said plainly.** You cannot bring a 12 or 24 word seed phrase.
 Nobody can move here from an existing hardware wallet by typing their words.
-Your backup is Core's 111-character master xprv, and it cannot be split into
+Your backup is the master private key itself, 111 characters, and it
+cannot be split into
 shares. If that is unacceptable, the `lab` branch keeps the translator,
 codex32 and SeedQR, and is meant for people who read code.
 
@@ -254,13 +257,38 @@ those appear. That is a deliberate refusal to improve on Core, not an
 oversight, because a homemade entropy source is exactly the kind of thing
 that looks clever and loses money.
 
-**And the honest bottom line, unchanged.** Software entropy cannot be
-audited by looking at its output. A compromised generator and a good one
-produce the same-looking bytes. That is as true of Core's as of anyone's.
-Cards and dice remain the documented default here, and they are the only
-path where the unauditable step happens in your own hands. Generating on
-the device is an option, and this section is what you are accepting when
-you take it.
+**The honest bottom line, stated more carefully than it used to be.** An
+earlier version of this said software entropy "cannot be audited". That
+was too broad, and Ben was right to push on it. There are two different
+questions and only one of them is beyond reach.
+
+**You CAN verify that the code is the code.** Bitcoin Core's releases are
+built reproducibly, so the binary corresponds to source anyone can read.
+Eleven signatures on the 31.1 hashes were checked out of band on
+2026-09-03 from a different host to the one serving the binary, and that
+hash is pinned in `image/PINS`, and provisioning refuses to install
+without it. The M3 release image gets the same treatment: a hash of the
+whole card, reproducible from this repository. So "is the generator the
+one in the repository?" is a question with a real answer, and the answer
+is checkable by you.
+
+**You CANNOT verify the inputs it was given, or the output it produced.**
+
+- The kernel's `getrandom` is not part of Core's reproducible build. Nor
+  is the processor, nor the chip's own hardware generator, which the
+  kernel also feeds from. Verified Core code asking a compromised kernel
+  or a compromised chip produces exactly the bytes it is given.
+- And randomness cannot be checked after the fact. A good generator and a
+  backdoored one produce output that looks identical, which is the point
+  of a backdoored one. No amount of reading the output tells you which you
+  had.
+
+So the accurate claim is narrower and stronger: **the software is
+auditable and verified; the silicon and the kernel under it are not, and
+the result is unfalsifiable either way.** Cards and dice do not fix the
+software, which was never the weak part. They move the unpredictable step
+out of the machine entirely, into something you watch happen. That is why
+they remain the documented default, and it is the whole of the difference.
 
 ## Against the honest alternative: Core on an air-gapped laptop
 
@@ -534,7 +562,7 @@ full for comparison. Sparrow, BlueWallet, Green and Bull Bitcoin all read
 that descriptor as written; Bitcoin Core has no QR reader, so it gets a
 watch-only wallet file its own GUI restores. Receiving addresses browses
 further, ten at a time, receive branch only. Backup key offers two: the
-master xprv on paper, and a file that Core's own `encryptwallet` and
+master private key on paper, and a file that Core's own `encryptwallet` and
 `backupwallet` produce, which another computer running Core restores with
 your passphrase.
 
@@ -547,7 +575,7 @@ asked for it**, encrypted by Core with a passphrase you typed (PLAN A-23).
 Out of scope for v1: multisig, message signing, and dice entropy. Corky
 signs for keys that already live on metal, and writes no randomness of its
 own; the one generation path it offers asks Bitcoin Core for the entropy
-and gives you Core's own master xprv to write down. See PLAN A-19 for the
+and gives you the master private key itself to write down. See PLAN A-19 for the
 tradeoff, stated plainly.
 
 
@@ -578,13 +606,13 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1930 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1962 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (978) ·
-[`corky/screens.py`](corky/screens.py) (565) ·
-[`corky/signer.py`](corky/signer.py) (313) ·
+[`corky/main.py`](corky/main.py) (995) ·
+[`corky/screens.py`](corky/screens.py) (579) ·
+[`corky/signer.py`](corky/signer.py) (314) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
 
@@ -598,11 +626,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,178 lines** (3,770 with blanks/comments).
+**Total functional code: 2,210 lines** (3,833 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,909 lines — none of it ships on the device.**
+**Test code: 3,963 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

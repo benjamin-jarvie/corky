@@ -329,6 +329,9 @@ def backup_encrypted(rpc: "Rpc", wallet: str, passphrase: str, dest_dir: "str | 
     a passphrase prompt to every later signature in the session. The
     scratch wallet is deleted again.
 
+    An empty `passphrase` writes the backup WITHOUT encryption, which Core
+    supports and the screen before it warns about.
+
     The file is named by the key's fingerprint. Returns its path.
     """
     xfp = master_fingerprint(rpc, wallet=wallet) or "unknown"
@@ -344,8 +347,13 @@ def backup_encrypted(rpc: "Rpc", wallet: str, passphrase: str, dest_dir: "str | 
         failures = [r for r in result if not r.get("success")]
         if failures:
             raise RuntimeError(f"backup import failed: {failures}")
-        # encryptwallet reloads the wallet under the same name.
-        rpc.call("encryptwallet", passphrase, wallet=scratch, stdin=True)
+        # An empty passphrase means the user chose no encryption, and Core
+        # refuses to encrypt with one, so the scratch is simply backed up
+        # as it is. The file then holds the key in the clear, which is what
+        # the screen before this warned about.
+        if passphrase:
+            # encryptwallet reloads the wallet under the same name.
+            rpc.call("encryptwallet", passphrase, wallet=scratch, stdin=True)
         out = Path(dest_dir) / f"{BACKUP_PREFIX}{xfp}{BACKUP_SUFFIX}"
         rpc.call("backupwallet", str(out), wallet=scratch)
         return out

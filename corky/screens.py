@@ -680,6 +680,27 @@ def choose_channel(w, h, channels, selected=0):
                   for c in channels], selected)
 
 
+def no_passphrase_warning(w, h, selected=0):
+    """An empty passphrase means the backup file is not encrypted.
+
+    Core allows it, so Corky allows it. The screen says what it costs,
+    because a wallet file with no passphrase is your private key on a
+    removable card, and a card can be copied without you knowing.
+    """
+    img, d = _frame(w, h, "NO  PASSPHRASE")
+    _fit(d, (w // 2, int(h * 0.26)), "The file will NOT be encrypted.",
+         int(h * 0.065), RED, "mm", int(w * 0.94))
+    _fit_block(d, ["Anyone who finds the card or the stick",
+                   "can take the coins. No passphrase is",
+                   "asked for to restore it.",
+                   "",
+                   "Paper at least has to be read in person."],
+               [(int(w * 0.06), int(h * (0.40 + i * 0.085))) for i in range(5)],
+               int(h * 0.05), CREAM, "lm", int(w * 0.9))
+    _actions(d, w, h, ["BACK", "NO PASSPHRASE"], selected)
+    return img
+
+
 def confirm_discard(w, h, xfp, selected=0):
     """Discard asks first. BACK is pre-selected; DISCARD must be chosen."""
     img, d = _frame(w, h, "DISCARD  KEY")
@@ -726,9 +747,10 @@ GENERATE_LINES = [
     # things Corky is not does not.
     # The ochre headline above already says the entropy is Core's, so a
     # body line repeating it is more slop.
-    "Software entropy cannot be audited as it runs. "
-    "Cards or dice remain the verifiable default.",
-    "Your backup is Core's master xprv: 111 characters to transcribe.",
+    "You can check Core's code is Core's code. You cannot check the "
+    "chip or the kernel it asks, and no output proves it was random.",
+    "Cards or dice move that step out of the machine, where you watch it.",
+    "Your backup is the private key itself: 111 characters to write down.",
 ]
 
 #: Body copy never shrinks below this. The screen scrolls, so a long line
@@ -938,7 +960,7 @@ def backup_page(w, h, chunk, label, page=0, pages=1):
     `chunk` is already one page's worth (see text_pages). `label` names the
     key, "KEY  D2B7E45C", so the paper says which key it opens.
     """
-    title = f"{label}  ·  WRITE  IT  DOWN"
+    title = f"{label}  ·  PRIVATE  KEY"
     if pages > 1:
         title = f"{label}  ·  PART  {page + 1}/{pages}"
     img, d = _frame(w, h, title)
@@ -955,7 +977,7 @@ def backup_page(w, h, chunk, label, page=0, pages=1):
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     else:
         _fit(d, (w // 2, int(h * 0.79)),
-             "paper you keep, not this device",
+             "write this down. it opens the wallet",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     _actions(d, w, h,
              ["ABORT" if page == 0 else "BACK",

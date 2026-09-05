@@ -259,12 +259,27 @@
   not read back out of memory) and shows the first receive address, so the
   transcription can be checked later against any wallet restored from it.
 
-  **The honest caveat, on the record.** Software entropy is unverifiable by
-  inspection. A compromised RNG is undetectable from its output, and that
-  is as true of Core's as of anyone's; trusting it is a choice about the
-  counterparty, not a verification win. Cards and dice remain the
-  documented default and the only path where the unauditable step happens
-  in your own hands. A-19 adds an option; it does not move the recommendation.
+  **The honest caveat, corrected 2026-09-05 (Ben).** The first version of
+  this said software entropy is "unverifiable by inspection", and that was
+  too broad. Two questions, one answer each.
+
+  The CODE is verifiable. Core's builds are reproducible, so the binary
+  corresponds to source anyone can read. Eleven signatures on the 31.1
+  hashes were checked out of band on 2026-09-03, from a different host to
+  the one serving the binary. The hash is pinned in image/PINS and
+  provisioning refuses to install without it. The M3 release image gets the
+  same treatment for the whole card.
+
+  The INPUTS and the OUTPUT are not. The kernel's getrandom, the processor
+  and the SoC's hardware generator all sit outside Core's reproducible
+  build, and verified code fed by a compromised kernel produces exactly the
+  bytes it is given. Randomness also cannot be checked after the fact: a
+  backdoored generator and a good one produce output that looks the same,
+  which is the point of a backdoored one.
+
+  So cards and dice do not fix the software, which was never the weak part.
+  They move the unpredictable step out of the machine, into something you
+  watch happen. A-19 adds an option; it does not move the recommendation.
 
 
 - **A-21: M0 ran on the board (2026-09-03). The verdict depends on the PSBT's

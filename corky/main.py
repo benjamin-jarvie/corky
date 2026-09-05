@@ -760,16 +760,42 @@ class Session:
             stop()
         self._hold(f"{out.name} written", ok=True)
 
+    #: What `_ask_passphrase` returns when the user chose no encryption.
+    NO_PASSPHRASE = ""
+
     def _ask_passphrase(self, title):
         """The passphrase, typed on the grid. Blanked on the dev display
-        like every other secret-bearing screen."""
-        text = self._text_entry(title, "passphrase", secret=True)
-        if text is None:
-            return None
-        if not text:
-            self._hold("a passphrase is required")
-            return None
-        return text
+        like every other secret-bearing screen.
+
+        Returns the passphrase, NO_PASSPHRASE if the user deliberately
+        chose none, or None if they backed out. An empty box asks again
+        rather than dropping you back to the menu, because typing nothing
+        is a slip and being thrown out of the flow for it is a punishment
+        (Ben, on the board, 2026-09-05).
+        """
+        while True:
+            text = self._text_entry(title, "passphrase", secret=True)
+            if text is None:
+                return None
+            if text:
+                return text
+            if self._confirm_no_passphrase():
+                return self.NO_PASSPHRASE
+
+    def _confirm_no_passphrase(self):
+        """An empty passphrase means an UNENCRYPTED backup. Core allows it,
+        so Corky allows it, and says what it costs before you take it."""
+        sel = 0
+        while True:
+            self.display.show(screens.no_passphrase_warning(
+                self.w, self.h, sel))
+            key = self.buttons.read()
+            if key in ("l", "r"):
+                sel = 1 - sel
+            elif key in ("b", "c"):
+                return False
+            elif key in ("a", "p"):
+                return sel == 1
 
     def _backup(self, name, xfp):
         """Two backups (ticket 04). The file is offered first, because Core
@@ -795,7 +821,8 @@ class Session:
         dest = self._choose_channel()
         if dest is None:
             return False
-        stop = self._busy("Bitcoin Core is encrypting your backup…")
+        stop = self._busy("Bitcoin Core is encrypting your backup…"
+                          if passphrase else "Bitcoin Core is writing your backup…")
         try:
             out = signer.backup_encrypted(self.rpc, name, passphrase, dest)
         finally:
@@ -956,6 +983,12 @@ class Session:
             elif key == "a":
                 text += pages[page][cur]
             elif key == "b":
+                if not text:
+                    # Nothing to delete, so B is what B is everywhere else
+                    # on this device: back. Without this the screen had no
+                    # visible way out and the button did nothing at all
+                    # (Ben, on the board, 2026-09-05).
+                    return None
                 text = text[:-1]
             elif key == "p":
                 return text

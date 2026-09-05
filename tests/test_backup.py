@@ -134,6 +134,31 @@ def main():
         except RuntimeError as exc:
             ok(f"a junk file is refused: {str(exc)[:60]}")
 
+        # 7b. No passphrase is a choice Core supports, so Corky does too.
+        #     The file then holds the key in the clear, which is exactly
+        #     what the screen before it says (Ben, 2026-09-05).
+        plaindir = work / "plain"; plaindir.mkdir(exist_ok=True)
+        plain = signer.backup_encrypted(rpc, name, "", plaindir)
+        # The laptop already holds this key from step 4, and loading it
+        # twice is refused by fingerprint, so put it down first.
+        signer.close_key(orpc, rname)
+        rname2 = signer.restore_encrypted(orpc, plain, "")
+        rinfo2 = orpc.call("getwalletinfo", wallet=rname2)
+        if rinfo2.get("private_keys_enabled") and "unlocked_until" not in rinfo2:
+            ok("an unencrypted backup restores and is not encrypted")
+        else:
+            bad(f"the unencrypted backup came back wrong: {rinfo2.get('walletname')}")
+        if orpc.call("getaddressinfo", addr0, wallet=rname2)["ismine"]:
+            ok("the unencrypted backup holds the same key")
+        else:
+            bad("the unencrypted backup does not own Corky's first address")
+        # And it really is in the clear, which is the whole warning.
+        if any(n in plain.read_bytes() for n in _key_bytes(XPRV_A).values()):
+            ok("the unencrypted backup does hold the key in the clear")
+        else:
+            bad("an unencrypted backup with no key in it is not a backup")
+        signer.close_key(orpc, rname2)
+
         # 8. The watch-only export cannot be restored as a key: it holds
         #    none, and restoring it would give a wallet that cannot sign.
         watch = signer.write_watch_only(rpc, name, work)

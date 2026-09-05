@@ -188,6 +188,57 @@ elif not (painted[0] == "home"
 else:
     ok("a failing key mode holds its error, then returns to Keys")
 
+# --- the passphrase screen must not be a dead end -------------------------
+# On the board 2026-09-05 the back button did nothing on an empty
+# passphrase, because B deletes a character and there was nothing to
+# delete, and DONE with nothing threw the user out to the key menu.
+class Recorder:
+    width, height = 320, 240
+
+    def __init__(self):
+        self.painted = []
+
+    def show(self, image, sensitive=False):
+        self.painted.append(image)
+
+
+def entry(keys):
+    sess = corky_main.Session(Recorder(), ScriptedButtons(keys), FakeRpc())
+    return sess._text_entry("PASSPHRASE", "passphrase", secret=True)
+
+
+if entry(["b"]) is None:
+    ok("B on an empty passphrase goes back instead of doing nothing")
+else:
+    bad("B on an empty passphrase did not go back")
+
+if entry(["a", "b", "b"]) is None:
+    ok("B deletes what is there, then goes back when there is nothing")
+else:
+    bad("B did not fall through to back once the buffer was empty")
+
+# DONE with nothing asks again, and only a deliberate confirmation makes an
+# unencrypted backup.
+sess = corky_main.Session(Recorder(), ScriptedButtons(
+    ["p"] +            # DONE with an empty box
+    ["b"] +            # back out of the no-passphrase warning
+    ["a", "p"]         # type one character, DONE
+), FakeRpc())
+got = sess._ask_passphrase("PASSPHRASE")
+if got and got != corky_main.Session.NO_PASSPHRASE:
+    ok("an empty passphrase asks again instead of leaving the flow")
+else:
+    bad(f"_ask_passphrase returned {got!r} after the box was left empty")
+
+sess = corky_main.Session(Recorder(), ScriptedButtons(
+    ["p"] +            # DONE with an empty box
+    ["r", "a"]         # move to NO PASSPHRASE and take it
+), FakeRpc())
+if sess._ask_passphrase("PASSPHRASE") == corky_main.Session.NO_PASSPHRASE:
+    ok("no passphrase is possible, but only after a deliberate choice")
+else:
+    bad("the no-passphrase choice did not come back as such")
+
 # --- D9: the sign button explains its refusal -----------------------------
 img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001)
 img_loud = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001,

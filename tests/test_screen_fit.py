@@ -91,6 +91,7 @@ CASES = {
     "choose-channel": lambda w, h: screens.choose_channel(
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
+    "no-passphrase": lambda w, h: screens.no_passphrase_warning(w, h, 1),
     "choose-key": lambda w, h: screens.choose_key(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
