@@ -1,0 +1,74 @@
+# Map: export, script policies, and what the panel lets you scroll
+
+Label: `wayfinder:map`. Tickets are in `tickets/`, one file each.
+
+## Destination
+
+An export flow that asks which script policy first, hands each coordinator
+a string that coordinator is **proven** to read, and says on the panel what
+it is handing over. Plus one device-wide rule for scrolling, so a screen
+with more below it always says so.
+
+Reaching the end means: every screen in the export path is decided, the
+policy list is settled against measured coordinator behaviour rather than
+documentation, and someone can go and build it without another decision.
+
+## Notes
+
+- Domain: Corky, the Core-only air-gapped signer. `CONTEXT.md` at the repo
+  root defines the vocabulary. Use Core's words, not invented ones.
+- Ben's standing rule: **do not reinvent the wheel.** The UI follows
+  SeedSigner's structure and Bitcoin Core's vocabulary. Where a screen has
+  no counterpart in either, ask before inventing one.
+- Ben's standing rule on execution: this repo carries execution IN the map,
+  as the M1 and e2e maps did. Decisions and the code that follows both land
+  here.
+- Skills every session should consult: `/grilling` and `/domain-modeling`
+  for the decision tickets, `/mp-tdd` for anything built, `/mp-code-review`
+  before the gate.
+- `TESTING.md` rules 1 to 11 bind every test written here. Rule 8 matters
+  most on this map: an interop claim tested with our own tools is not an
+  interop claim. Where a coordinator is named, run the coordinator.
+- The prior map, `docs/wayfinder/e2e-before-testers/`, holds tickets 19, 20
+  and 21: desk research on BlueWallet, Green and Bull Bitcoin. It is
+  research, not proof. This map's task tickets are the proof.
+
+## Decisions so far
+
+- [R1 What feeds the RNG on this board](tickets/R1-rng-inputs.md) — the SoC
+  hardware RNG through the in-kernel `[hwrng]` thread, interrupt jitter, a
+  firmware seed at boot, and Core's own cycle counter and process stats.
+  NOT keystrokes, NOT the fan, NOT temperature, NOT RDRAND. One gap found:
+  nothing in provisioning handles `/var/lib/systemd/random-seed`, which a
+  read-only M3 image would freeze identical on every device.
+
+- [T0 Let the device emit all four of Core's policies](tickets/T0-emit-all-four.md)
+  — done. `signer.EXPORT_KINDS` carries all four, LEFT and RIGHT walk every
+  policy a key HAS via `signer.available_kinds`, and the QR is captioned in
+  the letterbox so four identical-looking codes can be told apart. Sparrow's
+  own zxing reads all four captioned, on both panels, and Sparrow's library
+  derives Core's addresses for all four including legacy and nested segwit
+  (`tests/sparrow/test_export_interop.py`, 37 checks). T1, T2 and T3 are
+  unblocked.
+
+## Not yet specified
+
+- What the export screen sequence becomes once the policy list is settled.
+  It cannot be drawn until the tasks below say which policies survive.
+- Whether the descriptor should ever leave as anything but a plain string.
+  Animated QR and UR were ruled out for the descriptor once; if a
+  coordinator turns out to need a format we do not emit, that reopens.
+- Whether the boot microSD becomes a named channel, and if so at which
+  path. It touches PLAN A-23, so it is a decision, not a config change.
+- What the M3 read-only image does about the saved random seed. Sharp
+  enough to name, not yet sharp enough to ticket: it depends on whether
+  M3 is read-only root or an overlay.
+- Whether the change branch should ever be shown. Receiving addresses is
+  receive-only on purpose, and that stands, but D1 may make the policy
+  list long enough that the reason wants restating on the panel.
+
+## Out of scope
+
+- Multisig export. v1 is single-sig; PLAN freezes that.
+- Changing how Corky signs. This map is about what leaves the device
+  before a transaction exists, not about signing one.

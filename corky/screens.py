@@ -542,7 +542,11 @@ def tools_menu(w, h, selected=0):
                  selected)
 
 
-SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot"}
+# Core's four policies in the words their wallets use. "Legacy" and
+# "Nested segwit" are what Sparrow, BlueWallet and Core's own GUI call
+# them, so the panel uses them too rather than saying pkh and sh(wpkh).
+SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot",
+                 "sh": "Nested segwit", "pkh": "Legacy"}
 
 
 def _groups(text):
@@ -550,6 +554,46 @@ def _groups(text):
 
 
 ADDR_GROUPS_PER_ROW = 4
+
+
+def caption_qr(panel, qr_px, text):
+    """Name a QR in the letterbox band, never over the code.
+
+    `fit_to_panel` centres a square QR on the panel and leaves white
+    around it. The band above and below is OUTSIDE the quiet zone, so a
+    caption there costs the code nothing: the modules keep their size and
+    the quiet zone keeps its width.
+
+    Reserving space instead would shrink the QR. A descriptor is 57 to 61
+    modules and renders at about 3.7 pixels per module today, which
+    Sparrow's own zxing reads for all four policies (measured
+    2026-09-05). Taking 20 pixels of height would drop it to 3.0, and 4.0
+    is already where zxing starts refusing frames (TESTING.md rule 8).
+
+    `qr_px` is the QR's height in pixels after scaling. When the band
+    under the code is too thin, the caption turns on its side and uses the
+    margin beside it instead: the nested segwit descriptor is 61 modules
+    against the others' 57, which leaves 6 pixels below and 46 beside on
+    the 320x240 hat. That is the policy hardest to recognise by eye, so
+    leaving it unlabelled was not an option. If neither fits, nothing is
+    drawn rather than something drawn over the code.
+    """
+    band = (panel.height - qr_px) // 2
+    if band >= 9:
+        d = ImageDraw.Draw(panel)
+        size = min(int(band * 0.85), int(panel.height * 0.05))
+        _fit(d, (panel.width // 2, panel.height - band // 2), text,
+             size, "black", "mm", int(panel.width * 0.9))
+        return panel
+    side = (panel.width - qr_px) // 2
+    if side < 12:
+        return panel
+    strip = Image.new("RGB", (panel.height, side), "white")
+    _fit(ImageDraw.Draw(strip), (panel.height // 2, side // 2), text,
+         min(int(side * 0.6), int(panel.height * 0.05)), "black", "mm",
+         int(panel.height * 0.9))
+    panel.paste(strip.rotate(90, expand=True), (0, 0))
+    return panel
 
 
 def address_page(w, h, index, address, kind):

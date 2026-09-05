@@ -555,6 +555,25 @@ and reads from anywhere in the frame. Corky does not refuse large frames, so
 holding the camera closer works too, but it says so on screen when it sees
 them. Numbers and method: `tests/m1/legibility_rig.py`.
 
+**Script policies: all four of Core's, not two.** Core creates four
+descriptor pairs per wallet and always has: `pkh` at BIP44 (legacy),
+`sh(wpkh)` at BIP49 (nested segwit), `wpkh` at BIP84 (native segwit) and
+`tr` at BIP86 (taproot). One master private key opens all four, so a paper
+backup covers them whatever the export shows. LEFT and RIGHT walk every
+policy a key has, on the export QR and on Receiving addresses alike, and
+the QR is captioned with the policy's name in the letterbox so four
+identical-looking codes can be told apart. Sparrow's own library reads all
+four and derives Core's addresses for each.
+
+A key does not always have four. `createwallet` makes them all; a key that
+arrives by scan or by typing gets BIP84 and BIP86, because that is what
+Corky builds for it. So restoring your own paper backup presents two of
+the four policies the key controls, and coins on a legacy or nested
+address would be the key's but invisible here. The panel offers what the
+key actually has rather than crashing on what it has not, and whether the
+asymmetry should exist at all is an open decision
+([map D6](docs/wayfinder/export-and-policies/tickets/D6-import-asymmetry.md)).
+
 **Export and backup.** Export public key writes what a coordinator needs:
 a plain-text QR of Core's own output descriptor, the same string in
 four-character groups for typing, and the first three receive addresses in
@@ -616,13 +635,13 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2085 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2122 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1101) ·
-[`corky/screens.py`](corky/screens.py) (591) ·
-[`corky/signer.py`](corky/signer.py) (319) ·
+[`corky/main.py`](corky/main.py) (1114) ·
+[`corky/screens.py`](corky/screens.py) (609) ·
+[`corky/signer.py`](corky/signer.py) (325) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
 
@@ -636,11 +655,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,333 lines** (4,117 with blanks/comments).
+**Total functional code: 2,370 lines** (4,226 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,349 lines — none of it ships on the device.**
+**Test code: 4,358 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

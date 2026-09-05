@@ -240,6 +240,20 @@ def _run(cmd):
         return False
 
 
+def _next_kind(kind, key, order):
+    """The next script policy, walking `order` either way.
+
+    Core makes four and one private key opens all four, so LEFT and RIGHT
+    walk every policy this key HAS rather than flipping between two (map
+    ticket T0). `order` comes from signer.available_kinds, because a key
+    that arrived by scan has fewer than a key Core generated.
+    """
+    if kind not in order:
+        return order[0]
+    step = 1 if key == "r" else -1
+    return order[(order.index(kind) + step) % len(order)]
+
+
 def _grid_move(key, pages, page, cur):
     """One step of the character grid, shared by every typed screen.
 
@@ -733,15 +747,23 @@ class Session:
         LEFT and RIGHT switch script type on the QR itself, so choosing
         between native segwit and taproot is a glance rather than a gate.
         """
+        order = signer.available_kinds(self.rpc, name)
+        if kind not in order:
+            kind = order[0]
         while True:
             desc = signer.export_descriptor(self.rpc, name, kind)
-            img = qrchannel.fit_to_panel(
-                qrchannel.text_to_image(desc, panel=(self.w, self.h)),
-                self.w, self.h)
-            self.display.show(img)
+            code = qrchannel.text_to_image(desc, panel=(self.w, self.h))
+            panel = qrchannel.fit_to_panel(code, self.w, self.h)
+            # Which policy this is has to be ON the screen, or four QRs
+            # that look identical cannot be told apart (map ticket T0).
+            # The caption goes in the letterbox, so the code is untouched.
+            factor = min(self.w // code.width, self.h // code.height)
+            self.display.show(screens.caption_qr(
+                panel, code.height * factor,
+                screens.SCRIPT_LABELS[kind].upper()))
             key = self.buttons.read()
             if key in ("l", "r"):
-                kind = "tr" if kind == "wpkh" else "wpkh"
+                kind = _next_kind(kind, key, order)
                 continue
             if key in ("b", "c"):
                 return
@@ -803,6 +825,9 @@ class Session:
         `deriveaddresses` is side-effect free, so redrawing does not move
         the wallet's address index.
         """
+        order = signer.available_kinds(self.rpc, name)
+        if kind not in order:
+            kind = order[0]
         i, base, block = 0, 0, []
         while True:
             if not block or not base <= i < base + len(block):
@@ -818,9 +843,12 @@ class Session:
             if key in ("b", "c"):
                 return
             if key in ("l", "r"):
-                # Switch script type here rather than gating the screen
-                # behind a chooser (Ben, 2026-09-05).
-                kind = "tr" if kind == "wpkh" else "wpkh"
+                # Switch script policy here rather than gating the screen
+                # behind a chooser (Ben, 2026-09-05). All four of Core's,
+                # in the same order the export walks them (map T0), so a
+                # legacy or nested address of this wallet is reachable
+                # instead of merely existing.
+                kind = _next_kind(kind, key, order)
                 i, base, block = 0, 0, []
             elif key == "u":
                 i = max(0, i - 1)

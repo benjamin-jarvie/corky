@@ -238,25 +238,62 @@ def public_descriptors(rpc: "Rpc", wallet: str = WALLET) -> list[str]:
     return [d["desc"] for d in listed if d["active"]]
 
 
-# What a coordinator may be given. A Core-generated wallet also carries
-# legacy pkh and sh(wpkh) descriptors; Corky hands out addresses from
-# BIP84 and BIP86 only, so only those two ever leave the device.
-EXPORT_KINDS = {"wpkh": "wpkh(", "tr": "tr("}
+# What a coordinator may be given. Core creates all four of these per
+# wallet and always has, verified against v31.1 on regtest 2026-09-05:
+# pkh at 44h (legacy), sh(wpkh) at 49h (nested segwit), wpkh at 84h
+# (native segwit) and tr at 86h (taproot). One master private key opens
+# all four, so a paper backup covers them whatever the export shows.
+#
+# Corky offered two of the four until T0 of the export map, which meant
+# coins sent to a legacy or nested address of this wallet were spendable
+# by this key and invisible on the panel. Which of the four the SHIPPED
+# flow offers is map ticket D1, decided once T1 to T3 say what each
+# coordinator actually accepts. This table is what the device CAN emit.
+#
+# `sh` must be matched before `pkh` is read: the prefixes are distinct
+# under startswith, but the order below is the order LEFT and RIGHT cycle
+# on the panel, and native segwit stays first because it is the default.
+EXPORT_KINDS = {"wpkh": "wpkh(", "tr": "tr(",
+                "sh": "sh(wpkh(", "pkh": "pkh("}
+
+#: The order LEFT and RIGHT walk on the export and address screens.
+EXPORT_ORDER = ("wpkh", "tr", "sh", "pkh")
 
 
 def export_descriptors(rpc: "Rpc", wallet: str = WALLET) -> list[str]:
     """Every public descriptor a coordinator may be given for this key:
-    the wpkh and tr pairs, receive and change, as Core wrote them."""
+    all four script policies, receive and change, as Core wrote them."""
     return [d for d in public_descriptors(rpc, wallet=wallet)
             if any(d.startswith(p) for p in EXPORT_KINDS.values())]
+
+
+def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
+    """The script policies THIS key actually has, in EXPORT_ORDER.
+
+    A key does not always have four. `createwallet` makes all four, but a
+    key that arrived by scan or by typing gets only what
+    `build_descriptors` built for it, which is BIP84 and BIP86. So the
+    same key generated here and restored here from its own paper backup
+    presents a different set, and the panel must offer what is there
+    rather than what Core would have made.
+
+    Map ticket D1 decides whether that asymmetry stays. Until it does,
+    exporting a policy a wallet has not got is an error the user should
+    never be able to reach.
+    """
+    have = export_descriptors(rpc, wallet=wallet)
+    return tuple(k for k in EXPORT_ORDER
+                 if any(d.startswith(EXPORT_KINDS[k]) for d in have))
 
 
 def export_descriptor(rpc: "Rpc", wallet: str, kind: str, branch: int = 0) -> str:
     """One public descriptor, Core's own string with its checksum.
 
     Sparrow's own library parses this verbatim and derives the same
-    addresses Core does, for both kinds (proved 2026-09-04). BlueWallet,
-    Green and Bull Bitcoin read the same form (map tickets 19, 20, 21).
+    addresses Core does, for wpkh and tr (proved 2026-09-04). BlueWallet,
+    Green and Bull Bitcoin are desk research only (tickets 19, 20, 21);
+    what any of them does with legacy or nested segwit is unproven, which
+    is what map tickets T1 to T3 are for.
     """
     prefix = EXPORT_KINDS[kind]
     want = f"/{branch}/*"

@@ -339,11 +339,18 @@ def main():
                                    f"STDERR:{r.stderr[-1200:]}\n"
                                    f"STDOUT:{r.stdout[-600:]}")
         fr5 = work / "framesK5"
-        golden_qr = qrchannel.fit_to_panel(
-            qrchannel.text_to_image(desc, panel=(320, 240)), 320, 240)
+        # The QR carries its policy name in the letterbox, so four codes
+        # that look identical can be told apart (map ticket T0). The
+        # caption is part of the shipped frame, so it is part of the
+        # golden one.
+        code = qrchannel.text_to_image(desc, panel=(320, 240))
+        factor = min(320 // code.width, 240 // code.height)
+        golden_qr = scr.caption_qr(
+            qrchannel.fit_to_panel(code, 320, 240), code.height * factor,
+            scr.SCRIPT_LABELS["wpkh"].upper())
         buf = io.BytesIO(); golden_qr.save(buf, format="PNG")
         assert _has(fr5, buf.getvalue()), \
-            "K5: the panel never showed the export QR"
+            "K5: the panel never showed the captioned export QR"
         assert _has(fr5, _render(scr.export_text, scr.text_pages(desc)[0],
                                  page=0, pages=desc_pages)), \
             "K5: the descriptor as grouped text"

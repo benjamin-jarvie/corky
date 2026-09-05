@@ -47,20 +47,30 @@ def main():
     try:
         name = signer.open_session_xprv(rpc, XPRV_A)
 
-        # 1. Only the two script types Corky hands out addresses from ever
-        #    leave the device. A Core-generated wallet also carries legacy
-        #    pkh and sh(wpkh) descriptors, and those must not be exported.
+        # 1. Every policy a key HAS can be exported, and a key does not
+        #    always have four. Core's own createwallet makes all four;
+        #    build_descriptors makes BIP84 and BIP86, so a key that
+        #    arrived by scan or by typing has two. The panel offers what
+        #    the key presents (map ticket T0); the asymmetry itself is D6.
         gen_name = signer.generate_wallet(rpc)
-        pubs = signer.export_descriptors(rpc, gen_name)
-        kinds = sorted({d.split("(")[0] for d in pubs})
-        if kinds == ["tr", "wpkh"]:
-            ok(f"export offers only wpkh and tr, not {len(pubs)} mixed kinds")
+        if signer.available_kinds(rpc, gen_name) == signer.EXPORT_ORDER:
+            ok("a key Core generated presents all four script policies")
         else:
-            bad(f"export offered {kinds}")
-        if any("prv" in d for d in pubs):
-            bad("an exported descriptor carries a private key")
+            bad(f"a generated key presented "
+                f"{signer.available_kinds(rpc, gen_name)}")
+        if signer.available_kinds(rpc, name) == ("wpkh", "tr"):
+            ok("a key that arrived by xprv presents BIP84 and BIP86")
         else:
-            ok("no exported descriptor carries a private key")
+            bad(f"an imported key presented "
+                f"{signer.available_kinds(rpc, name)}")
+
+        # Whatever it presents, nothing exported may carry a private key.
+        leaked = [d for d in signer.export_descriptors(rpc, gen_name)
+                  if any(p in d for p in signer.XPRV_PREFIXES)]
+        if leaked:
+            bad(f"an exported descriptor carried a private key: {leaked[0][:40]}")
+        else:
+            ok("no exported descriptor carries a private key, all four kinds")
         signer.close_key(rpc, gen_name)
 
         # 2. The descriptor Corky exports is Core's own string, byte for
