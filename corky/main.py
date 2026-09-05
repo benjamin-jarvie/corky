@@ -533,26 +533,29 @@ class Session:
         return None
 
     def state_keys(self):
-        """The Key tile: SeedSigner's Seeds screen. No key loaded opens
-        Load a key straight away; otherwise the loaded keys are listed by
-        fingerprint with Load a key last (ticket 07)."""
+        """The Keys tile. One screen with one title, whether or not the
+        device holds a key: the loaded keys by fingerprint, then Load a key
+        and New key.
+
+        It used to jump straight past this into a differently titled LOAD A
+        KEY when nothing was loaded, so the same tile gave two screens, and
+        New key sat under Tools where it did not belong (Ben, 2026-09-05).
+        """
         selected = 0
         while True:
             self._refresh_keys()
-            if not self.keys:
-                if not self.state_load_key():
-                    return None
-                outcome = self.state_key_menu(self.key)
-                if outcome in (POWER_OFF, TO_HOME):
-                    return outcome
-                continue
             keys = self.keys
+            n = len(keys) + len(screens.KEYS_ACTIONS)
             selected = self._pick(lambda sel, keys=keys: screens.keys_menu(
-                self.w, self.h, keys, sel), len(keys) + 1, start=selected)
+                self.w, self.h, keys, sel), n, start=selected)
             if selected is None:
                 return None
-            if selected == len(keys):                 # Load a key
+            action = selected - len(keys)
+            if action == 0:                           # Load a key
                 if not self.state_load_key():
+                    continue
+            elif action == 1:                         # New key
+                if not self._tool_generate():
                     continue
             else:
                 self.key = keys[selected].name
@@ -586,20 +589,16 @@ class Session:
                 return TO_HOME
 
     def state_tools(self):
-        """Tools holds New key, which is Core's Create Wallet (ticket 07).
-        A new key lands on its own menu, as SeedSigner does."""
+        """Tools is about the device, not about your keys. New key moved to
+        the Keys screen on 2026-09-05, which leaves the leak check."""
         while True:
             choice = self._pick(
                 lambda sel: screens.tools_menu(self.w, self.h, sel),
                 len(screens.TOOLS_OPTIONS))
             if choice is None:
                 return None
-            if choice == 1:
+            if choice == 0:
                 self._tool_leak_check()
-                continue
-            if self._tool_generate():
-                outcome = self.state_key_menu(self.key)
-                return outcome if outcome in (POWER_OFF, TO_HOME) else None
 
     # -- export the public key (ticket 12) ---------------------------------
 
@@ -1096,7 +1095,11 @@ class Session:
     LEAK_CHECK = Path(__file__).resolve().parent.parent / "image" / "leak-check.sh"
 
     def _tool_leak_check(self):
-        """Run the leak check and put its verdict on the panel."""
+        """Run the leak check and put its rows on the panel.
+
+        The d-pad scrolls, and A, B or C leaves. There is nothing here to
+        choose, so no button pretends otherwise.
+        """
         stop = self._busy("checking every way off this board…")
         try:
             out = subprocess.run(["bash", str(self.LEAK_CHECK), "--porcelain"],
@@ -1106,30 +1109,29 @@ class Session:
             return self._hold(f"leak check did not run: {str(exc)[:38]}")
         finally:
             stop()
-        passed, failures = 0, []
+        leaks, clear = [], []
         for line in out.stdout.splitlines():
             parts = line.split("\t")
-            if parts[0] == "ok":
-                passed += 1
-            elif parts[0] == "FAIL" and len(parts) > 1:
-                failures.append(parts[1])
-        if not passed and not failures:
+            if len(parts) < 3:
+                continue
+            verdict, label, state = parts[0], parts[1], parts[2]
+            if verdict == "FAIL":
+                leaks.append((label, state, "red"))
+            elif verdict == "ok":
+                clear.append((label, state, "normal"))
+        rows = leaks + clear          # what you opened this for comes first
+        if not rows:
             return self._hold("leak check produced no report")
-        page = 0
+        cursor = 0
         while True:
-            self.display.show(screens.leak_report(
-                self.w, self.h, passed, failures, page))
+            self.display.show(screens.leak_report(self.w, self.h, rows, cursor))
             key = self.buttons.read()
-            if key in ("b", "c"):
+            if key in ("a", "b", "c", "p"):
                 return
             if key in ("u", "l"):
-                page -= 1
-            elif key in ("a", "p", "d", "r"):
-                pages = max(1, (len(failures) + screens.LEAK_ROWS - 1)
-                            // screens.LEAK_ROWS)
-                if not failures or page + 1 >= pages:
-                    return
-                page += 1
+                cursor = max(0, cursor - 1)
+            elif key in ("d", "r"):
+                cursor = min(len(rows) - 1, cursor + 1)
 
     def _tool_generate(self):
         """Seed generation and usage EXACTLY as a Bitcoin Core wallet

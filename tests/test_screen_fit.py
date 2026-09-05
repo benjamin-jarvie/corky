@@ -67,16 +67,19 @@ CASES = {
     "keys-menu": lambda w, h: screens.keys_menu(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
-               ("corky-5", "ba4c8bd5")], 5),
+               ("corky-5", "ba4c8bd5")], 6),
+    "keys-menu-empty": lambda w, h: screens.keys_menu(w, h, [], 0),
     "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 4),
-    "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
-    "leak-clear": lambda w, h: screens.leak_report(w, h, 34, []),
+    "tools-menu": lambda w, h: screens.tools_menu(w, h, 0),
+    "leak-clear": lambda w, h: screens.leak_report(
+        w, h, [("Wi-Fi driver", "not loaded", "normal")] * 24, 0),
     "leak-failures": lambda w, h: screens.leak_report(
-        w, h, 17, ["/boot/firmware/config.txt does NOT set dtoverlay=disable-wifi",
-                   "module brcmfmac is LOADED",
-                   "SWAP IS ON. Key pages can be written to the card.",
-                   "a serial console is on the GPIO header: three wires is a root shell",
-                   "/var/log/journal exists, so the journal is written to the card"], 0),
+        w, h, [("Wi-Fi overlay", "not set", "red"),
+               ("Bluetooth driver", "loaded", "red"),
+               ("Swap", "ON, key pages can reach the card", "red"),
+               ("Serial console", "on the GPIO header", "red"),
+               ("USB device mode", "active, can pretend to be a disk", "red"),
+               ("Core networking", "off", "normal")], 3),
     "export-menu": lambda w, h: screens.export_menu(w, h, 4),
     "export-script-menu": lambda w, h: screens.export_script_menu(
         w, h, ("wpkh", "tr"), 1),

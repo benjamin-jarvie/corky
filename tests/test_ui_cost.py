@@ -58,7 +58,7 @@ class ScriptedButtons:
 def named_screens(display):
     """Paint names instead of images, so a session's screen order is
     assertable without rendering."""
-    for name in ("home", "load_key_menu", "result", "busy", "review",
+    for name in ("home", "load_key_menu", "keys_menu", "result", "busy", "review",
                  "settings_menu"):
         setattr(screens, name,
                 (lambda n: lambda *a, **k: n)(name))
@@ -152,15 +152,16 @@ else:
 
 # --- D6: a failing seed mode must hold its message ------------------------
 _real = {n: getattr(screens, n) for n in
-         ("home", "load_key_menu", "result", "busy", "review",
+         ("home", "load_key_menu", "keys_menu", "result", "busy", "review",
           "settings_menu")}
 display = named_screens(RecordingDisplay())
-# R,A opens the Key tile; with no key loaded that is Load a key. A picks
-# "Scan a key", A accepts the warning, and the scan raises because the key
-# scan is not wired (ticket 09); ONE key dismisses the error, then D,R,A,A
-# goes home -> settings -> power off. If the error is not held, the
-# dismissing A re-opens the menu.
-buttons = ScriptedButtons(["r", "a"] + ["a", "a"] + ["a"] +
+# R,A opens the Keys tile, which is a screen of its own even with nothing
+# loaded (Ben, 2026-09-05). Then A picks Load a key, A picks Scan a key, A
+# accepts the warning, and the scan fails because this machine has no
+# camera. ONE key dismisses the error. C leaves Keys for home, then D,R,A,A
+# goes to settings and powers off. If the error is not held, the dismissing
+# A falls through into the next screen and the script runs out.
+buttons = ScriptedButtons(["r", "a"] + ["a", "a", "a"] + ["a"] + ["c"] +
                           ["d", "r", "a", "a"])
 session = corky_main.Session(display, buttons, FakeRpc())
 session.qr = corky_main.CameraQrSource()
@@ -175,18 +176,17 @@ for n, f in _real.items():
 painted = display.painted
 if raised is not None:
     bad(f"the error was not held; the session ran off its script: {raised}")
-# A-22: the old path went through SeedQR, which painted a "busy" frame
-# before it failed. The xprv scan raises straight out of the warning
-# screen, so there is no busy frame to require. What this check is
-# actually about is unchanged: the failure is SHOWN, and the next thing
-# the user sees is home, not the menu they just failed out of.
+# The failure is SHOWN, and the screen after it is the one level UP from
+# the menu that failed, not the menu itself. Before 2026-09-05 that was
+# home, because Load a key was reached straight from the tile; now Keys
+# sits between them, so Keys is where a failed load returns you.
 elif not (painted[0] == "home"
           and "result" in painted
-          and painted[painted.index("result") + 1] == "home"
+          and painted[painted.index("result") + 1] == "keys_menu"
           and painted.count("load_key_menu") >= 1):
-    bad(f"unexpected screen order after a failing seed mode: {painted}")
+    bad(f"unexpected screen order after a failing key mode: {painted}")
 else:
-    ok("a failing seed mode holds its error until a key is pressed")
+    ok("a failing key mode holds its error, then returns to Keys")
 
 # --- D9: the sign button explains its refusal -----------------------------
 img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001)

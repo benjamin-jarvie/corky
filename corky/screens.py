@@ -22,9 +22,6 @@ import signer  # noqa: E402 - needs the path above
 INK = "#1A1714"
 CREAM = "#F5EFE0"
 RED = "#9E2B25"
-# Removed as dead on 2026-09-05 and brought back the same day: the leak
-# report is the one screen that has good news worth colouring.
-GREEN = "#2E4A3B"
 GREY = "#B8B2A6"
 OCHRE = "#C8912F"
 
@@ -179,7 +176,7 @@ def _frame(w, h, title=None):
 # SeedSigner's four: Scan, Seeds, Tools, Settings (Ben, 2026-09-04, map
 # e2e-before-testers ticket 02). Key generation lives under Tools, where
 # SeedSigner keeps "New seed".
-HOME_TILES = [("scan", "qrcode"), ("key", "key"),
+HOME_TILES = [("scan", "qrcode"), ("keys", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
 
@@ -403,31 +400,39 @@ def scanning(w, h, frame, message, progress=0.0):
 # highlight drew straight through the title and the line under it. Two
 # menus had their own geometry as well and started at 0.34 and 0.36, so
 # every menu began at a different height.
-MENU_TOP = 0.16          # top edge of the first row's box
+MENU_TOP = 0.16          # top edge of the first row's box, on every menu
 MENU_BOTTOM = 0.95       # bottom edge the last row may not pass
-MENU_BOX = 0.085         # the tallest a row box may be, half-height
+MENU_PITCH = 0.135       # one row's height, fixed, so two rows sit together
+MENU_ROWS = 6            # rows on screen at once; a longer list scrolls
 
 
 def _menu(w, h, title, rows, selected, icons=None):
     """One list screen for every menu: rows of (label, note, tone), tone
     "normal" or "red". `icons` optionally names one glyph per row.
 
-    The first row's box starts at MENU_TOP on every screen, so the menus do
-    not shift under you as you move between them. Rows below it are spread
-    over the space that is left, so six rows and two rows both fit.
+    Rows have a FIXED height and start at MENU_TOP, so a two-row menu sits
+    together at the top instead of being flung to the corners of the panel
+    (Ben, on the board, 2026-09-05: "new key sits nicely below but then
+    check for leaks is a long way below"). A list longer than MENU_ROWS
+    scrolls with the cursor, and a bar on the right says where you are.
     """
     img, d = _frame(w, h, title)
     n = max(len(rows), 1)
-    slot = (MENU_BOTTOM - MENU_TOP) / n
-    # Pixels, not fractions, and measured from a fixed top. Deriving the
-    # box from a centre and a half-height rounded differently for each row
-    # count, so menus started a pixel apart (caught by test_screen_fit).
+    # The rows ON SCREEN set the pitch, not the length of the whole list.
+    # Using n crammed a 34-row report into the top 70 pixels.
+    pitch = min(MENU_PITCH, (MENU_BOTTOM - MENU_TOP) / min(n, MENU_ROWS))
     first_top = int(h * MENU_TOP)
-    box_h = int(2 * min(slot * 0.42, MENU_BOX) * h)
-    for i, (label, note, tone) in enumerate(rows):
-        box_top = first_top + int(i * slot * h)
+    box_h = int(pitch * 0.82 * h)
+    # The window follows the cursor and never moves further than it must.
+    start = 0
+    if n > MENU_ROWS:
+        start = max(0, min(selected - MENU_ROWS + 2, n - MENU_ROWS))
+        start = max(0, min(start, selected)) if selected >= 0 else 0
+    visible = rows[start:start + MENU_ROWS]
+    for i, (label, note, tone) in enumerate(visible):
+        box_top = first_top + int(i * pitch * h)
         y = box_top + box_h // 2
-        active = i == selected
+        active = (start + i) == selected
         if active:
             d.rounded_rectangle([int(w * 0.04), box_top,
                                  int(w * 0.96), box_top + box_h],
@@ -437,12 +442,19 @@ def _menu(w, h, title, rows, selected, icons=None):
             colour = RED if not active else "#D9433B"
         x = int(w * 0.08)
         if icons:
-            _icon(d, int(w * 0.11), y, int(h * 0.055), icons[i], colour)
+            _icon(d, int(w * 0.11), y, int(h * 0.055), icons[start + i], colour)
             x = int(w * 0.20)
         _fit(d, (x, y), label, int(h * 0.052), colour, "lm",
-             int(w * 0.58) - (x - int(w * 0.08)))
+             int(w * 0.56) - (x - int(w * 0.08)))
         _fit(d, (int(w * 0.92), y), note, int(h * 0.04),
              OCHRE if active else GREY, "rm", int(w * 0.30))
+    if n > MENU_ROWS:
+        # Where you are in the list, on the right edge, like any scrollbar.
+        track_top, track_h = first_top, int(MENU_ROWS * pitch * h)
+        bar_h = max(int(track_h * MENU_ROWS / n), 6)
+        bar_y = track_top + int(track_h * start / n)
+        d.rectangle([w - 4, track_top, w - 3, track_top + track_h], fill="#3A352E")
+        d.rectangle([w - 5, bar_y, w - 2, bar_y + bar_h], fill=OCHRE)
     return img
 
 
@@ -462,50 +474,44 @@ KEY_MENU_OPTIONS = [
     ("Discard key", "Core forgets it"),
 ]
 
-TOOLS_OPTIONS = [("New key", "Core's own RNG"),
-                 ("Check for leaks", "every way off")]
+TOOLS_OPTIONS = [("Check for leaks", "every way off")]
 
 
-LEAK_ROWS = 5
-
-
-def leak_report(w, h, passed, failures, page=0):
-    """What image/leak-check.sh found, on the panel.
+def leak_report(w, h, rows, cursor=0):
+    """What image/leak-check.sh found, one thing and its state per row.
 
     The device may be the only place this can be read: a hardened board has
-    no SSH. Green when nothing can carry data off, ochre otherwise, because
-    a dev image is expected to fail the radio rows and that is not an alarm.
+    no SSH. Leaks come first, because they are what you opened this for.
+    It is the same list screen as every other menu, so the d-pad scrolls it
+    and A, B or C leaves, and there is no action bar inventing a second way
+    to do the same thing (Ben, 2026-09-05).
     """
-    total = passed + len(failures)
-    img, d = _frame(w, h, "LEAK  CHECK")
-    if not failures:
-        _status_circle(img, d, w, h, "CLEAR", GREEN)
-        _fit(d, (w // 2, int(h * 0.66)), f"{passed} of {total} checks pass",
-             int(h * 0.055), CREAM, "mm", int(w * 0.9))
-        _fit(d, (w // 2, int(h * 0.75)), "the OS drives nothing off this board",
-             int(h * 0.042), GREY, "mm", int(w * 0.92))
-        _actions(d, w, h, ["DONE"], 0)
-        return img
-    pages = max(1, (len(failures) + LEAK_ROWS - 1) // LEAK_ROWS)
-    page = max(0, min(page, pages - 1))
-    head = f"{len(failures)} of {total} can leak"
-    if pages > 1:
-        head += f"   {page + 1}/{pages}"
-    _fit(d, (w // 2, int(h * 0.17)), head, int(h * 0.062), OCHRE, "mm",
-         int(w * 0.92))
-    shown = failures[page * LEAK_ROWS:(page + 1) * LEAK_ROWS]
-    for i, line in enumerate(shown):
-        _fit(d, (int(w * 0.05), int(h * (0.30 + i * 0.105))), line,
-             int(h * 0.045), CREAM, "lm", int(w * 0.90))
-    _actions(d, w, h, ["BACK", "MORE" if pages > 1 else "DONE"], 1)
-    return img
+    leaks = sum(1 for _label, _state, tone in rows if tone == "red")
+    title = "LEAK  CHECK"
+    if rows:
+        title = (f"LEAK  CHECK  ·  {leaks} OF {len(rows)}" if leaks
+                 else f"LEAK  CHECK  ·  ALL {len(rows)} CLEAR")
+    return _menu(w, h, title, rows, cursor)
+
+
+# What the KEYS screen offers below the loaded keys. New key lives here
+# rather than under Tools, because making a key is a thing you do to your
+# keys and Tools is for the device (Ben, 2026-09-05).
+KEYS_ACTIONS = [("Load a key", "scan, type or restore"),
+                ("New key", "Core's own RNG")]
 
 
 def keys_menu(w, h, keys, selected=0):
-    """The loaded keys by fingerprint, then Load a key. SeedSigner's Seeds
-    screen. `keys` are (wallet name, fingerprint) pairs in slot order."""
-    rows = [((xfp or "????????").upper(), "loaded", "normal") for _n, xfp in keys]
-    rows.append(("Load a key", "", "normal"))
+    """The loaded keys by fingerprint, then what you can do about keys.
+
+    One screen, one title, whether or not a key is loaded. It used to jump
+    straight past this into a differently titled LOAD A KEY when the device
+    held nothing, so the same button gave you two different screens.
+    `keys` are (wallet name, fingerprint) pairs in slot order.
+    """
+    rows = [((xfp or "????????").upper(), "loaded", "normal")
+            for _n, xfp in keys]
+    rows += [(label, note, "normal") for label, note in KEYS_ACTIONS]
     return _menu(w, h, "KEYS", rows, selected)
 
 

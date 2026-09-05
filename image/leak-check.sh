@@ -2,16 +2,17 @@
 # Corky: every way data could leave this board, and what the OS can prove.
 #
 # Run this ON THE DEVICE, as root:   sudo bash /opt/corky/image/leak-check.sh
+# On the device itself it is Tools, Check for leaks.
 #
 # READ THIS BEFORE YOU TRUST THE RESULT.
 #
-# Every check below asks the operating system whether it is driving the
-# wireless hardware. A clean run means the OS has no driver bound, no
-# firmware to load, no service trying, and no interface up. It does NOT
-# mean the chip has no power. Raspberry Pi documents a hardware disable
-# pin for the Compute Modules and not for the Zero 2 W, and the
-# `disable-wifi` overlay disables the SDIO host controller while the chip
-# keeps its power.
+# Every check below asks the operating system whether it is driving a way
+# off this board. A clean run means the OS has no driver bound, no firmware
+# to load, no service trying, no swap, no journal on the card, no console on
+# the header and no USB device mode. It does NOT mean the wireless chip has
+# no power. Raspberry Pi documents a hardware disable pin for the Compute
+# Modules and not for the Zero 2 W, and the `disable-wifi` overlay disables
+# the SDIO host controller while the chip keeps its power.
 #
 # So there are two claims, and they are not the same claim:
 #   OS silent    - this script can check it. That is what a PASS means.
@@ -20,220 +21,168 @@
 # The Zero 2 W's radio is a separate component beside the processor, not
 # inside it, so removal is possible. See
 # docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md.
+#
+# --porcelain prints one tab-separated record per check and nothing else:
+#     ok|FAIL <tab> what it is <tab> what it is doing
+# The device's own Tools screen reads that. The checks are written once and
+# read two ways.
 
 PASS=0; FAIL=0
-# --porcelain prints one tab-separated record per check and nothing else,
-# so the device's own Tools screen can show this report on the panel. The
-# checks are written once and read two ways.
 PORCELAIN=0
 [ "${1:-}" = "--porcelain" ] && PORCELAIN=1
 say()  { [ "$PORCELAIN" -eq 1 ] || printf "%s\n" "$1"; }
-ok()   { [ "$PORCELAIN" -eq 1 ] && printf "ok\t%s\n" "$1" || printf "  ok    %s\n" "$1"; PASS=$((PASS+1)); }
+ok()   { PASS=$((PASS+1))
+         if [ "$PORCELAIN" -eq 1 ]; then printf "ok\t%s\t%s\n" "$1" "$2"
+         else printf "  ok    %-22s %s\n" "$1" "$2"; fi; }
+bad()  { FAIL=$((FAIL+1))
+         if [ "$PORCELAIN" -eq 1 ]; then printf "FAIL\t%s\t%s\n" "$1" "$2"
+         else printf "  LEAK  %-22s %s\n" "$1" "$2"; fi; }
+
 # systemctl prints its answer on stdout AND exits non-zero for a unit that
 # does not exist, so the answer must be read as one line and the exit code
 # ignored. Getting this wrong reported "not-found\nabsent" and failed every
 # check (found on the board, 2026-09-05).
-unit_state() { systemctl is-enabled "$1" 2>/dev/null | head -1 | tr -d '\r'; }
+unit_state()  { systemctl is-enabled "$1" 2>/dev/null | head -1 | tr -d '\r'; }
+unit_active() { systemctl is-active "$1" 2>/dev/null | head -1; }
 # A unit that cannot run is as good as one that is masked. "static" means
 # the unit has no enable switch, which is normal and says nothing either way.
-unit_ok()    { case "$1" in masked|disabled|not-found|""|absent) return 0 ;; *) return 1 ;; esac; }
-bad()  { [ "$PORCELAIN" -eq 1 ] && printf "FAIL\t%s\n" "$1" || printf "  FAIL  %s\n" "$1"; FAIL=$((FAIL+1)); }
-note() { [ "$PORCELAIN" -eq 1 ] || printf "        %s\n" "$1"; }
+unit_off()    { case "$1" in masked|disabled|not-found|""|absent) return 0 ;;
+                            *) return 1 ;; esac; }
+
+# One service, one row: is it running, and can it come back?
+service_row() {
+    local label="$1" unit="$2" state active
+    active=$(unit_active "$unit"); state=$(unit_state "$unit")
+    [ -n "$state" ] || state=not-found
+    if [ "$active" = "active" ]; then
+        bad "$label" "running"
+    elif unit_off "$state"; then
+        ok "$label" "off"
+    else
+        bad "$label" "starts at boot"
+    fi
+}
+
+CFG=/boot/firmware/config.txt
+[ -f "$CFG" ] || CFG=/boot/config.txt
+CMDLINE=/boot/firmware/cmdline.txt
+[ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
 
 say "Corky leak check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
 say ""
-say "1. Firmware overlays"
-CFG=/boot/firmware/config.txt
-[ -f "$CFG" ] || CFG=/boot/config.txt
-for ov in disable-wifi disable-bt; do
-    if grep -q "^dtoverlay=$ov" "$CFG" 2>/dev/null; then
-        ok "$CFG sets dtoverlay=$ov"
-    else
-        bad "$CFG does NOT set dtoverlay=$ov"
-    fi
-done
+say "RADIO"
 
-say ""
-say "2. Kernel drivers"
-for mod in brcmfmac brcmutil cfg80211 bluetooth btbcm hci_uart; do
-    if lsmod 2>/dev/null | grep -qw "^$mod"; then
-        bad "module $mod is LOADED"
-    else
-        ok "module $mod is not loaded"
-    fi
-done
-if [ -f /etc/modprobe.d/corky-no-radio.conf ]; then
-    ok "the blacklist file is installed"
-else
-    bad "no /etc/modprobe.d/corky-no-radio.conf"
-fi
+grep -q "^dtoverlay=disable-wifi" "$CFG" 2>/dev/null \
+    && ok "Wi-Fi overlay" "disabled" || bad "Wi-Fi overlay" "not set"
+grep -q "^dtoverlay=disable-bt" "$CFG" 2>/dev/null \
+    && ok "Bluetooth overlay" "disabled" || bad "Bluetooth overlay" "not set"
 
-say ""
-say "3. Firmware blobs"
-if [ -d /lib/firmware/brcm ]; then
-    bad "/lib/firmware/brcm is present, so a driver could bring the chip up"
-    note "$(find /lib/firmware/brcm -type f 2>/dev/null | wc -l) files"
-else
-    ok "/lib/firmware/brcm is absent"
-    [ -d /lib/firmware/brcm.corky-disabled ] && \
-        note "kept at /lib/firmware/brcm.corky-disabled, so this is reversible"
-fi
+WIFI_MODS=$(lsmod 2>/dev/null | grep -cE "^(brcmfmac|brcmutil|cfg80211)")
+[ "$WIFI_MODS" -eq 0 ] && ok "Wi-Fi driver" "not loaded" \
+                       || bad "Wi-Fi driver" "loaded"
+BT_MODS=$(lsmod 2>/dev/null | grep -cE "^(bluetooth|btbcm|hci_uart|btsdio)")
+[ "$BT_MODS" -eq 0 ] && ok "Bluetooth driver" "not loaded" \
+                     || bad "Bluetooth driver" "loaded"
 
-say ""
-say "4. Interfaces"
-IFACES=$(ls /sys/class/net 2>/dev/null | grep -vE '^(lo|usb|eth)' | tr '\n' ' ')
-if [ -z "$IFACES" ]; then
-    ok "no wireless interface exists"
-else
-    bad "interfaces present: $IFACES"
-fi
-if command -v rfkill >/dev/null 2>&1; then
-    RF=$(rfkill list 2>/dev/null)
-    if [ -z "$RF" ]; then ok "rfkill lists no radio"; else bad "rfkill sees a radio"; note "$RF"; fi
-fi
+[ -f /etc/modprobe.d/corky-no-radio.conf ] \
+    && ok "Driver blacklist" "installed" || bad "Driver blacklist" "missing"
+
+[ -d /lib/firmware/brcm ] && bad "Radio firmware" "on the card" \
+                          || ok "Radio firmware" "removed"
+
+WIFI_IF=$(ls /sys/class/net 2>/dev/null | grep -vE '^(lo|usb|eth)' | tr '\n' ' ')
+[ -z "$WIFI_IF" ] && ok "Wi-Fi interface" "none" \
+                  || bad "Wi-Fi interface" "$(echo "$WIFI_IF" | tr -d ' ')"
 if command -v hciconfig >/dev/null 2>&1; then
-    if [ -z "$(hciconfig 2>/dev/null)" ]; then
-        ok "hciconfig lists no Bluetooth device"
-    else
-        bad "hciconfig sees a Bluetooth device"
-    fi
+    [ -z "$(hciconfig 2>/dev/null)" ] && ok "Bluetooth device" "none" \
+                                      || bad "Bluetooth device" "present"
 fi
+service_row "Wi-Fi service" wpa_supplicant
+service_row "Bluetooth service" bluetooth
+service_row "Network manager" NetworkManager
 
-say ""
-say "5. Services"
-for unit in wpa_supplicant bluetooth hciuart dhcpcd NetworkManager systemd-networkd; do
-    STATE=$(unit_state "$unit"); [ -n "$STATE" ] || STATE=not-found
-    ACTIVE=$(systemctl is-active "$unit" 2>/dev/null | head -1)
-    if [ "$ACTIVE" = "active" ]; then
-        bad "$unit is RUNNING"
-    elif unit_ok "$STATE"; then
-        ok "$unit is $STATE"
-    else
-        bad "$unit is $STATE"
-    fi
-done
-
-say ""
-say "6. What the kernel saw at boot"
-if dmesg 2>/dev/null | grep -qiE "brcmfmac|bluetooth|hci0"; then
-    bad "the kernel log mentions the radio; read it with: dmesg | grep -i brcm"
+if dmesg 2>/dev/null | grep -qiE "brcmfmac|Bluetooth: hci"; then
+    bad "Radio at boot" "brought up"
 else
-    ok "the kernel log has no radio bring-up"
+    ok "Radio at boot" "silent"
 fi
 
 say ""
-say "7. Swap, the worst path off this board"
+say "THE CARD"
+
 if [ -n "$(swapon --show 2>/dev/null)" ]; then
-    bad "SWAP IS ON. Key pages can be written to the card."
-    note "$(swapon --show 2>/dev/null | tail -n +2)"
+    bad "Swap" "ON, key pages can reach the card"
 else
-    ok "no swap is active"
+    ok "Swap" "off"
 fi
-# swapon above is the authority on whether swap is on NOW. These say
-# whether it comes back at the next boot. swap.target is "static" on every
-# systemd machine and that is not a finding, so it is not checked.
+SWAP_BACK=no
 for unit in dphys-swapfile dev-zram0.swap; do
-    STATE=$(unit_state "$unit"); [ -n "$STATE" ] || STATE=not-found
-    if unit_ok "$STATE"; then
-        ok "$unit is $STATE"
-    else
-        bad "$unit is $STATE and can bring swap back at reboot"
-    fi
+    st=$(unit_state "$unit"); [ -n "$st" ] || st=not-found
+    unit_off "$st" || SWAP_BACK=yes
 done
-if [ -f /etc/systemd/zram-generator.conf ] && grep -qE "zram-size *= *0" /etc/systemd/zram-generator.conf; then
-    ok "the zram generator is configured to zero size"
-elif [ -x /usr/lib/systemd/system-generators/zram-generator ]; then
-    bad "the zram generator is installed and not configured to zero"
-fi
-if grep -qE '\sswap\s' /etc/fstab 2>/dev/null; then
-    bad "/etc/fstab still has a swap entry"
-else
-    ok "/etc/fstab has no swap entry"
-fi
+[ -f /etc/systemd/zram-generator.conf ] \
+    && grep -qE "zram-size *= *0" /etc/systemd/zram-generator.conf || {
+        [ -x /usr/lib/systemd/system-generators/zram-generator ] && SWAP_BACK=yes; }
+[ "$SWAP_BACK" = "no" ] && ok "Swap at boot" "cannot return" \
+                        || bad "Swap at boot" "comes back"
+
+[ -d /var/log/journal ] && bad "Journal" "written to the card" \
+                        || ok "Journal" "in RAM only"
 
 say ""
-say "8. The journal, which keeps a record of sessions"
-if [ -d /var/log/journal ]; then
-    bad "/var/log/journal exists, so the journal is written to the card"
-else
-    ok "no persistent journal directory"
-fi
-if grep -rqs "Storage=volatile" /etc/systemd/journald.conf.d/ /etc/systemd/journald.conf; then
-    ok "journald is set to keep the log in RAM"
-else
-    bad "journald is not set to Storage=volatile"
-fi
+say "PORTS AND CONSOLES"
 
-say ""
-say "9. Consoles and ports that are not the panel"
-CMDLINE=/boot/firmware/cmdline.txt
-[ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
-if grep -qE "console=(serial0|ttyAMA0|ttyS0)" "$CMDLINE" 2>/dev/null; then
-    bad "a serial console is on the GPIO header: three wires is a root shell"
-else
-    ok "no serial console in $CMDLINE"
-fi
+grep -qE "console=(serial0|ttyAMA0|ttyS0)" "$CMDLINE" 2>/dev/null \
+    && bad "Serial console" "on the GPIO header" \
+    || ok "Serial console" "off"
+GETTY=off
 for unit in serial-getty@ttyAMA0.service serial-getty@ttyS0.service; do
-    STATE=$(unit_state "$unit"); [ -n "$STATE" ] || STATE=not-found
-    if unit_ok "$STATE"; then ok "$unit is $STATE"; else bad "$unit is $STATE"; fi
+    st=$(unit_state "$unit"); [ -n "$st" ] || st=not-found
+    unit_off "$st" || GETTY=on
 done
-if [ -e /sys/class/udc ] && [ -n "$(ls /sys/class/udc 2>/dev/null)" ]; then
-    bad "a USB device controller is active: this board can pretend to be a"
-    note "network card, a serial port or a disk to any computer it is plugged into"
+[ "$GETTY" = "off" ] && ok "Serial login" "off" || bad "Serial login" "enabled"
+
+if [ -n "$(ls /sys/class/udc 2>/dev/null)" ]; then
+    bad "USB device mode" "active, can pretend to be a disk"
 else
-    ok "no USB device controller: the port is a host, not a device"
+    ok "USB device mode" "off, host only"
 fi
-if [ -f /etc/modprobe.d/corky-no-gadget.conf ]; then
-    ok "the USB gadget drivers are blacklisted"
-else
-    bad "no USB gadget blacklist"
-fi
-if command -v tvservice >/dev/null 2>&1 || [ -d /sys/class/drm ]; then
-    ATTACHED=$(grep -l "^connected" /sys/class/drm/*/status 2>/dev/null | wc -l)
-    if [ "$ATTACHED" -eq 0 ]; then
-        ok "no display is attached over HDMI"
-    else
-        note "$ATTACHED HDMI output(s) connected. The panel is SPI, so HDMI"
-        note "carries only the boot console. Unplug it for a signing session."
-    fi
-fi
+[ -f /etc/modprobe.d/corky-no-gadget.conf ] \
+    && ok "USB gadget blacklist" "installed" \
+    || bad "USB gadget blacklist" "missing"
+
+ATTACHED=$(grep -l "^connected" /sys/class/drm/*/status 2>/dev/null | wc -l)
+[ "$ATTACHED" -eq 0 ] && ok "HDMI" "nothing attached" \
+                      || ok "HDMI" "a screen is plugged in"
+
+service_row "Remote login" ssh
 
 say ""
-say "10. Bitcoin Core's own networking"
-CONF=/etc/corky-bitcoin.conf
-if grep -q "^networkactive=0" "$CONF" 2>/dev/null; then
-    ok "$CONF sets networkactive=0"
-else
-    bad "$CONF does not set networkactive=0"
-fi
+say "BITCOIN CORE"
+grep -q "^networkactive=0" /etc/corky-bitcoin.conf 2>/dev/null \
+    && ok "Core networking" "off" || bad "Core networking" "on"
 
 say ""
 say "==================================================================="
 if [ "$FAIL" -eq 0 ]; then
-    say "OS SILENT: $PASS checks passed."
+    say "OS SILENT: all $PASS checks pass."
+    say ""
+    say "The operating system is not driving any way off this board."
 else
-    say "$FAIL of $((PASS+FAIL)) checks FAILED. Read them above."
+    say "$FAIL of $((PASS+FAIL)) checks found a way off this board."
+    say ""
+    say "A DEV image is expected to fail the radio and login rows, because"
+    say "it keeps SSH so you can work on it. Run image/harden.sh when the"
+    say "device is about to hold a real key. That step is one way: it takes"
+    say "SSH away."
 fi
 say ""
-if [ "$FAIL" -eq 0 ]; then
-  say "This says the operating system is not driving any way off this board:"
-  say "no radio, no swap to the card, no journal on the card, no console on"
-  say "the header, and no USB device mode."
-else
-  say "Each FAIL above is a way data could leave this board. A DEV image is"
-  say "expected to fail the radio and console checks, because it keeps SSH"
-  say "so you can work on it. Run image/harden.sh when the device is about"
-  say "to hold a real key. That step is one way: it takes SSH away."
-fi
-say ""
-say "It does NOT say the wireless chip is unpowered. Only removing the"
+say "None of this says the wireless chip is unpowered. Only removing the"
 say "part says that, and on the Zero 2 W the radio is a separate component"
-say "beside the processor, so removal is possible. A device that has to be"
-say "silent by physics is a device with the part taken off."
+say "beside the processor, so removal is possible."
 say ""
 say "What no script can check: the activity LED can be modulated, and the"
 say "power line and the panel both emit. Those need a room, not a config."
 say "==================================================================="
-say ""
 [ "$PORCELAIN" -eq 1 ] && printf "TOTAL\t%s\t%s\n" "$PASS" "$FAIL"
 exit $FAIL
