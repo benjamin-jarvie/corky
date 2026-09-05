@@ -334,6 +334,12 @@ def receive_addresses(rpc: "Rpc", wallet: str, kind: str, count: int, start: int
     return rpc.call("deriveaddresses", desc, [start, start + count - 1])
 
 
+#: What the watch-only wallet file is called. It carries no private key,
+#: which is why it is the one file the private-key-on-paper rule (A-24)
+#: still allows off this device.
+WATCH_PREFIX = "corky-"
+
+
 def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
     """A watch-only wallet file for a laptop running Bitcoin Core.
 
@@ -357,108 +363,20 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
         failures = [r for r in result if not r.get("success")]
         if failures:
             raise RuntimeError(f"watch-only import failed: {failures}")
-        out = Path(dest_dir) / f"{BACKUP_PREFIX}{xfp}-watch.dat"
+        out = Path(dest_dir) / f"{WATCH_PREFIX}{xfp}-watch.dat"
         rpc.call("backupwallet", str(out), wallet=scratch)
         return out
     finally:
         _drop_wallet(rpc, scratch)
 
 
-# How long a restored key stays unlocked. The wallet dies at power-off, so
-# this only has to outlast a session at the desk (ticket 04: unlock once,
-# at restore, for the session).
-SESSION_UNLOCK = 60 * 60 * 12
-
-BACKUP_PREFIX = "corky-"
-BACKUP_SUFFIX = "-backup.dat"
 
 
-def backup_encrypted(rpc: "Rpc", wallet: str, passphrase: str, dest_dir: "str | Path") -> Path:
-    """A passphrase-encrypted wallet file, made by Core's own commands.
-
-    `encryptwallet` then `backupwallet`, which is exactly the pair a Core
-    user runs, so another Core restores it with `restorewallet` and unlocks
-    it with `walletpassphrase`. Nothing of ours encrypts anything.
-
-    The encryption happens on a SCRATCH copy built from the same private
-    descriptors, not on the loaded key. `encryptwallet` would otherwise
-    leave the user's own key locked, so making a backup would silently add
-    a passphrase prompt to every later signature in the session. The
-    scratch wallet is deleted again.
-
-    An empty `passphrase` writes the backup WITHOUT encryption, which Core
-    supports and the screen before it warns about.
-
-    The file is named by the key's fingerprint. Returns its path.
-    """
-    xfp = master_fingerprint(rpc, wallet=wallet) or "unknown"
-    descs = rpc.call("listdescriptors", True, wallet=wallet)["descriptors"]
-    imports = [_desc_entry(d["desc"], internal=d.get("internal", False))
-               for d in descs]
-    scratch = f"{wallet}-backup"
-    _drop_wallet(rpc, scratch)
-    rpc.call("createwallet", scratch, False, True, "", False, True)
-    try:
-        result = rpc.call("importdescriptors", imports, wallet=scratch,
-                          stdin=True)
-        failures = [r for r in result if not r.get("success")]
-        if failures:
-            raise RuntimeError(f"backup import failed: {failures}")
-        # An empty passphrase means the user chose no encryption, and Core
-        # refuses to encrypt with one, so the scratch is simply backed up
-        # as it is. The file then holds the key in the clear, which is what
-        # the screen before this warned about.
-        if passphrase:
-            # encryptwallet reloads the wallet under the same name.
-            rpc.call("encryptwallet", passphrase, wallet=scratch, stdin=True)
-        out = Path(dest_dir) / f"{BACKUP_PREFIX}{xfp}{BACKUP_SUFFIX}"
-        rpc.call("backupwallet", str(out), wallet=scratch)
-        return out
-    finally:
-        _drop_wallet(rpc, scratch)
 
 
-def find_backups(directory: "str | Path") -> list[Path]:
-    """Every Corky backup file on a medium, in name order."""
-    try:
-        return sorted(p for p in Path(directory).iterdir()
-                      if p.is_file() and p.name.endswith(BACKUP_SUFFIX))
-    except OSError:
-        return []
 
 
-def restore_encrypted(rpc: "Rpc", path: "str | Path", passphrase: str, timeout: int = SESSION_UNLOCK) -> str:
-    """Load a key from a Core wallet backup, and unlock it for the session.
 
-    Refuses a file that is not a wallet, one that holds no private key
-    (the watch-only export), a wrong passphrase, and a key already loaded.
-    Any refusal leaves the session exactly as it was.
-    """
-    name = _next_slot(rpc)
-    _drop_wallet(rpc, name)
-    try:
-        rpc.call("restorewallet", name, str(path))
-    except RuntimeError:
-        _drop_wallet(rpc, name)
-        raise RuntimeError("that file is not a Bitcoin Core wallet backup") from None
-    try:
-        info = rpc.call("getwalletinfo", wallet=name)
-        if not info.get("private_keys_enabled", False):
-            raise RuntimeError("that backup holds no private key; it is the "
-                               "watch-only export, not a key backup")
-        if "unlocked_until" in info:
-            try:
-                rpc.call("walletpassphrase", passphrase, timeout,
-                         wallet=name, stdin=True)
-            except RuntimeError:
-                raise RuntimeError("wrong passphrase") from None
-        xfp = master_fingerprint(rpc, wallet=name)
-        if any(k.xfp == xfp for k in loaded_keys(rpc) if k.name != name):
-            raise RuntimeError(f"key {xfp} is already loaded")
-        return name
-    except RuntimeError:
-        _drop_wallet(rpc, name)
-        raise
 
 
 def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:

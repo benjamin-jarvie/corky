@@ -240,12 +240,12 @@ def main():
         # check alone. Then Keys, New key, which is the first row there now.
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan a key -> warning
                   + "da" + "dda" + "b"            # Receiving addresses -> page on, back
-                  + "da" + "a" + "aaa"            # Backup key -> On paper (1st) -> 3 pages
+                  + "da" + "aaa"                  # Backup key -> 3 pages, paper is the only kind
                   + "da" + "ra"                   # Discard key -> confirm: DISCARD
                   + "da" + "a" + "c"              # Tools -> Check for leaks -> C leaves
                   + "b"                           # Tools -> home
                   + "ra" + keys_press(0, "New key")   # Keys -> New key, done
-                  + "dda" + "a" + "aaa"           # Backup key -> On paper -> 3 pages
+                  + "dda" + "aaa"                 # Backup key -> 3 pages
                   + "b" + "b"                     # key menu -> keys -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -256,10 +256,8 @@ def main():
             "K3: scanning an xprv did not land on that key's menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), "K3: A's key menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 2)), "K3: Backup key highlighted"
-        assert _has(fr, _render(scr.backup_menu, 0)), \
-            "K3: the backup chooser, with On paper first and selected"
-        assert not _has(fr, _render(scr.encrypt_menu, 0)), \
-            "K3: the PAPER backup asked about encryption, so row 0 ran the file backup"
+        assert _has(fr, _render(scr.key_menu, xfp_a, 2)), \
+            "K3: Backup key was never the selected row"
         # The dev display blanks every sensitive frame (hal.DevDisplay), so
         # the three xprv pages are three blank frames in a row, and the
         # backup page itself is pinned by test_screen_fit.
@@ -388,45 +386,6 @@ def main():
         print(f"ok   K5: export -> script type, QR, text, wallet file "
               f"{written[0].name} for a Core laptop")
 
-        # ---- Session K6: the file backup, and restoring from it (13) ----
-        # Load A, back it up to the stick with a passphrase, discard it,
-        # then load it again from that file. The key that comes back must
-        # be the same key, by fingerprint.
-        signer.close_session(rpc)
-        stick6 = work / "stick6"; stick6.mkdir()
-        phrase = text_keys("passphrase", "hunter2")
-        script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan -> warning
-                  + "dda" + "da"                  # Backup key (3rd) -> To a file (2nd)
-                  + "a" + phrase + "a" + "a"      # Encrypt it -> type -> channel -> dismiss
-                  + "da" + "ra"                       # Discard key -> DISCARD
-                  + "ra" + keys_press(0, "Restore from file")
-                  + "a" + phrase                  # pick the backup, type the passphrase
-                  + "b" + "b" + "draa")
-        r = run_device(datadir, script, work / "framesK6",
-                       qr_key=key_a, stick=stick6)
-        assert r.returncode == 0, (f"K6 failed rc={r.returncode}\n"
-                                   f"STDERR:{r.stderr[-1200:]}")
-        backups = signer.find_backups(stick6)
-        assert len(backups) == 1, f"K6: backup not written: {list(stick6.iterdir())}"
-        assert xfp_a in backups[0].name, f"K6: wrong name {backups[0].name}"
-        fr6 = work / "framesK6"
-        assert _has(fr6, _render(scr.backup_menu, 1)), \
-            "K6: To a file is the second backup row, and was selected"
-        assert _has(fr6, _render(scr.encrypt_menu, 0)), \
-            "K6: encrypt or not is asked before the passphrase"
-        assert _has(fr6, _render(scr.restore_menu, [backups[0].name], 0)), \
-            "K6: the restore chooser listed the backup by fingerprint"
-        assert _has(fr6, _render(scr.result, ok=True, label="DONE",
-                                 detail=f"{backups[0].name} written")), \
-            "K6: the device did not say the backup was written"
-        # The key that came back is the same key, and it is usable.
-        restored = signer.restore_encrypted(rpc, backups[0], "hunter2")
-        assert signer.master_fingerprint(rpc, wallet=restored) == xfp_a, \
-            "K6: the restored key is not the key that was backed up"
-        signer.close_session(rpc)
-        print(f"ok   K6: backup to {backups[0].name}, discard, restore, "
-              f"same fingerprint {xfp_a}")
-
         # ---- Session K7: a bad file on the stick must not kill the app ----
         # ISSUES D18. corky.service has Restart=on-failure, so an exception
         # here is not one bad screen, it is a restart loop that lasts as
@@ -492,7 +451,7 @@ def main():
         page1_bad = pages9[0][:wrong_at] + typo + pages9[0][wrong_at + 1:]
 
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
-                  + "dda" + "a"                  # Backup key -> On paper
+                  + "dda"                        # Backup key: paper, no chooser
                   + "aa" + "ra"                  # 3 pages, then CHECK IT
                   + text_keys("xprv", page1_bad)  # page 1, one wrong
                   + "a"                          # verdict: FIX is selected

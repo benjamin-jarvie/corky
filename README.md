@@ -85,18 +85,18 @@ key, derives every child, holds it, and signs with it. Corky derives
 nothing, hashes nothing, and signs nothing. `tests/test_integrity.py`
 fails if any shipped module so much as imports a cryptographic library.
 
-**Corky sees your key at three moments, and no others:**
+**Corky sees your key at two moments, and no others:**
 
 1. **On the way in.** What you type on the grid, or what the camera reads,
    is a string in Python until it reaches Core through `bitcoin-cli
    -stdin`. Never the command line, so it is never in a process listing.
 2. **On the way to paper, and only if you ask.** The paper backup asks
    Core for the master key and renders it as pixels. This is the one time
-   a key is pulled **out** of Core for a reason that is not cryptographic,
-   which is why the encrypted file backup is the first option and this one
-   is the second.
-3. **The backup passphrase**, typed on the grid, on its way to Core's own
-   `encryptwallet`.
+   a key is pulled **out** of Core for a reason that is not cryptographic.
+
+It was three moments until 2026-09-05. The third was a backup passphrase
+on its way to Core's `encryptwallet`, and it went when the encrypted file
+backup did (PLAN A-24).
 
 Everything else, including the whole file channel and the whole QR channel,
 carries transactions and public keys only.
@@ -119,8 +119,10 @@ bytes between you and Bitcoin Core:
 Nobody can move here from an existing hardware wallet by typing their words.
 Your backup is the master private key itself, 111 characters, and it
 cannot be split into
-shares. If that is unacceptable, the `lab` branch keeps the translator,
-codex32 and SeedQR, and is meant for people who read code.
+shares. If that is unacceptable,
+[butlers-playground](https://github.com/benjamin-jarvie/butlers-playground)
+keeps the translator, codex32 and SeedQR, and is meant for people who read
+code.
 
 Corky's claim is not "trustless". It is: **you trust Bitcoin Core's wallet
 implementation instead of a rewrite of it, and nothing else of ours computes
@@ -345,9 +347,9 @@ up means copying `wallet.dat` off, or reading the key out in the console
 and into the scrollback. Deleting either afterwards is not deletion: flash
 storage with wear levelling does not reliably overwrite in place.
 
-**Corky.** Core generates onto a tmpfs, which is RAM. The default backup
-is Core's own encrypted file, and the key is never read out of Core to
-make it. Power off and the wallet is gone.
+**Corky.** Core generates onto a tmpfs, which is RAM. The only backup is
+paper, so the key is never written to any medium at all. Power off and the
+wallet is gone.
 
 **Corky wins**, on where the key rests rather than on how it is made. The
 generation itself is identical, because it is the same Core.
@@ -444,13 +446,26 @@ boot memory remanence is a real attack against that, and the answer to it
 is to power the device off, which is also the answer to everything else on
 this device. It is an M3 question and it is not solved here.
 
-**The one exposure that was a choice is now the second option.** Getting a
-key IN requires it to pass through memory. Showing a paper backup does
-not: it asks Core for the master key purely to draw it on a screen. So the
-encrypted file backup is offered first, and `generate_wallet` no longer
-returns the key at all. A key Core generates and you back up to a file is
-**never read out of Core**. Choose the paper backup and it is, once, on
-purpose, and the menu says which one costs you that.
+**The one exposure left is the paper backup, and it is a choice.** Getting
+a key IN requires it to pass through memory. Showing a paper backup asks
+Core for the master key purely to draw it on a screen. `generate_wallet`
+does not return the key, so a key you never back up is never read out of
+Core at all.
+
+There used to be a second option, an encrypted file, offered first because
+it did not read the key out. It is gone (PLAN A-24). This board has one
+card slot and that card is the boot device, so the file would have gone
+either to the boot card, which PLAN A-23 kept hedging about, or to a USB
+stick. Ben's call was that a private key should not go onto a medium at
+all. The whole encryption path went with it: no passphrase screen, no
+`encryptwallet`, no restore-from-file.
+
+The code belongs in
+[butlers-playground](https://github.com/benjamin-jarvie/butlers-playground),
+this repo's fork, where a board with soldered storage and two free USB
+ports makes the tradeoff different. That fork last synced at the A-22 cut
+on 2026-09-04 and is 26 commits behind, so the forward merge that carries
+this across is its own job.
 
 ## The trade-offs, before critics find them
 
@@ -553,7 +568,7 @@ them is transformed by anything of ours at all: pure Core from the first
 byte. (Descriptor mode is the answer to
 Maxwell's BIP39 critique: the backup carries its own derivation path, script
 type and checksum. Its trade-off: it is a printed/engraved QR, not stampable
-steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out via **three channels**: animated QR, which carries fountain parts past the pure cycle so a frame the scanner cannot read never strands a transfer;
+steel words.) PSBT in/out via **three channels**: animated QR, which carries fountain parts past the pure cycle so a frame the scanner cannot read never strands a transfer;
 a PSBT file on a USB stick in the OTG port; and — once the M3 RAM-resident
 image lands — the boot microSD itself, SeedSigner-OS style (the whole OS runs
 from RAM, so the card can be pulled and used as the PSBT sled). QR is the
@@ -613,11 +628,9 @@ full for comparison. Sparrow, BlueWallet, Green and Bull Bitcoin all read
 that descriptor as written; Bitcoin Core has no QR reader, so it gets a
 watch-only wallet file its own GUI restores. Receiving addresses browses
 further, ten at a time, receive branch only. Backup key offers two: the
-master private key on paper, and a file that Core's own `encryptwallet` and
-`backupwallet` produce, which another computer running Core restores with
-your passphrase. The file backup asks whether to encrypt it before it asks
-for anything else, and takes no for an answer: Core writes an unencrypted
-backup too, and the device says what that costs before it does.
+master private key on paper, and nothing else. Backup key goes straight to
+the pages; there is no chooser in front of it and no passphrase, because
+there is no file to encrypt (PLAN A-24).
 
 **Export asks the script type first, then shows the key.** SeedSigner's
 shape, minus the two questions that turned out to be noise: signature type
@@ -650,8 +663,7 @@ derives the same addresses Core derives, and signs a real transaction that
 Core finalises and the network accepts
 ([`tests/sparrow/test_recovery.py`](tests/sparrow/test_recovery.py), 21
 checks). Bitcoin Core takes it too, by building the descriptor and
-importing it. The encrypted file backup restores on a second Core node
-through Core's own `restorewallet`.
+importing it.
 
 **BlueWallet, Green and Bull Bitcoin cannot open it.** BlueWallet accepts
 an xprv only as a multisig cosigner, Green never handles one, and Bull
@@ -664,8 +676,10 @@ need it.
 **Nothing persists.** A discard, a close, a crash-restart and a power-off
 each leave no byte of a key anywhere on the device; `tests/test_no_persistence.py`
 searches the whole datadir for the raw key bytes to prove it. The one
-exception is the file backup, which is a key on a medium **because you
-asked for it**, encrypted by Core with a passphrase you typed (PLAN A-23).
+exception was the encrypted file backup, and since PLAN A-24 there is no
+exception at all: the private key is never written to any medium by this
+device. What still goes to a file is public, the watch-only wallet Bitcoin
+Core needs because it reads no QR, and PSBTs.
 
 Out of scope for v1: multisig, message signing, and dice entropy. Corky
 signs for keys that already live on metal, and writes no randomness of its
@@ -697,22 +711,24 @@ the words `pbkdf2`, `seed_to_xprv` or `Bitcoin seed` reappear anywhere in
 The cost is real and deliberate: **this build cannot accept a 12 or 24
 word seed phrase**, so nobody can bring words from an existing hardware
 wallet, and a backup is Core's 111-character master xprv rather than
-words. The `lab` branch carries the removed modules for people who want
+words.
+[butlers-playground](https://github.com/benjamin-jarvie/butlers-playground)
+carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2161 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1982 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1122) ·
-[`corky/screens.py`](corky/screens.py) (637) ·
-[`corky/signer.py`](corky/signer.py) (328) ·
+[`corky/main.py`](corky/main.py) (1049) ·
+[`corky/screens.py`](corky/screens.py) (586) ·
+[`corky/signer.py`](corky/signer.py) (273) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
 
 `signer.py` sat in layer 3 until 2026-09-05, when a review pointed out that
-it takes an xprv and a passphrase as parameters and always had. It carries
+it takes an xprv as a parameter and always had. It carries
 them to Core and computes nothing with them, which is layer 2 by this
 README's own definition.
 
@@ -721,11 +737,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,409 lines** (4,313 with blanks/comments).
+**Total functional code: 2,230 lines** (4,065 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,502 lines — none of it ships on the device.**
+**Test code: 4,267 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

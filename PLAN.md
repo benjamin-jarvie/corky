@@ -247,6 +247,47 @@
   when the user wants it. `tests/e2e_session.py` session G asserts the
   backup menu does not follow generation at once.
 
+- **A-24: the private key leaves on paper only (Ben, 2026-09-05).** The
+  encrypted file backup, its passphrase, and restore-from-file are cut.
+  Backup key goes straight to the pages. Ben's words: "you can and should
+  only be able to export by writing it down on paper, no encryption
+  needed."
+
+  **What it removes.** `signer.backup_encrypted`, `restore_encrypted`,
+  `find_backups`; `main._backup_file`, `_ask_passphrase`,
+  `_confirm_no_passphrase`, `_key_from_file`, `_backup`;
+  `screens.encrypt_menu`, `no_passphrase_warning`, `restore_menu`,
+  `backup_menu`, `BACKUP_OPTIONS`, `fingerprint_of_backup`, and the
+  passphrase alphabet. 179 lines of shipped code, and Restore from file
+  leaves the KEYS screen with it.
+
+  **What it keeps.** The file channel, for PUBLIC data only: the
+  watch-only wallet file Bitcoin Core needs because it reads no QR, and
+  PSBTs. The worst a hostile card can do there is hand Core something Core
+  rejects.
+
+  **Why.** This board has one card slot and that card is the boot device,
+  so an encrypted backup would go either to the boot card, which A-23 kept
+  hedging about, or to a USB stick. Drawing the line at the key rather
+  than the medium means a key that was never written to a medium cannot be
+  taken off one. It also deletes the third of the three moments Corky sees
+  a key: the backup passphrase on its way to `encryptwallet`. Two moments
+  remain, in and to paper.
+
+  **One correction to the premise, recorded because it changes the
+  reasoning and not the decision.** USB host already works on the Zero 2 W
+  (`otg_mode=1`, `dwc2` in host mode, gadget modules blacklisted), so a
+  stick was available and this was a choice rather than a hardware
+  constraint. Ben confirmed it after hearing that.
+
+  **The cost, stated plainly.** The only backup is now 111 handwritten
+  characters. No second copy, no encryption at rest, and the only way back
+  is scanning or typing them. That is what makes the paper check built the
+  same day load-bearing rather than a nicety.
+
+  **Where the removed code goes.** butlers-playground, this repo's fork,
+  which is 26 commits behind. Map ticket N4 carries that job.
+
 - **A-20: the outbound QR carries fountain parts (Ben, 2026-09-03).**
   `psbt_to_frames` used to return exactly one pure cycle, which the display
   looped. That is fragile in a way only Sparrow's decoder shows. Corky renders

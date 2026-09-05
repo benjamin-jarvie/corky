@@ -138,8 +138,7 @@ try:
     success_calls = list(backup_calls)
 
     # The last page's bar is live: DONE is pre-selected and CHECK IT is
-    # one press right of it. Both must reach the caller, or the check Ben
-    # asked for is unreachable and DONE is the only outcome there is.
+    # one press right of it. Both must reach the caller.
     backup_calls.clear()
     check_session = corky_main.Session(
         RecordingDisplay(), ScriptedButtons("ara"), FakeRpc())
@@ -202,10 +201,12 @@ elif not (painted[0] == "home"
 else:
     ok("a failing key mode holds its error, then returns to Keys")
 
-# --- the passphrase screen must not be a dead end -------------------------
-# On the board 2026-09-05 the back button did nothing on an empty
-# passphrase, because B deletes a character and there was nothing to
-# delete, and DONE with nothing threw the user out to the key menu.
+# --- the typed key screen must not be a dead end --------------------------
+# On the board 2026-09-05 the back button did nothing on an empty box,
+# because B deletes a character and there was nothing to delete. It was
+# found on the passphrase screen, which went with the encrypted backup
+# (A-24); the same rule binds the one typed screen that is left, where a
+# private key goes in.
 class Recorder:
     width, height = 320, 240
 
@@ -218,50 +219,18 @@ class Recorder:
 
 def entry(keys):
     sess = corky_main.Session(Recorder(), ScriptedButtons(keys), FakeRpc())
-    return sess._text_entry("PASSPHRASE", "passphrase", secret=True)
+    return sess._text_entry("MASTER  PRIVATE  KEY", "xprv", secret=True)
 
 
 if entry(["b"]) is None:
-    ok("B on an empty passphrase goes back instead of doing nothing")
+    ok("B on an empty typed key goes back instead of doing nothing")
 else:
-    bad("B on an empty passphrase did not go back")
+    bad("B on an empty typed key did not go back")
 
 if entry(["a", "b", "b"]) is None:
     ok("B deletes what is there, then goes back when there is nothing")
 else:
     bad("B did not fall through to back once the buffer was empty")
-
-# Encrypt or not is asked FIRST (Ben, 2026-09-05: "it should ask if you
-# want to encrypt it or not first"). An empty box after choosing to
-# encrypt is a slip, so it asks again rather than reading as a choice.
-sess = corky_main.Session(Recorder(), ScriptedButtons(
-    ["a"] +            # ENCRYPT IT, the first row
-    ["p"] +            # DONE with an empty box
-    ["a"] +            # read the "type a passphrase" message
-    ["a", "p"]         # type one character, DONE
-), FakeRpc())
-got = sess._ask_passphrase("PASSPHRASE")
-if got and got != corky_main.Session.NO_PASSPHRASE:
-    ok("an empty passphrase asks again instead of leaving the flow")
-else:
-    bad(f"_ask_passphrase returned {got!r} after the box was left empty")
-
-sess = corky_main.Session(Recorder(), ScriptedButtons(
-    ["d", "a"] +       # NO PASSPHRASE, the second row
-    ["r", "a"]         # move off the pre-selected BACK and confirm
-), FakeRpc())
-if sess._ask_passphrase("PASSPHRASE") == corky_main.Session.NO_PASSPHRASE:
-    ok("no passphrase is possible, but only after a deliberate choice")
-else:
-    bad("the no-passphrase choice did not come back as such")
-
-# And backing out of the question leaves the flow, rather than dropping
-# into a passphrase grid the user never asked for.
-sess = corky_main.Session(Recorder(), ScriptedButtons(["b"]), FakeRpc())
-if sess._ask_passphrase("PASSPHRASE") is None:
-    ok("B on the encrypt question leaves the backup flow")
-else:
-    bad("B on the encrypt question did not leave the flow")
 
 # --- D9: the sign button explains its refusal -----------------------------
 img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001)

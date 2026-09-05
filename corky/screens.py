@@ -10,14 +10,10 @@ Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
 """
 
-import sys
 from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import signer  # noqa: E402 - needs the path above
 
 INK = "#1A1714"
 CREAM = "#F5EFE0"
@@ -481,7 +477,7 @@ def _menu(w, h, title, rows, selected, icons=None):
 KEY_MENU_OPTIONS = [
     ("Export public key", "for a coordinator"),
     ("Receiving addresses", "Core derives"),
-    ("Backup key", "paper or file"),
+    ("Backup key", "on paper"),
     ("Discard key", "Core forgets it"),
 ]
 
@@ -574,7 +570,6 @@ KEYS_ACTIONS = [
     ("New key", ""),
     ("Scan a key", ""),
     ("Type private key", ""),
-    ("Restore from file", ""),
 ]
 
 
@@ -722,58 +717,18 @@ def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
     return img
 
 
-# Read from signer so the screen and the writer cannot drift apart.
-BACKUP_PREFIX = signer.BACKUP_PREFIX
-BACKUP_SUFFIX = signer.BACKUP_SUFFIX
-
-# Encrypt or not, asked before the passphrase rather than discovered by
-# leaving the box empty (Ben, 2026-09-05).
-ENCRYPT_OPTIONS = [
-    ("Encrypt it", "you choose a passphrase"),
-    ("No passphrase", "anyone who finds it"),
-]
 
 
-def encrypt_menu(w, h, selected=0):
-    return _menu(w, h, "BACKUP  FILE",
-                 [(label, note, "normal") for label, note in ENCRYPT_OPTIONS],
-                 selected)
 
 
-BACKUP_OPTIONS = [
-    ("On paper", "your private key"),
-    ("To a file", "encrypted by Core"),
-]
-
-#: The paper row's number, named here beside the row it indexes. main.py
-#: used to hard-code 0 for the FILE backup while row 0 read "On paper", so
-#: choosing paper asked for an encryption passphrase.
-PAPER = 0
 
 
-def backup_menu(w, h, selected=0):
-    """Two backups, and they are not alternatives. The paper one is the key
-    itself; the file one is what another computer running Core restores."""
-    return _menu(w, h, "BACKUP  KEY",
-                 [(label, note, "normal") for label, note in BACKUP_OPTIONS],
-                 selected)
 
 
-def fingerprint_of_backup(filename):
-    """The key a backup file holds, by the fingerprint in its name. One
-    place, so the screen and signer.BACKUP_SUFFIX cannot drift apart."""
-    stem = filename[:-len(BACKUP_SUFFIX)] if filename.endswith(BACKUP_SUFFIX) \
-        else filename
-    return stem[len(BACKUP_PREFIX):] if stem.startswith(BACKUP_PREFIX) else stem
 
 
-def restore_menu(w, h, names, selected=0):
-    """The backup files found on the medium, by the fingerprint in the
-    name, so the user picks a key rather than a filename."""
-    rows = [(fingerprint_of_backup(n).upper(), "Core backup", "normal")
-            for n in names]
-    return _menu(w, h, "RESTORE  A  KEY", rows or [("none found", "", "normal")],
-                 selected)
+
+
 
 
 # CONTEXT.md calls these channels: how bytes cross the air gap. QR is the
@@ -789,25 +744,6 @@ def choose_channel(w, h, channels, selected=0):
                   for c in channels], selected)
 
 
-def no_passphrase_warning(w, h, selected=0):
-    """An empty passphrase means the backup file is not encrypted.
-
-    Core allows it, so Corky allows it. The screen says what it costs,
-    because a wallet file with no passphrase is your private key on a
-    removable card, and a card can be copied without you knowing.
-    """
-    img, d = _frame(w, h, "NO  PASSPHRASE")
-    _fit(d, (w // 2, int(h * 0.26)), "The file will NOT be encrypted.",
-         int(h * 0.065), RED, "mm", int(w * 0.94))
-    _fit_block(d, ["Anyone who finds the card or the stick",
-                   "can take the coins. No passphrase is",
-                   "asked for to restore it.",
-                   "",
-                   "Paper at least has to be read in person."],
-               [(int(w * 0.06), int(h * (0.40 + i * 0.085))) for i in range(5)],
-               int(h * 0.05), CREAM, "lm", int(w * 0.9))
-    _actions(d, w, h, ["BACK", "NO PASSPHRASE"], selected)
-    return img
 
 
 def confirm_discard(w, h, xfp, selected=0):
@@ -871,18 +807,10 @@ BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
 DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
 
 
-# A-22: the passphrase charset went with the BIP39 passphrase prompt. An
-# xprv and a descriptor are the only things typed on this device now.
-# A passphrase is the user's own string, so the grid must be able to type
-# anything a person would pick. 84 characters, three pages of 32.
-PASSPHRASE_CHARSET = ("abcdefghijklmnopqrstuvwxyz"
-                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                      "0123456789"
-                      " .,-_!?@#$%&*+=/:;()")
 
-CHARSETS = {"xprv": BASE58,
-            "descriptor": DESCRIPTOR_CHARSET,
-            "passphrase": PASSPHRASE_CHARSET}
+# A passphrase alphabet went with the file backup: the only thing this
+# device asks you to type now is a key, and a key is base58 (PLAN A-24).
+CHARSETS = {"xprv": BASE58, "descriptor": DESCRIPTOR_CHARSET}
 
 
 def charset_pages(name):

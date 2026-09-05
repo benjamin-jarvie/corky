@@ -140,6 +140,11 @@ documentation, and someone can go and build it without another decision.
 
 ## Open, and they are the way out of this map
 
+- [N4 Sync butlers-playground](tickets/N4-sync-the-fork.md) — the fork is
+  26 commits behind and the forward merge is 50 hunks across 12 files. It
+  should be next, because until it lands the encrypted file backup exists
+  only in corky's history.
+
 - [N1 The card comes out and the signer keeps running](tickets/N1-card-removable.md)
   — this is M3, and Ben's whole microSD workflow depends on it.
 - [N2 Say when the card can safely come out](tickets/N2-safe-to-remove.md)

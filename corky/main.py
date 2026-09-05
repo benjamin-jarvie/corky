@@ -645,7 +645,7 @@ class Session:
             elif selected == 1:
                 self._browse_addresses(name)
             elif selected == 2:
-                self._backup(name, xfp)
+                self._backup_paper(name, xfp)
             elif selected == 3 and self._discard(name, xfp):
                 return TO_HOME
 
@@ -875,118 +875,21 @@ class Session:
             stop()
         self._hold(f"{out.name} written", ok=True)
 
-    #: What `_ask_passphrase` returns when the user chose no encryption.
-    NO_PASSPHRASE = ""
 
-    def _ask_passphrase(self, title):
-        """Encrypt or not, then the passphrase if so.
 
-        The question comes first now (Ben, 2026-09-05). Asking for a
-        passphrase and treating an empty box as "no thanks" made the
-        choice something you discovered by failing at the screen.
 
-        Returns the passphrase, NO_PASSPHRASE for a deliberate no, or None
-        if the user backed out.
-        """
-        choice = self._pick(
-            lambda sel: screens.encrypt_menu(self.w, self.h, sel),
-            len(screens.ENCRYPT_OPTIONS))
-        if choice is None:
-            return None
-        if choice == 1:                      # no encryption
-            if not self._confirm_no_passphrase():
-                return None
-            return self.NO_PASSPHRASE
-        while True:
-            text = self._text_entry(title, "passphrase", secret=True)
-            if text is None:
-                return None
-            if text:
-                return text
-            # An empty box here is a slip, not a choice: the choice was
-            # made on the screen before this one.
-            self._hold("type a passphrase, or go back to choose no")
 
-    def _confirm_no_passphrase(self):
-        """No passphrase means an UNENCRYPTED backup. Core allows it, so
-        Corky allows it, and says what it costs before you take it."""
-        sel = 0
-        while True:
-            self.display.show(screens.no_passphrase_warning(
-                self.w, self.h, sel))
-            key = self.buttons.read()
-            if key in ("l", "r"):
-                sel = 1 - sel
-            elif key in ("b", "c"):
-                return False
-            elif key in ("a", "p"):
-                return sel == 1
 
-    def _backup(self, name, xfp):
-        """Two backups (ticket 04). The rows run in screens.BACKUP_OPTIONS
-        order: On paper, then To a file.
-
-        They ran in the opposite order to the screen until 2026-09-05. Row
-        0 read "On paper" and started the FILE backup, so choosing paper
-        asked for an encryption passphrase, which is the "back button does
-        nothing on backup to paper" Ben reported. Index the same list the
-        screen draws, so the two cannot disagree again.
-
-        The paper backup is the one exposure that is a choice: it asks Core
-        for the key so a screen can draw it. The file one never passes the
-        key through Corky at all. Returns True if a backup was made.
-        """
-        i = self._pick(lambda sel: screens.backup_menu(self.w, self.h, sel),
-                       len(screens.BACKUP_OPTIONS))
-        if i is None:
-            return False
-        return (self._backup_paper(name, xfp) if i == screens.PAPER
-                else self._backup_file(name))
-
-    def _backup_file(self, name):
-        """Core's own encryptwallet then backupwallet. The medium is asked
-        every time, because a backup on the card you are booting from is a
-        different decision from one on a stick you take away."""
-        passphrase = self._ask_passphrase("BACKUP  PASSPHRASE")
-        if passphrase is None:
-            return False
-        dest = self._choose_channel()
-        if dest is None:
-            return False
-        stop = self._busy("Bitcoin Core is encrypting your backup…"
-                          if passphrase else "Bitcoin Core is writing your backup…")
-        try:
-            out = signer.backup_encrypted(self.rpc, name, passphrase, dest)
-        finally:
-            stop()
-        self._hold(f"{out.name} written", ok=True)
-        return True
-
-    def _key_from_file(self):
-        """Load a key from a Core wallet backup on a stick or a card."""
-        found = []
-        for _kind, path in self._file_channels():
-            found.extend(signer.find_backups(path))
-        if not found:
-            self._hold("no backup file on the stick or card")
-            return False
-        i = self._pick(lambda sel: screens.restore_menu(
-            self.w, self.h, [p.name for p in found], sel), len(found))
-        if i is None:
-            return False
-        passphrase = self._ask_passphrase("BACKUP  PASSPHRASE")
-        if passphrase is None:
-            return False
-        stop = self._busy("Bitcoin Core is restoring the key…")
-        try:
-            self.key = signer.restore_encrypted(self.rpc, found[i], passphrase)
-        finally:
-            stop()
-        return True
 
     def _backup_paper(self, name, xfp):
-        """The paper backup: Core's master private key for this key, in
-        four-character groups over as many pages as it needs.
+        """Backup key. Core's master private key, in four-character groups
+        over as many pages as it needs, and there is no other kind.
+
+        There used to be a choice: paper, or a file Core encrypted with a
+        passphrase. The file is gone (PLAN A-24). One card slot on this
+        board is the boot card, and a private key on the boot card was the
+        thing PLAN A-23 kept hedging about. A key that is never written to
+        a medium cannot be taken off one.
 
         The last page offers VERIFY, and VERIFY now types the key back in
         and checks it (Ben, 2026-09-05: it "just takes me back to the
@@ -1044,14 +947,17 @@ class Session:
         """One of the ways to get a key, chosen from the Keys screen.
 
         Flat, with no LOAD A KEY screen between (Ben, 2026-09-05). The
-        order matches screens.KEYS_ACTIONS: make one, or bring one in four
+        order matches screens.KEYS_ACTIONS: make one, or bring one in two
         ways. PLAN A-22: every way in hands Core a string it understands,
         and Corky transforms none of them.
+
+        Restore from file went with the encrypted backup (A-24). Paper is
+        the only way the key leaves, so paper is the only way it comes
+        back, by scanning it or typing it.
         """
         ways = [self._tool_generate,
                 self._key_by_scan,
-                self._key_xprv_typed,
-                self._key_from_file]
+                self._key_xprv_typed]
         try:
             return bool(ways[action]())
         except self.HANDLED as exc:

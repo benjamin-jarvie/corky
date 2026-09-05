@@ -88,8 +88,6 @@ CASES = {
     "choose-channel": lambda w, h: screens.choose_channel(
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
-    "no-passphrase": lambda w, h: screens.no_passphrase_warning(w, h, 1),
-    "encrypt-menu": lambda w, h: screens.encrypt_menu(w, h, 1),
     "export-options": lambda w, h: screens.export_options(w, h, 0),
     "script-menu": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
@@ -114,8 +112,6 @@ MENUS = {
     "tools": lambda w, h: screens.tools_menu(w, h, 0),
     "settings": lambda w, h: screens.settings_menu(w, h, 0),
     "channel": lambda w, h: screens.channel_menu(w, h, 0),
-    "encrypt": lambda w, h: screens.encrypt_menu(w, h, 0),
-    "backup": lambda w, h: screens.backup_menu(w, h, 0),
     "export options": lambda w, h: screens.export_options(w, h, 0),
     "script type": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),

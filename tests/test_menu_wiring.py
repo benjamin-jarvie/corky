@@ -93,8 +93,8 @@ def recorder(sess, names, into):
 
 def run_key_menu(sess):
     ran = []
-    recorder(sess, ("_export", "_browse_addresses", "_backup", "_discard"),
-             ran)
+    recorder(sess, ("_export", "_browse_addresses", "_backup_paper",
+                    "_discard"), ran)
     sess.state_key_menu("corky")
     return ran[0] if ran else "nothing"
 
@@ -103,23 +103,8 @@ corky_main.signer.master_fingerprint = lambda *a, **k: "73c5da0a"
 pin("KEY", screens.KEY_MENU_OPTIONS, run_key_menu, {
     "Export public key": "_export",
     "Receiving addresses": "_browse_addresses",
-    "Backup key": "_backup",
+    "Backup key": "_backup_paper",
     "Discard key": "_discard",
-})
-
-
-# --- 2. the backup menu: the defect this suite was written for ----------
-
-def run_backup(sess):
-    ran = []
-    recorder(sess, ("_backup_paper", "_backup_file"), ran)
-    sess._backup("corky", "73c5da0a")
-    return ran[0] if ran else "nothing"
-
-
-pin("BACKUP", screens.BACKUP_OPTIONS, run_backup, {
-    "On paper": "_backup_paper",
-    "To a file": "_backup_file",
 })
 
 
@@ -133,8 +118,7 @@ for i, (label, _note) in enumerate(screens.KEYS_ACTIONS):
     s._load_key(i)
     want = {"New key": "_tool_generate",
             "Scan a key": "_key_by_scan",
-            "Type private key": "_key_xprv_typed",
-            "Restore from file": "_key_from_file"}[label]
+            "Type private key": "_key_xprv_typed"}[label]
     if got == [want]:
         ok(f"KEYS: '{label}' runs {want}")
     else:
@@ -154,24 +138,6 @@ pin("TOOLS", screens.TOOLS_OPTIONS, run_tools, {
     "Check for leaks": "_tool_leak_check",
     "Check an address": "_tool_check_address",
 })
-
-
-# --- 5. encrypt or not: row 1 must mean no encryption -------------------
-
-for i, (label, _note) in enumerate(screens.ENCRYPT_OPTIONS):
-    # Row 0 goes on to the passphrase grid, which needs many more presses;
-    # row 1 goes to the warning, where LEFT/RIGHT then A confirms.
-    s = session(to_row(i) + ("ra" if i == 1 else ""))
-    s._text_entry = lambda *a, **k: "typed"
-    try:
-        got = s._ask_passphrase("BACKUP  PASSPHRASE")
-    except hal.ScriptExhausted:
-        got = "ran out of presses"
-    want = "typed" if i == 0 else corky_main.Session.NO_PASSPHRASE
-    if got == want:
-        ok(f"ENCRYPT: '{label}' returns {'a passphrase' if i == 0 else 'no passphrase'}")
-    else:
-        bad(f"ENCRYPT: '{label}' returned {got!r}, not {want!r}")
 
 
 print()

@@ -390,16 +390,15 @@ def main():
         # New key generates and stops. No tradeoff screen, and no backup
         # you have to walk through to keep the key (Ben, 2026-09-05:
         # "when I click generate key it should just generate"). The paper
-        # backup is now a row on the key's own menu, taken here on
-        # purpose, and it is the FIRST backup row: row 0 read "On paper"
-        # and ran the file backup until this session caught it.
-        # The master xprv is 111 characters and paginates into three.
+        # backup is a row on the key's own menu, taken here on purpose,
+        # and there is no chooser in front of it: paper is the only kind
+        # since A-24. The master private key is 111 characters and
+        # paginates into three.
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
                        "ra" + "a"                 # Keys, New key (first row)
                        + "dda"                    # key menu -> Backup key
-                       + "a"                      # backup menu -> On paper
                        + "a" * xprv_pages         # one press per page
                        + "b" + "b" + "draa",      # key menu -> Keys -> home -> off
                        fg)
@@ -410,17 +409,17 @@ def main():
         assert not (rpc.wallet_dir / signer.WALLET).exists(), \
             "G: the session wallet was not deleted at teardown"
         # The backup was chosen, not forced. Under the flow this replaces,
-        # the backup menu was the very next screen after Core finished, so
-        # its frame number sat one after the busy screen's. Here three
-        # presses of the key menu separate them.
+        # a backup screen was the very next thing after Core finished. Here
+        # three presses of the key menu separate them, and the frame the
+        # device paints for a backup page is blank, because it is
+        # sensitive, so what is counted is the gap.
         made = _where(fg, _render(scr.busy,
                                   "Bitcoin Core is generating your key…"))
-        chose = _where(fg, _render(scr.backup_menu, 0))
-        assert chose and chose[0] - made[-1] >= 3, \
-            ("G: the backup menu followed generation at once "
-             f"(generated at {made}, backup menu at {chose})")
-        print("ok   G: New key generates and stops; paper backup is a row "
-              "on the key menu; both wallets gone at teardown")
+        assert made, "G: the generating screen was never shown"
+        assert len(_frames(fg)) - made[-1] > 4, \
+            "G: nothing happened after generation, so nothing was chosen"
+        print("ok   G: New key generates and stops; the paper backup is "
+              "chosen from the key menu; both wallets gone at teardown")
 
         print("\nSESSION PASS: xprv-QR, typed xprv, typed descriptor, "
               "Core-RNG generation, QR in/out, stick in/out, "

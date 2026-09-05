@@ -166,20 +166,15 @@ def main():
         else:
             ok("the exported wallet file contains no key material")
 
-        # 4b. The screen that lists backups reads the fingerprint out of a
-        #     filename, so its two constants must agree with signer's.
-        sys.path.insert(0, str(ROOT / "corky"))
-        import screens  # noqa: E402
-        # Build the probe from a filename signer actually WROTE, not from
-        # the screen's own constants, or the check could never see them
-        # drift apart.
-        real = signer.backup_encrypted(rpc, name, "probe passphrase", work)
+        # 4b. The watch-only file names the key it watches, so a person
+        #     with two of them on a stick can tell which is which. The
+        #     probe is a filename signer actually WROTE, not one built
+        #     from the same constant, or drift could never show.
         xfp = signer.master_fingerprint(rpc, wallet=name)
-        if screens.fingerprint_of_backup(real.name) == xfp:
-            ok(f"the restore screen reads {xfp} out of {real.name}")
+        if xfp in out.name and out.name.endswith("-watch.dat"):
+            ok(f"the watch-only file names its key: {out.name}")
         else:
-            bad(f"the screen read {screens.fingerprint_of_backup(real.name)!r} "
-                f"out of {real.name}, wanted {xfp}")
+            bad(f"{out.name} does not name the key {xfp}")
 
         # 5. Exporting must not disturb the session: the key still signs and
         #    no extra wallet is left behind.
