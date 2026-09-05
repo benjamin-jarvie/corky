@@ -485,11 +485,22 @@ def leak_report(w, h, rows, cursor=0):
 # Type descriptor is gone: a descriptor lives as a printed QR, not as
 # words on steel, so Scan a key covers it, and typing 111 characters on a
 # five-way pad to avoid holding up a card is not a trade anyone makes.
-# Type xprv stays because it is the only way back from a paper backup.
+# Typing a private key stays because it is the only way back from paper.
+#
+# The rows say "private key", not "xprv" (Ben, 2026-09-05: "I want to use
+# correct terms instead of xprv because people won't know what that is").
+# They also do NOT say "seed", which he asked about and which would be
+# wrong here: a seed in Bitcoin means the 12 or 24 words, or the bytes
+# they expand into, and Corky cannot take words at all. Calling this a
+# seed would send a reader looking for words to write down, and would
+# suggest another wallet could restore it from words. It cannot. What
+# Corky holds is the master private key itself, which in a worded wallet
+# is what the seed PRODUCES. "Private key" is both true and the phrase
+# people already know. The exact token, xprv, belongs in the README.
 KEYS_ACTIONS = [
     ("New key", ""),
     ("Scan a key", ""),
-    ("Type xprv", ""),
+    ("Type private key", ""),
     ("Restore from file", ""),
 ]
 
@@ -618,7 +629,7 @@ def core_file_menu(w, h, selected=1):
 
 
 BACKUP_OPTIONS = [
-    ("On paper", "the master xprv"),
+    ("On paper", "your private key"),
     ("To a file", "encrypted by Core"),
 ]
 
@@ -769,23 +780,87 @@ def charset_pages(name):
             for i in range(0, len(cs), CELLS_PER_PAGE)]
 
 
+def _echo_with_caret(d, w, h, shown, at):
+    """The typed characters on one line, with a box on the edit position.
+
+    Each character gets the same cell width, so the box lands on one
+    character however wide that character's glyph is.
+    """
+    size = int(h * 0.06)
+    cell = int(w * 0.92) // ECHO_WINDOW
+    x0 = (w - cell * ECHO_WINDOW) // 2
+    y = int(h * 0.16)
+    for i, ch in enumerate(shown):
+        cx = x0 + i * cell + cell // 2
+        d.text((cx, y), ch, font=_font(size),
+               fill=OCHRE if i == at else CREAM, anchor="mm")
+    bx = x0 + at * cell
+    d.rectangle([bx, y + size // 2 + 1, bx + cell - 1, y + size // 2 + 2],
+                fill=OCHRE)
+
+
+#: What C does next, per focus, on the check-entry screen. Each carries
+#: the count so the writer knows how far through the page they are. The
+#: focus a screen is in has to be readable FROM the screen; a modal
+#: surface with no statement of its mode is how a button comes to "do
+#: nothing" (Ben, on the board, 2026-09-05).
+CHECK_HINTS = {
+    "grid": "%d/%d typed   ·   C to move the caret",
+    "text": "%d/%d typed   ·   L/R move the caret, A returns to the grid",
+    "bar": "%d/%d typed   ·   L/R choose, A does it",
+}
+
+#: How many typed characters the echo line can hold at this font size.
+ECHO_WINDOW = 30
+
+
+def echo_window(text, caret):
+    """The slice of typed text to echo, and where the caret sits in it.
+
+    Appending shows the tail, which is what the writer is watching. Editing
+    a character in the middle has to bring that character into view, so the
+    window follows the caret and keeps a little of both sides.
+    """
+    if caret is None or len(text) <= ECHO_WINDOW:
+        start = max(0, len(text) - ECHO_WINDOW) if caret is None else 0
+        return text[start:start + ECHO_WINDOW], (caret or 0) - start
+    start = min(max(0, caret - ECHO_WINDOW // 2), len(text) - ECHO_WINDOW)
+    return text[start:start + ECHO_WINDOW], caret - start
+
+
 def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
-               secret=False, actions_sel=1):
-    """Text on a paged 8x4 grid: passphrases (S2) and typed xprv or
-    descriptor strings (S3). `secret=True` masks the echo, since a
-    passphrase is shoulder-surfable and does not checksum. `cursor` indexes
-    the CURRENT page. The action bar is selectable, so CANCEL really
-    cancels."""
+               secret=False, actions_sel=1, caret=None, hint=None,
+               actions=("CANCEL", "DONE")):
+    """Text on a paged 8x4 grid: passphrases (S2), typed keys and
+    descriptors (S3), and typing a written backup back in to check it.
+
+    `secret=True` masks the echo, since a passphrase is shoulder-surfable
+    and does not checksum. `cursor` indexes the CURRENT page of the grid.
+    The action bar is selectable, so CANCEL really cancels.
+
+    `caret` is the position being EDITED inside `text`. None means the
+    plain appending mode every other screen uses, drawn with a trailing
+    underscore. A number puts a gold box on that character and scrolls the
+    echo to keep it visible, which is what lets a mistyped character 40
+    along be fixed without deleting the 40 after it (Ben, 2026-09-05).
+    """
     img, d = _frame(w, h, title)
-    shown = ("*" * len(text)) if secret else text[-30:]
-    _fit(d, (w // 2, int(h * 0.16)), (shown or "") + "_",
-         int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    if secret:
+        _fit(d, (w // 2, int(h * 0.16)), "*" * len(text) + "_",
+             int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    elif caret is None:
+        _fit(d, (w // 2, int(h * 0.16)), text[-ECHO_WINDOW:] + "_",
+             int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    else:
+        _echo_with_caret(d, w, h, *echo_window(text, caret))
     pages = charset_pages(charset)
     page = max(0, min(page, len(pages) - 1))
     cells = pages[page]
-    if len(pages) > 1:
-        _fit(d, (w // 2, int(h * 0.235)),
-             f"page {page + 1}/{len(pages)}   L/R past the end turns the page",
+    if hint is None and len(pages) > 1:
+        hint = (f"page {page + 1}/{len(pages)}"
+                "   L/R past the end turns the page")
+    if hint:
+        _fit(d, (w // 2, int(h * 0.235)), hint,
              int(h * 0.038), GREY, "mm", int(w * 0.92))
     cell_w, cell_h = w // 9, int(h * 0.135)
     x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.29)
@@ -800,7 +875,7 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
         label = "space" if ch == " " else ch
         _fit(d, (gx, gy), label, int(h * 0.055),
              CREAM if i == cursor else GREY, "mm", cell_w - 2)
-    _actions(d, w, h, ["CANCEL", "DONE"], actions_sel)
+    _actions(d, w, h, list(actions), actions_sel)
     return img
 
 
@@ -825,7 +900,8 @@ def text_pages(text):
     """Split a backup string into screenfuls, in order, losing nothing.
 
     Core's
-    master xprv is 111 characters; both are three screenfuls. Drawing them as
+    master private key is 111 characters, which is three screenfuls.
+    Drawing it as
     one column ran the last third off the bottom of the panel, so the user was
     asked to transcribe characters that never rendered.
     """
@@ -860,10 +936,10 @@ def splash(w, h):
 # ---- backup display -------------------------------------------------
 # These were named codex32_* because codex32 shares were the first
 # thing paged across the panel. They are generic: A-22 keeps them for
-# Core's master xprv, which is the pure signer's only backup.
+# Core's master private key, which is the pure signer's only backup.
 
 
-def backup_page(w, h, chunk, label, page=0, pages=1):
+def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
     """One screenful of the key, on its way to paper.
 
     `chunk` is already one page's worth (see text_pages). `label` names the
@@ -888,10 +964,57 @@ def backup_page(w, h, chunk, label, page=0, pages=1):
         _fit(d, (w // 2, int(h * 0.79)),
              "write this down. it opens the wallet",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
-    _actions(d, w, h,
-             ["ABORT" if page == 0 else "BACK",
-              "NEXT" if page + 1 < pages else "VERIFY"], 1)
+    if page + 1 < pages:
+        _actions(d, w, h, ["ABORT" if page == 0 else "BACK", "NEXT"], 1)
+    else:
+        # The last page is where the writing is finished, so both ways on
+        # are real choices and the bar is live. DONE is pre-selected: a
+        # backup flow you cannot leave in one press is the flow Ben threw
+        # out on 2026-09-05. CHECK IT is one press away and says what it
+        # is, which the old VERIFY label did not, because it did nothing.
+        _actions(d, w, h, ["DONE", "CHECK IT"], actions_sel)
     return img
+
+def check_result(w, h, typed, wrong, label, page=0, pages=1):
+    """The verdict on one page of a backup that was typed back in.
+
+    `wrong` is the positions in `typed` that do not match, so the writer
+    sees WHICH characters to correct rather than being told the page is
+    wrong and left to find it. An empty `wrong` is a pass.
+
+    Corky can only mark the wrong ones because it holds the true key at
+    this moment, which it already does: this screen runs inside the paper
+    backup, where the key is on the panel anyway. It opens no new window
+    on the key. Core, separately, is what confirms the whole key matches
+    (signer.identity_of_key); this screen is the human half.
+    """
+    passed = not wrong
+    img, d = _frame(w, h, f"{label}  ·  CHECK  {page + 1}/{pages}"
+                    if pages > 1 else f"{label}  ·  CHECK")
+    _fit(d, (w // 2, int(h * 0.20)),
+         "this page matches" if passed
+         else f"{len(wrong)} character{'s' if len(wrong) > 1 else ''}"
+              " to correct",
+         int(h * 0.06), OCHRE if passed else RED, "mm", int(w * 0.92))
+    # The same 4-character groups the backup page used, so the eye lands
+    # in the same place on both screens.
+    groups = _groups(typed)
+    size = int(h * 0.07)
+    for row_start in range(0, len(groups), GROUPS_PER_ROW):
+        row = groups[row_start:row_start + GROUPS_PER_ROW]
+        y = int(h * (0.34 + (row_start // GROUPS_PER_ROW) * 0.125))
+        cell = int(w * 0.86) // (GROUPS_PER_ROW * 5)
+        x0 = (w - cell * (len(row) * 5 - 1)) // 2
+        for gi, group in enumerate(row):
+            for ci, ch in enumerate(group):
+                at = (row_start + gi) * 4 + ci
+                cx = x0 + (gi * 5 + ci) * cell + cell // 2
+                d.text((cx, y), ch, font=_font(size),
+                       fill=RED if at in wrong else CREAM, anchor="mm")
+    _actions(d, w, h, ["DONE"] if passed else ["ABORT", "FIX"],
+             0 if passed else 1)
+    return img
+
 
 def verified(w, h, kind="ok"):
     """`kind` may carry newlines; each line is fitted separately."""

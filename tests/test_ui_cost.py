@@ -123,7 +123,7 @@ backup_calls = []
 real_backup_screen = screens.backup_page
 try:
     screens.backup_page = (
-        lambda _w, _h, page_text, _label, page, pages:
+        lambda _w, _h, page_text, _label, page, pages, actions_sel=0:
         backup_calls.append((page_text, page, pages)) or "backup")
     buttons = ScriptedButtons("aac")
     session = corky_main.Session(RecordingDisplay(), buttons, FakeRpc())
@@ -136,18 +136,32 @@ try:
         RecordingDisplay(), success_buttons, FakeRpc())
     succeeded = success_session._show_backup("y" * 49, "KEY  D2B7E45C")
     success_calls = list(backup_calls)
+
+    # The last page's bar is live: DONE is pre-selected and CHECK IT is
+    # one press right of it. Both must reach the caller, or the check Ben
+    # asked for is unreachable and DONE is the only outcome there is.
+    backup_calls.clear()
+    check_session = corky_main.Session(
+        RecordingDisplay(), ScriptedButtons("ara"), FakeRpc())
+    chose_check = check_session._show_backup("z" * 49, "KEY  D2B7E45C")
 finally:
     screens.backup_page = real_backup_screen
 
 expected_abort = [("x" * 48, 0, 3), ("x" * 48, 1, 3), ("x", 2, 3)]
 expected_success = [("y" * 48, 0, 2), ("y", 1, 2)]
-if (completed or abort_calls != expected_abort or buttons.reads != 3 or
-        not succeeded or success_calls != expected_success or
-        success_buttons.reads != 2):
+if (completed is not None or abort_calls != expected_abort
+        or buttons.reads != 3
+        or succeeded != "done" or success_calls != expected_success
+        or success_buttons.reads != 2):
     bad("backup pagination/abort drifted: "
         f"abort={abort_calls}, success={success_calls}")
 else:
     ok("backup strings paginate in order, complete, and abort immediately")
+
+if chose_check != "check":
+    bad(f"CHECK IT on the last backup page returned {chose_check!r}")
+else:
+    ok("CHECK IT on the last backup page reaches the caller")
 
 
 # --- D6: a failing seed mode must hold its message ------------------------
@@ -259,9 +273,47 @@ else:
     ok("review() says why it will not sign yet")
 
 # --- entry cost budgets ---------------------------------------------------
-# A-22: the word and codex32 entry budgets went with their grids.
+# A-22: the word and codex32 entry budgets went with their grids. What is
+# left is the base58 grid, which types a private key in and types one back
+# to check a paper backup. TESTING.md rule 6: these are measurements, taken
+# by replaying the real navigation rules, and they fail when the cost
+# drifts.
+#
+# Up and down cross a page boundary (main._grid_move). Before they did, a
+# page turn meant walking to the end of the 32-cell strip first, and base58
+# is 58 characters over two pages. That one rule is most of the difference
+# below, and without it Ben's paper check would have cost 1,444 presses,
+# which is not a check anyone performs.
+sys.path.insert(0, str(ROOT / "tests"))
+from e2e_keys import text_keys as _type_keys      # noqa: E402
 
+KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
+       "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 
+typing_in = len(_type_keys("xprv", KEY))
+checking = sum(len(_type_keys("xprv", page))
+               for page in screens.text_pages(KEY))
+
+for label, got, budget in (
+        ("typing a 111-character private key in", typing_in, 640),
+        ("checking a written backup, all 3 pages", checking, 650)):
+    if got <= budget:
+        ok(f"{label}: {got} presses (budget {budget})")
+    else:
+        bad(f"{label}: {got} presses, over the {budget} budget")
+
+# The page-crossing rule is the whole reason those fit. Pin it directly,
+# because a change that quietly restored the old behaviour would double
+# the numbers above and still read as a small diff.
+_pages = screens.charset_pages("xprv")
+if corky_main._grid_move("d", _pages, 0, 24) != (1, 0):
+    bad("DOWN from the last row does not cross to the next page")
+elif corky_main._grid_move("u", _pages, 1, 3) != (0, 27):
+    bad("UP from the top row does not cross to the previous page")
+elif corky_main._grid_move("d", _pages, 1, 24) != (1, 25):
+    bad("DOWN past the last page moved off the end of the charset")
+else:
+    ok("up and down cross a page boundary and stop at the charset's ends")
 
 
 

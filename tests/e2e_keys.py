@@ -1,6 +1,7 @@
 """Several keys, on the device: scripted dev-HAL sessions for map
 e2e-before-testers tickets 03 and 10. Run: python3 tests/e2e_keys.py
 (needs bitcoind)."""
+import collections
 import io
 import os
 import random
@@ -20,36 +21,65 @@ import qrchannel  # noqa: E402
 XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
 
-def text_keys(charset, want):
-    """Keys that type `want` on the paged text grid, by walking the same
-    rules main._text_entry uses (TESTING.md rule 2: assert the round trip,
-    never the key count)."""
+def _grid_route(pages, start, target):
+    """Shortest presses from one grid cell to another, found by search.
+
+    A cell is (page, index). The rules are re-stated here from the
+    SCREEN's shape alone (screens.charset_pages), not read out of
+    main._grid_move, and the route is searched for rather than written
+    down. A helper that encodes a route agrees with whatever the code does
+    to produce that route; this one can only agree about the rules, and a
+    disagreement shows up as a wrong character in the round trip
+    (TESTING.md rule 2).
+    """
+    def moves(page, cur):
+        n = len(pages[page])
+        row, col, last = cur // 8, cur % 8, (n - 1) // 8
+        if row == 0 and page > 0:
+            prev = len(pages[page - 1])
+            yield "u", (page - 1, min(((prev - 1) // 8) * 8 + col, prev - 1))
+        else:
+            yield "u", (page, max(0, cur - 8))
+        if row == last and page + 1 < len(pages):
+            yield "d", (page + 1, min(col, len(pages[page + 1]) - 1))
+        else:
+            yield "d", (page, min(n - 1, cur + 8))
+        if cur == 0 and page > 0:
+            yield "l", (page - 1, len(pages[page - 1]) - 1)
+        else:
+            yield "l", (page, max(0, cur - 1))
+        if cur == n - 1 and page + 1 < len(pages):
+            yield "r", (page + 1, 0)
+        else:
+            yield "r", (page, min(n - 1, cur + 1))
+
+    seen, queue = {start: []}, collections.deque([start])
+    while queue:
+        at = queue.popleft()
+        if at == target:
+            return seen[at]
+        for press, nxt in moves(*at):
+            if nxt not in seen:
+                seen[nxt] = seen[at] + [press]
+                queue.append(nxt)
+    raise AssertionError(f"no route from {start} to {target}")
+
+
+def grid_presses(charset, want):
+    """Presses that type `want` on the grid, without the closing press."""
     pages = scr.charset_pages(charset)
-    page, cur, out = 0, 0, []
+    at, out = (0, 0), []
     for ch in want:
         tp = next(i for i, pg in enumerate(pages) if ch in pg)
-        ti = pages[tp].index(ch)
-        while page < tp:
-            n = len(pages[page])
-            while cur < n - 1:
-                out.append("r"); cur += 1
-            out.append("r"); page += 1; cur = 0
-        while page > tp:
-            while cur > 0:
-                out.append("l"); cur -= 1
-            out.append("l"); page -= 1; cur = len(pages[page]) - 1
-        n = len(pages[page])
-        while cur + 8 <= ti:
-            out.append("d"); cur = min(n - 1, cur + 8)
-        while cur - 8 >= ti:
-            out.append("u"); cur = max(0, cur - 8)
-        while cur < ti:
-            out.append("r"); cur += 1
-        while cur > ti:
-            out.append("l"); cur -= 1
-        out.append("a")
-    out.append("p")
+        target = (tp, pages[tp].index(ch))
+        out += _grid_route(pages, at, target) + ["a"]
+        at = target
     return "".join(out)
+
+
+def text_keys(charset, want):
+    """Presses that type `want` and commit it with the centre press."""
+    return grid_presses(charset, want) + "p"
 
 
 def keys_press(n_keys, action, start=0):
@@ -182,7 +212,7 @@ def main():
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan -> warning
                   + "b" + "b"                     # key menu -> Keys -> home
                   + "a" + "a"                     # Sign tile: nobody owns it, dismiss
-                  + "ra" + keys_press(1, "Type xprv")
+                  + "ra" + keys_press(1, "Type private key")
                   + text_keys("xprv", xprv_b)
                   + "b" + "b"                     # key menu -> Keys -> home
                   + "a"                           # Sign tile
@@ -413,6 +443,64 @@ def main():
         signer.close_session(rpc)
         print("ok   K8: an empty file on the stick is named on screen, "
               "not waited on for ever")
+
+        # ---- Session K9: VERIFY types the paper backup back in (Ben) ----
+        # The last backup page has always offered VERIFY and always just
+        # gone back to the menu. This is the flow it promises: type each
+        # page back, get told exactly which characters are wrong, fix them
+        # in place, and have Bitcoin Core confirm the whole key at the end.
+        #
+        # Page 1 is typed with a deliberate error at position 5, so the
+        # verdict screen has to name that position and FIX has to land on
+        # it. Rule 1: the key is a real one Core opens and signs with, and
+        # every press is computed from the navigation rules, never counted.
+        signer.close_session(rpc)
+        pages9 = scr.text_pages(XPRV_A)
+        assert len(pages9) == 3, f"K9: expected 3 backup pages, got {len(pages9)}"
+        wrong_at = 5
+        right = pages9[0][wrong_at]
+        typo = "2" if right != "2" else "3"
+        assert typo in scr.BASE58, "K9: the substitute is not a base58 character"
+        page1_bad = pages9[0][:wrong_at] + typo + pages9[0][wrong_at + 1:]
+
+        script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
+                  + "dda" + "a"                  # Backup key -> On paper
+                  + "aa" + "ra"                  # 3 pages, then CHECK IT
+                  + text_keys("xprv", page1_bad)  # page 1, one wrong
+                  + "a"                          # verdict: FIX is selected
+                  + grid_presses("xprv", right) + "p"   # overwrite, CHECK
+                  + "a"                          # verdict: matches, go on
+                  + text_keys("xprv", pages9[1]) + "a"
+                  + text_keys("xprv", pages9[2]) + "a"
+                  + "a"                          # Core's verdict, dismissed
+                  + "b" + "b" + "draa")
+        r = run_device(datadir, script, work / "framesK9", qr_key=key_a)
+        assert r.returncode == 0, f"K9 failed:\n{r.stderr[-1500:]}"
+        fr9 = work / "framesK9"
+        # Every screen in the check shows key material, so hal.DevDisplay
+        # blanks those frames: what the verdict SAID is asserted in
+        # tests/test_backup_check.py, where the screens are rendered
+        # directly. What this session proves is the part only a real
+        # device and a real node can: the flow runs end to end on Core's
+        # own key and Core agrees at the end.
+        assert _has(fr9, _render(scr.verified,
+                                 f"your paper opens\nkey {xfp_a.upper()}")), \
+            "K9: Core never confirmed the typed key opens this wallet"
+        # And Core really is the one deciding: the same call on a different
+        # key must not agree, or the check above proves nothing.
+        other = signer.master_xprv(rpc, wallet=signer.generate_wallet(rpc))
+        assert (signer.identity_of_key(rpc, XPRV_A)
+                != signer.identity_of_key(rpc, other)), \
+            "K9: Core reads two different keys as the same key"
+        try:
+            signer.identity_of_key(rpc, page1_bad + pages9[0][:1])
+            raise AssertionError("K9: Core accepted a mistyped key")
+        except RuntimeError as exc:
+            assert XPRV_A[:20] not in str(exc) and typo not in str(exc)[:8], \
+                f"K9: the refusal leaked key material: {exc}"
+        signer.close_session(rpc)
+        print("ok   K9: VERIFY types the backup back, names the wrong "
+              "character, and Core confirms the key")
         print("ALL PASS")
     finally:
         try:

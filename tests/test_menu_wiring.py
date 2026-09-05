@@ -133,7 +133,7 @@ for i, (label, _note) in enumerate(screens.KEYS_ACTIONS):
     s._load_key(i)
     want = {"New key": "_tool_generate",
             "Scan a key": "_key_by_scan",
-            "Type xprv": "_key_xprv_typed",
+            "Type private key": "_key_xprv_typed",
             "Restore from file": "_key_from_file"}[label]
     if got == [want]:
         ok(f"KEYS: '{label}' runs {want}")

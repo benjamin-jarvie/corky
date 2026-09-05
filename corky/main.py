@@ -239,6 +239,46 @@ def _run(cmd):
         return False
 
 
+def _grid_move(key, pages, page, cur):
+    """One step of the character grid, shared by every typed screen.
+
+    The grid is one strip read left to right: L and R step a cell and
+    cross rows, U and D jump a row. A page turns at the strip's ends with
+    L or R, and ALSO when U or D would leave the top or bottom row, which
+    is the cheap way across and lands on the same column.
+
+    That second rule is worth 710 presses. Base58 is 58 characters over
+    two pages of 32, and turning a page with R alone means walking to the
+    end of the strip first: checking a 111-character key cost 1,412
+    presses, 807 of them spent turning pages. It costs 702 now
+    (tests/test_ui_cost.py measures both, TESTING.md rule 6).
+
+    Returns the new (page, cur). An unrelated key gives them back unchanged.
+    """
+    n = len(pages[page])
+    if key == "u":
+        if cur < 8 and page > 0:
+            page -= 1
+            return page, min(((len(pages[page]) - 1) // 8) * 8 + cur % 8,
+                             len(pages[page]) - 1)
+        return page, max(0, cur - 8)
+    if key == "d":
+        if cur // 8 == (n - 1) // 8 and page + 1 < len(pages):
+            page += 1
+            return page, min(cur % 8, len(pages[page]) - 1)
+        return page, min(n - 1, cur + 8)
+    if key == "l":
+        if cur == 0 and page > 0:
+            return page - 1, len(pages[page - 1]) - 1
+        return page, max(0, cur - 1)
+    if key == "r":
+        if cur == n - 1 and page + 1 < len(pages):
+            return page + 1, 0
+        return page, min(n - 1, cur + 1)
+    return page, cur
+
+
+
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
                  animate=False, on_device=False, card_dir=None):
@@ -884,10 +924,22 @@ class Session:
         return True
 
     def _backup_paper(self, name, xfp):
-        """The paper backup: Core's master xprv for this key, in
-        four-character groups over as many pages as it needs."""
+        """The paper backup: Core's master private key for this key, in
+        four-character groups over as many pages as it needs.
+
+        The last page offers VERIFY, and VERIFY now types the key back in
+        and checks it (Ben, 2026-09-05: it "just takes me back to the
+        menu"). Checking is offered, never forced: a writer who wants to
+        check later can come back to Backup key and do it then.
+        """
+        label = f"KEY  {(xfp or '').upper()}"
         xprv = signer.master_xprv(self.rpc, wallet=name)
-        return self._show_backup(xprv, f"KEY  {(xfp or '').upper()}")
+        outcome = self._show_backup(xprv, label)
+        if outcome is None:
+            return False
+        if outcome == "check":
+            self._verify_backup(xprv, label, xfp)
+        return True
 
     def _discard(self, name, xfp):
         """Discard key asks first; BACK is pre-selected. Returns True when
@@ -982,7 +1034,6 @@ class Session:
                 self.w, self.h, title, text, cur, charset, page, secret,
                 actions_sel=1 if sel is None else sel), sensitive=True)
             key = self.buttons.read()
-            n = len(pages[page])
             if sel is not None:            # focus is on the action bar
                 if key in ("l", "r"):
                     sel = 1 - sel
@@ -991,26 +1042,8 @@ class Session:
                 elif key in ("b", "c"):
                     sel = None
                 continue
-            # The grid is one strip read left to right: l/r step one cell
-            # and cross rows, u/d jump a row, and a page turns only at the
-            # strip's ends. Anything cleverer desynchronises the user's
-            # mental model from the cursor.
-            if key == "u":
-                cur = max(0, cur - 8)
-            elif key == "d":
-                cur = min(n - 1, cur + 8)
-            elif key == "l":
-                if cur == 0 and page > 0:
-                    page -= 1
-                    cur = len(pages[page]) - 1
-                else:
-                    cur = max(0, cur - 1)
-            elif key == "r":
-                if cur == n - 1 and page + 1 < len(pages):
-                    page += 1
-                    cur = 0
-                else:
-                    cur = min(n - 1, cur + 1)
+            if key in ("u", "d", "l", "r"):
+                page, cur = _grid_move(key, pages, page, cur)
             elif key == "a":
                 text += pages[page][cur]
             elif key == "b":
@@ -1127,8 +1160,8 @@ class Session:
         return text
 
     def _key_xprv_typed(self):
-        """S3: an xprv typed on the grid."""
-        text = self._text_entry("BIP32  EXTENDED  PRIVATE  KEY", "xprv")
+        """S3: a master private key typed on the grid."""
+        text = self._text_entry("MASTER  PRIVATE  KEY", "xprv")
         if not text:
             return False
         stop = self._busy("importing into Core…")
@@ -1207,28 +1240,189 @@ class Session:
     def _show_backup(self, text, label):
         """Show one backup string across as many screenfuls as it needs.
 
-        Core's 111-character master xprv overruns one screen; drawing it as
-        one column asked the user to transcribe characters that were never
-        on the panel. A advances and
-        finishes on the last page, B or UP re-shows the previous page for
-        checking against paper, C aborts. Returns False on abort."""
+        Core's 111-character master private key overruns one screen;
+        drawing it as one column asked the user to transcribe characters
+        that were never on the panel. A advances, B or UP re-shows the
+        previous page for checking against paper, C aborts.
+
+        On the LAST page the action bar is live: DONE finishes, and
+        CHECK IT goes on to type the backup back in. Returns "done",
+        "check", or None if the user abandoned it.
+        """
         pages = screens.text_pages(text)
-        i = 0
+        i, sel = 0, 0
         while True:
             self.display.show(screens.backup_page(
                 self.w, self.h, pages[i], label,
-                page=i, pages=len(pages)), sensitive=True)
+                page=i, pages=len(pages), actions_sel=sel), sensitive=True)
             key = self.buttons.read()
+            last = i + 1 == len(pages)
             if key == "c":
-                return False
+                return None
             if key in ("b", "u"):
                 if i == 0:
-                    return False    # nothing earlier: BACK is ABORT here
+                    return None     # nothing earlier: BACK is ABORT here
                 i -= 1
+                sel = 0
+            elif key in ("l", "r") and last:
+                sel = 1 - sel
             elif key in ("a", "p"):
-                if i + 1 == len(pages):
-                    return True
+                if last:
+                    return "check" if sel == 1 else "done"
                 i += 1
+
+    # -- checking a written backup (Ben, 2026-09-05) ----------------------
+
+    def _verify_backup(self, text, label, xfp):
+        """Type the written backup back in, one page at a time, and find
+        out whether the paper is right.
+
+        The last backup page offered VERIFY and then just went back, which
+        is a label that lies. This is the flow it promised.
+
+        Page by page, because a page is what the writer copied and a
+        mistake should cost one page and not all 111 characters. The
+        per-character comparison is Corky's, because only Corky is holding
+        both strings; the verdict on the WHOLE key is Core's, from
+        `getdescriptorinfo`, which reads the typed key and says what it is.
+        Both must agree before this says the paper is good.
+
+        Returns True when the paper is proven, False when the user leaves.
+        """
+        pages = screens.text_pages(text)
+        typed = []
+        for i, page in enumerate(pages):
+            got = self._check_page(label, i, len(pages), page)
+            if got is None:
+                return False
+            typed.append(got)
+        return self._confirm_typed_key("".join(typed), text, xfp)
+
+    def _confirm_typed_key(self, typed, text, xfp):
+        """Core reads what was typed and says whether it is the same key.
+
+        The pages already matched character by character, so this cannot
+        disagree; it runs anyway because a comparison of our own two
+        strings proves our two strings are equal, and that is not the same
+        claim as "the paper opens this wallet". Core parses, Corky compares
+        what Core returns (PLAN A-11).
+        """
+        stop = self._busy("Bitcoin Core is reading what you typed…")
+        try:
+            same = (signer.identity_of_key(self.rpc, typed)
+                    == signer.identity_of_key(self.rpc, text))
+        except RuntimeError as exc:
+            stop()
+            self._hold(str(exc)[:60])
+            return False
+        finally:
+            stop()
+        if not same:
+            self._hold("Core does not read that as the same key")
+            return False
+        self.display.show(screens.verified(
+            self.w, self.h,
+            "your paper opens\n"
+            f"key {(xfp or '').upper()}"))
+        self.buttons.read()
+        return True
+
+    def _check_page(self, label, i, pages, want):
+        """One page typed back and judged. Returns the text, or None.
+
+        Loops entry -> verdict -> entry, so FIX returns to the same
+        characters with the caret already on the first wrong one. The
+        writer never hunts for the mistake the device has already found.
+        """
+        typed, caret = "", 0
+        while True:
+            typed, caret = self._check_entry(label, i, pages, len(want),
+                                             typed, caret)
+            if typed is None:
+                return None
+            wrong = {n for n, ch in enumerate(typed)
+                     if n >= len(want) or ch != want[n]}
+            wrong |= set(range(len(typed), len(want)))
+            sel = 1
+            while True:
+                self.display.show(screens.check_result(
+                    self.w, self.h, typed, wrong, label, i, pages),
+                    sensitive=True)
+                key = self.buttons.read()
+                if wrong and key in ("l", "r"):
+                    sel = 1 - sel
+                elif key in ("a", "p"):
+                    if not wrong:
+                        return typed
+                    if sel == 0:
+                        return None
+                    caret = min(wrong)      # FIX: land on the first one
+                    break
+                elif key in ("b", "c"):
+                    if not wrong:
+                        return typed
+                    break
+
+    def _check_entry(self, label, i, pages, want_len, typed,  # noqa: C901 - one keypad state machine, like _text_entry
+                     caret):
+        """The typing surface for a check. Returns (text, caret), or
+        (None, 0) if the user left.
+
+        Three focuses, cycled with C: the character grid, the typed text,
+        and the action bar. The text focus is what Ben asked for: L and R
+        walk the caret through what you have typed, so a wrong character
+        forty along is fixed where it is, instead of deleting the forty
+        after it. A writes the highlighted character AT the caret, which
+        is an overwrite when the caret sits on an existing character.
+        """
+        charset = "xprv"
+        grid = screens.charset_pages(charset)
+        cur, page, focus, sel = 0, 0, "grid", 1
+        while True:
+            title = (f"{label}  ·  TYPE  {i + 1}/{pages}" if pages > 1
+                     else f"{label}  ·  TYPE  IT  BACK")
+            self.display.show(screens.text_entry(
+                self.w, self.h, title, typed, cur, charset, page,
+                actions_sel=sel, caret=caret,
+                actions=("ABORT", "CHECK"),
+                hint=screens.CHECK_HINTS[focus] % (len(typed), want_len)),
+                sensitive=True)
+            key = self.buttons.read()
+            if focus == "bar":
+                if key in ("l", "r"):
+                    sel = 1 - sel
+                elif key in ("a", "p"):
+                    return (typed, caret) if sel == 1 else (None, 0)
+                elif key in ("b", "c"):
+                    focus = "grid"
+            elif focus == "text":
+                if key == "l":
+                    caret = max(0, caret - 1)
+                elif key == "r":
+                    caret = min(len(typed), caret + 1)
+                elif key == "b" and caret < len(typed):
+                    typed = typed[:caret] + typed[caret + 1:]
+                elif key == "a":
+                    focus = "grid"      # back to the grid to overwrite it
+                elif key == "p":
+                    return typed, caret  # centre press finishes, everywhere
+                elif key == "c":
+                    focus = "bar"
+            elif key in ("u", "d", "l", "r"):
+                page, cur = _grid_move(key, grid, page, cur)
+            elif key == "a":
+                typed = typed[:caret] + grid[page][cur] + typed[caret + 1:]
+                caret = min(len(typed), caret + 1)
+            elif key == "b":
+                if not typed:
+                    return None, 0
+                if caret > 0:
+                    typed = typed[:caret - 1] + typed[caret:]
+                    caret -= 1
+            elif key == "p":
+                return typed, caret
+            elif key == "c":
+                focus = "text"
 
 
 

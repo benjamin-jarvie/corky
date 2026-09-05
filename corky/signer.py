@@ -533,6 +533,32 @@ def master_xprv(rpc: "Rpc", wallet: str = WALLET) -> str:
     return masters.pop()
 
 
+def identity_of_key(rpc: "Rpc", key: str) -> str:
+    """What Core says a private key IS, as one string, without a wallet.
+
+    `getdescriptorinfo` normalises `wpkh(<key>)` by replacing the private
+    key with its master public key, so the answer carries both halves of
+    the key's identity: the public key AND the chain code. Two keys give
+    the same answer only if they are the same key.
+
+    This is stronger than the fingerprint the key menu shows. A fingerprint
+    is four bytes of a hash of the public key alone, so two keys with
+    different chain codes and the same fingerprint would derive completely
+    different addresses and still look equal. Core is the one parsing, and
+    Corky only compares the two strings Core returns (PLAN A-11).
+
+    Nothing is created and nothing is written: `getdescriptorinfo` is
+    side-effect free, like `deriveaddresses`. Raises RuntimeError with the
+    key REDACTED if Core will not read it, which is what a mistyped
+    character produces: base58's own checksum fails long before anything
+    cryptographic happens.
+    """
+    try:
+        return rpc.call("getdescriptorinfo", f"wpkh({key})")["descriptor"]
+    except RuntimeError as exc:
+        raise RuntimeError(redact(str(exc))) from None
+
+
 def _drop_wallet(rpc: "Rpc", name: str) -> None:
     """Unload and delete a wallet, ignoring the not-loaded case."""
     with contextlib.suppress(RuntimeError):

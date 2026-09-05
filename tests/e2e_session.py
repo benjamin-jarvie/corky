@@ -367,7 +367,7 @@ def main():
                       [{rpc.call("getnewaddress", wallet="watch"): 0.3}],
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickt / "typed.psbt").write_bytes(base64.b64decode(pt))
-        # Keys -> Type xprv (third row) -> type it -> back out to home ->
+        # Keys -> Type private key (third row) -> type it -> back out to home ->
         # Sign tile -> sign -> POWER OFF.
         r = run_device(datadir,
                        "ra" + "dda" + text_keys("xprv", typed_xprv)
