@@ -90,7 +90,9 @@ CASES = {
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
     "no-passphrase": lambda w, h: screens.no_passphrase_warning(w, h, 1),
     "encrypt-menu": lambda w, h: screens.encrypt_menu(w, h, 1),
-    "core-file-menu": lambda w, h: screens.core_file_menu(w, h, 0),
+    "export-options": lambda w, h: screens.export_options(w, h, 0),
+    "script-menu": lambda w, h: screens.script_menu(
+        w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "choose-key": lambda w, h: screens.choose_key(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
@@ -114,7 +116,9 @@ MENUS = {
     "channel": lambda w, h: screens.channel_menu(w, h, 0),
     "encrypt": lambda w, h: screens.encrypt_menu(w, h, 0),
     "backup": lambda w, h: screens.backup_menu(w, h, 0),
-    "core file": lambda w, h: screens.core_file_menu(w, h, 0),
+    "export options": lambda w, h: screens.export_options(w, h, 0),
+    "script type": lambda w, h: screens.script_menu(
+        w, h, ("wpkh", "tr", "sh", "pkh"), 0),
 }
 
 

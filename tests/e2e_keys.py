@@ -326,13 +326,20 @@ def main():
         desc_pages = len(scr.text_pages(desc))
         signer.close_session(rpc)
         stick5 = work / "stick5"; stick5.mkdir()
+        # Export asks the script type FIRST now, then shows the QR, and the
+        # extras are chosen from EXPORT OPTIONS rather than met on the way
+        # out (map D2). Native segwit is the first row.
         script = ("ra" + "da" + "a"                   # Keys -> Scan a key -> warning
-                  + "a"                               # Export public key: the QR at once
-                  + "a"                               # leave the QR
-                  + "a" * desc_pages                  # the descriptor as text
-                  + "a" * 3                           # three address pages
-                  + "a" + "a" + "a"                   # Core file? -> yes -> channel -> dismiss
-                  + "b" + "b" + "draa")
+                  + "a"                               # Export public key
+                  + "a"                               # SCRIPT TYPE -> Native segwit
+                  + "a"                               # the QR -> EXPORT OPTIONS
+                  + "a"                               # Show as text
+                  + "a" * desc_pages                  # page through and leave
+                  + "a"                               # the QR -> EXPORT OPTIONS
+                  + "da"                              # Wallet file for Core
+                  + "a" + "a"                         # channel -> dismiss
+                  + "b"                               # QR -> SCRIPT TYPE
+                  + "b" + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK5",
                        qr_key=key_a, stick=stick5)
         assert r.returncode == 0, (f"K5 failed rc={r.returncode}\n"
@@ -351,12 +358,23 @@ def main():
         buf = io.BytesIO(); golden_qr.save(buf, format="PNG")
         assert _has(fr5, buf.getvalue()), \
             "K5: the panel never showed the captioned export QR"
+        # Every key presents all four since D6, and the wallet this session
+        # used is already closed, so the list is EXPORT_ORDER rather than a
+        # live lookup.
+        assert _has(fr5, _render(scr.script_menu, signer.EXPORT_ORDER, 0)), \
+            "K5: the script type was not asked before the QR"
         assert _has(fr5, _render(scr.export_text, scr.text_pages(desc)[0],
-                                 page=0, pages=desc_pages)), \
-            "K5: the descriptor as grouped text"
+                                 page=0, pages=desc_pages,
+                                 title=scr.SCRIPT_LABELS["wpkh"].upper())), \
+            "K5: the descriptor as grouped text, titled with its policy"
+        assert _has(fr5, _render(scr.export_options, 0)), \
+            "K5: the export options were never offered"
+        # Receiving addresses left this flow: it is a row on the key's own
+        # menu, and arriving there by pressing DONE on a descriptor is what
+        # lost Ben on the board (map D2).
         for i, addr in enumerate(want_addrs):
-            assert _has(fr5, _render(scr.address_page, i, addr, "wpkh")), \
-                f"K5: receive address {i} was never shown in full"
+            assert not _has(fr5, _render(scr.address_page, i, addr, "wpkh")), \
+                f"K5: address {i} appeared in the export flow, which it left"
         written = list(stick5.glob("corky-*-watch.dat"))
         assert len(written) == 1, f"K5: watch-only file not written: {written}"
         assert _has(fr5, _render(scr.result, ok=True, label="DONE",
@@ -367,7 +385,7 @@ def main():
             "K5: writing a wallet file still draws SIGNED"
         assert xfp_a in written[0].name, \
             f"K5: the file is not named by fingerprint: {written[0].name}"
-        print(f"ok   K5: export -> QR, text, three addresses, and "
+        print(f"ok   K5: export -> script type, QR, text, wallet file "
               f"{written[0].name} for a Core laptop")
 
         # ---- Session K6: the file backup, and restoring from it (13) ----

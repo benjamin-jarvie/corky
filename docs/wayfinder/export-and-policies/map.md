@@ -92,6 +92,23 @@ documentation, and someone can go and build it without another decision.
   pass. The gate has to be re-run on a hardened flash, and that is the
   gate on a beta.
 
+- [D1 Which policies Corky offers](tickets/D1-which-policies.md) — all
+  four, in the order wpkh, tr, sh, pkh, and none hidden on a coordinator's
+  account because Corky no longer knows which coordinator you use.
+- [D2 What the export screens become](tickets/D2-export-sequence.md) —
+  script type first, then the captioned QR, with EXPORT OPTIONS on it for
+  the text form and Core's wallet file. Receiving addresses leaves the
+  export path. Built.
+- [D3 One scrolling rule](tickets/D3-scroll-rule.md) — one `scrollbar`
+  helper on every screen with content past its edge; a fixed thumb that
+  never arrives for the endless list. Built.
+- [D4 What the descriptor screen calls itself](tickets/D4-what-to-call-it.md)
+  — name the policy, and a footer saying it is your public key and where
+  it sits, with no private key in it. Built.
+- [D5 Does the boot microSD become a channel](tickets/D5-microsd-channel.md)
+  — yes, and it is blocked on the OS running from RAM. **M3 moves from
+  last to a prerequisite.**
+
 ## Not yet specified
 
 - What the export screen sequence becomes once the policy list is settled.
@@ -108,6 +125,25 @@ documentation, and someone can go and build it without another decision.
 - Whether the change branch should ever be shown. Receiving addresses is
   receive-only on purpose, and that stands, but D1 may make the policy
   list long enough that the reason wants restating on the panel.
+
+- What the M3 image does about the saved random seed (R2 says it is
+  hygiene, not a hazard).
+- Whether Corky should ever show change addresses.
+
+## Open, and they are the way out of this map
+
+- [N1 The card comes out and the signer keeps running](tickets/N1-card-removable.md)
+  — this is M3, and Ben's whole microSD workflow depends on it.
+- [N2 Say when the card can safely come out](tickets/N2-safe-to-remove.md)
+  — blocked by N1.
+- [N3 Keys persist until the device is turned off](tickets/N3-keys-persist.md)
+  — the behaviour was already right and there was no timer; the proof
+  landed as `tests/test_key_persistence.py`.
+- [T1](tickets/T1-sparrow-policies.md), [T2](tickets/T2-phone-policies.md),
+  [T3](tickets/T3-core-watch-only.md) — Ben's hardware checks, now much
+  smaller than they were: R3 settled the policy question from source, so
+  what is left is whether each app's camera reads our QR and whether the
+  address matches.
 
 ## Out of scope
 

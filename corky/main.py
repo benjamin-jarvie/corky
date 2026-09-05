@@ -732,51 +732,65 @@ class Session:
         return None if i is None else channels[i][1]
 
     def _export(self, name):
-        """Show the public key. Nothing to choose first.
+        """Choose the script type, then show the key (map D2).
 
-        It used to ask which coordinator before showing anything, and the
-        research that motivated that chooser is what killed it: Sparrow,
-        BlueWallet, Green and Bull Bitcoin all read the same plain
-        descriptor, so four of the five entries produced an identical QR
-        (Ben, 2026-09-05: "cart before the horse"). Native segwit shows
-        first, LEFT or RIGHT switches to taproot, and the wallet file for
-        Bitcoin Core is offered at the end, once you have seen the key.
-        """
-        return self._export_qr(name, "wpkh")
-
-    def _export_qr(self, name, kind):
-        """The QR, then the same descriptor as text, then the first three
-        addresses in full so the coordinator can be checked against them.
-
-        LEFT and RIGHT switch script type on the QR itself, so choosing
-        between native segwit and taproot is a glance rather than a gate.
+        SeedSigner's shape, minus the two questions we proved unnecessary.
+        It asks signature type, script type and coordinator before the QR.
+        Single-sig makes the first meaningless, and R3 proved the third
+        produced an identical QR for four coordinators out of five. The
+        script type is the one real question and Ben put it first: "if
+        exporting, you should have chosen this first."
         """
         order = signer.available_kinds(self.rpc, name)
-        if kind not in order:
-            kind = order[0]
+        selected = 0
         while True:
-            desc = signer.export_descriptor(self.rpc, name, kind)
-            code = qrchannel.text_to_image(desc, panel=(self.w, self.h))
-            panel = qrchannel.fit_to_panel(code, self.w, self.h)
-            # Which policy this is has to be ON the screen, or four QRs
-            # that look identical cannot be told apart (map ticket T0).
-            # The caption goes in the letterbox, so the code is untouched.
-            factor = min(self.w // code.width, self.h // code.height)
-            self.display.show(screens.caption_qr(
-                panel, code.height * factor,
-                screens.SCRIPT_LABELS[kind].upper()))
+            selected = self._pick(
+                lambda sel, o=order: screens.script_menu(self.w, self.h, o, sel),
+                len(order), start=selected)
+            if selected is None:
+                return
+            self._export_qr(name, order[selected])
+
+    def _export_qr(self, name, kind):
+        """The QR for one policy, and what else you can do with it.
+
+        B returns to the script type, which is where you came from. A opens
+        EXPORT OPTIONS. Nothing happens on the way out: the Bitcoin Core
+        wallet file used to appear as you left, and receiving addresses
+        used to open by themselves, which is what made this flow feel like
+        four screens deep with no map (map D2).
+        """
+        desc = signer.export_descriptor(self.rpc, name, kind)
+        code = qrchannel.text_to_image(desc, panel=(self.w, self.h))
+        panel = qrchannel.fit_to_panel(code, self.w, self.h)
+        factor = min(self.w // code.width, self.h // code.height)
+        framed = screens.caption_qr(panel, code.height * factor,
+                                    screens.SCRIPT_LABELS[kind].upper())
+        while True:
+            self.display.show(framed)
             key = self.buttons.read()
-            if key in ("l", "r"):
-                kind = _next_kind(kind, key, order)
-                continue
             if key in ("b", "c"):
                 return
-            break
+            if key not in ("a", "p"):
+                continue
+            choice = self._pick(
+                lambda sel: screens.export_options(self.w, self.h, sel),
+                len(screens.EXPORT_OPTIONS))
+            if choice == 0:
+                self._export_text(desc, kind)
+            elif choice == 1:
+                self._export_file(name)
+            elif choice == 2:
+                return
+
+    def _export_text(self, desc, kind):
+        """The same descriptor as text, for typing into a coordinator."""
         pages = screens.text_pages(desc)
         i = 0
         while True:
             self.display.show(screens.export_text(
-                self.w, self.h, pages[i], page=i, pages=len(pages)))
+                self.w, self.h, pages[i], page=i, pages=len(pages),
+                title=screens.SCRIPT_LABELS[kind].upper()))
             key = self.buttons.read()
             if key == "c":
                 return
@@ -784,23 +798,10 @@ class Session:
                 if i == 0:
                     return
                 i -= 1
-            elif key in ("a", "p"):
+            elif key in ("a", "p", "d"):
                 if i + 1 == len(pages):
-                    break
+                    return
                 i += 1
-        self._show_addresses(name, kind)
-        # Bitcoin Core has no QR reader, so it takes a file. Offered here,
-        # after you have seen the key, rather than as a thing to choose
-        # before you have seen anything.
-        if self._pick(lambda sel: screens.core_file_menu(self.w, self.h, sel),
-                      len(screens.CORE_FILE_OPTIONS)) == 0:
-            self._export_file(name)
-
-    def _show_addresses(self, name, kind, count=3):
-        """The first `count` receive addresses, one per screen. Used at the
-        end of an export and after generation, where the list is short and
-        finite."""
-        return self._page_addresses(name, kind, limit=count)
 
     #: How many addresses one deriveaddresses call fetches. Paging past the
     #: end of a block fetches the next one, so browsing is unbounded.

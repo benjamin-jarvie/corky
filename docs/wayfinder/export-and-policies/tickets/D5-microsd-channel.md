@@ -1,6 +1,6 @@
 # D5 Does the boot microSD become a channel
 
-Type: `wayfinder:grilling`, HITL. Blocked by: T3.
+Type: `wayfinder:grilling`. **Closed 2026-09-05.**
 
 ## Question
 
@@ -22,3 +22,41 @@ and what does the panel call it? PLAN A-23 permits a key on the card when
 the user asks for the card, so this is a rule change, not a config change.
 The M3 plan makes the card removable while the OS runs from RAM, which
 changes what "the card" means; that interaction belongs in this ticket.
+
+**Closed 2026-09-05.**
+
+## Decision
+
+**Yes, and it is now the primary file channel rather than a convenience.
+It cannot happen until the OS runs from RAM.**
+
+Ben's workflow, in his words: "take microSD out, use a different one with
+PSBT, sign and put back into coordinator". That is SeedSigner's model and
+it is the right one for a device with one card slot and no USB host port
+worth trusting.
+
+## The blocker, measured on the board
+
+The operating system is ON the card. `lsblk` shows `mmcblk0p2` mounted at
+`/`, and there is one usable slot. Pull the card on the image running
+today and the system dies at the next disk touch.
+
+So every part of Ben's workflow depends on the RAM-resident image, which
+was M3 and was scheduled last:
+
+- keep running with the card out;
+- say "you can safely remove the microSD now";
+- accept a blank card to export a key to;
+- accept a different card carrying a PSBT.
+
+**M3 is therefore a prerequisite for this ticket, not a successor to it.**
+That is a change to the plan's order and it is the single most important
+thing this map found.
+
+## What does not need M3
+
+The `--card-dir` half is separate and small: naming a mounted card as a
+channel beside the stick. But on a one-slot board with the OS on that
+card, the only card that could be named is the boot card, which is what
+PLAN A-23 was careful about. There is nothing worth shipping here before
+M3.

@@ -619,6 +619,22 @@ your passphrase. The file backup asks whether to encrypt it before it asks
 for anything else, and takes no for an answer: Core writes an unencrypted
 backup too, and the device says what that costs before it does.
 
+**Export asks the script type first, then shows the key.** SeedSigner's
+shape, minus the two questions that turned out to be noise: signature type
+is meaningless in a single-sig device, and the coordinator chooser
+produced an identical QR for four coordinators out of five. So it is
+script type, then the QR captioned with the policy it carries, and
+EXPORT OPTIONS on the QR for the text form and Bitcoin Core's wallet file.
+Receiving addresses is a row on the key's own menu and no longer opens by
+itself at the end of an export.
+
+**Every screen that scrolls says so.** One scrollbar, one shape, on the
+right edge of every screen with content past its edge. A list with a known
+end sizes its thumb to the fraction visible; browsing receiving addresses
+has no end, so its thumb is a fixed height that moves and never arrives,
+because a bar that pretends to know the length of an endless list is a lie
+told in pixels.
+
 **New key generates, and stops there.** It used to show a screen of
 tradeoffs you had to accept, and then walk you into a backup you could not
 leave without losing the key. Both are gone. The tradeoffs are stated
@@ -685,12 +701,12 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2125 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2161 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1114) ·
-[`corky/screens.py`](corky/screens.py) (609) ·
+[`corky/main.py`](corky/main.py) (1122) ·
+[`corky/screens.py`](corky/screens.py) (637) ·
 [`corky/signer.py`](corky/signer.py) (328) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
@@ -705,11 +721,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,373 lines** (4,250 with blanks/comments).
+**Total functional code: 2,409 lines** (4,313 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,390 lines — none of it ships on the device.**
+**Test code: 4,502 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

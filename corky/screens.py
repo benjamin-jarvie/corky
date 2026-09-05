@@ -391,6 +391,32 @@ MENU_PITCH = 0.135       # one row's height, fixed, so two rows sit together
 MENU_ROWS = 6            # rows on screen at once; a longer list scrolls
 
 
+def scrollbar(d, w, top, track_h, position, total, visible=1):
+    """Where you are in something longer than the screen, on the right edge.
+
+    One shape in one place, because a rule that lives in four call sites
+    drifts (Ben, 2026-09-05: "we need the scroll bar if you can scroll for
+    any screen you can scroll"). `_menu` drew this and nothing else did, so
+    the addresses screen gave no sign that DOWN showed more.
+
+    `total` None means an endless list, which browsing receiving addresses
+    is: the thumb is a fixed height, it moves, and it never reaches the
+    bottom, because a bar that pretends to know the length of an endless
+    list is a lie told in pixels.
+    """
+    d.rectangle([w - 4, top, w - 3, top + track_h], fill="#3A352E")
+    if total is None:
+        bar_h = max(int(track_h * 0.18), 6)
+        # Asymptotic: fills the top nine tenths of the track and stops.
+        span = track_h - bar_h
+        bar_y = top + int(span * (1 - 1 / (1 + position / 12)) * 0.9)
+    else:
+        bar_h = max(int(track_h * visible / total), 6)
+        bar_y = top + int(track_h * position / total)
+    d.rectangle([w - 5, bar_y, w - 2, min(bar_y + bar_h, top + track_h)],
+                fill=OCHRE)
+
+
 def _menu(w, h, title, rows, selected, icons=None):
     """One list screen for every menu: rows of (label, note, tone), tone
     "normal" or "red". `icons` optionally names one glyph per row.
@@ -443,12 +469,8 @@ def _menu(w, h, title, rows, selected, icons=None):
         _fit(d, (int(w * 0.92), y), note, size, note_colour, "rm",
              int(w * 0.36))
     if n > MENU_ROWS:
-        # Where you are in the list, on the right edge, like any scrollbar.
-        track_top, track_h = first_top, int(MENU_ROWS * pitch * h)
-        bar_h = max(int(track_h * MENU_ROWS / n), 6)
-        bar_y = track_top + int(track_h * start / n)
-        d.rectangle([w - 4, track_top, w - 3, track_top + track_h], fill="#3A352E")
-        d.rectangle([w - 5, bar_y, w - 2, bar_y + bar_h], fill=OCHRE)
+        scrollbar(d, w, first_top, int(MENU_ROWS * pitch * h),
+                  start, n, MENU_ROWS)
     return img
 
 
@@ -462,6 +484,47 @@ KEY_MENU_OPTIONS = [
     ("Backup key", "paper or file"),
     ("Discard key", "Core forgets it"),
 ]
+
+def script_menu(w, h, kinds, selected=0):
+    """Which script policy to export. Chosen FIRST, before the QR.
+
+    Ben, 2026-09-05: "if exporting, you should have chosen this first."
+    SeedSigner asks the same question in the same place; what it also asks,
+    and we do not, is which coordinator, because all five read the same
+    plain descriptor (map R3).
+
+    `kinds` is what this key HAS, which is all four for a key Core made or
+    a key imported since D6.
+    """
+    rows = [(SCRIPT_LABELS[k], SCRIPT_NOTES[k], "normal") for k in kinds]
+    return _menu(w, h, "SCRIPT  TYPE", rows, selected)
+
+
+#: What each policy is for, in a few words, so the choice is informed
+#: without a screen of prose. Addresses shown are mainnet.
+SCRIPT_NOTES = {
+    "wpkh": "bc1q · usual",
+    "tr": "bc1p · newest",
+    "sh": "3… · older",
+    "pkh": "1… · oldest",
+}
+
+# Offered ON the QR, so the extras are chosen rather than met on the way
+# out. Receiving addresses is deliberately NOT here: it is a row on the
+# key's own menu, and arriving there by pressing DONE on a descriptor is
+# what lost Ben on the board (map D2).
+EXPORT_OPTIONS = [
+    ("Show as text", "to type by hand"),
+    ("Wallet file for Core", "Core reads no QR"),
+    ("Done", ""),
+]
+
+
+def export_options(w, h, selected=0):
+    return _menu(w, h, "EXPORT",
+                 [(label, note, "normal") for label, note in EXPORT_OPTIONS],
+                 selected)
+
 
 TOOLS_OPTIONS = [("Check for leaks", ""),
                  ("Check an address", "")]
@@ -633,6 +696,9 @@ def address_page(w, h, index, address, kind):
             x += d.textlength(group, font=font) + space
     _fit(d, (w // 2, int(h * 0.90)), "compare every group", int(h * 0.045),
          GREY, "mm", int(w * 0.6))
+    # Browsing goes on for as long as you press down, so this is the
+    # endless kind of bar: it moves, and it never arrives (D3).
+    scrollbar(d, w, int(h * 0.16), int(h * 0.62), index, None)
     return img
 
 
@@ -641,12 +707,17 @@ def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
     someone typing it into a coordinator by hand. Public: no blanking."""
     head = title if pages == 1 else f"{title}  ·  PART  {page + 1}/{pages}"
     img, d = _frame(w, h, head)
+    _fit(d, (w // 2, int(h * 0.855)),
+         "your public key and where it sits. no private key here",
+         int(h * 0.042), GREY, "mm", int(w * 0.94))
     groups = _groups(chunk)
     for row_start in range(0, len(groups), GROUPS_PER_ROW):
         y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
         _fit(d, (w // 2, y),
              "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
              int(h * 0.075), CREAM, "mm", int(w * 0.92))
+    if pages > 1:
+        scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
     _actions(d, w, h, ["BACK", "NEXT" if page + 1 < pages else "DONE"], 1)
     return img
 
@@ -666,19 +737,6 @@ ENCRYPT_OPTIONS = [
 def encrypt_menu(w, h, selected=0):
     return _menu(w, h, "BACKUP  FILE",
                  [(label, note, "normal") for label, note in ENCRYPT_OPTIONS],
-                 selected)
-
-
-# Offered at the END of the export, once the key is on screen.
-CORE_FILE_OPTIONS = [
-    ("Wallet file for Core", "Core reads no QR"),
-    ("Done", ""),
-]
-
-
-def core_file_menu(w, h, selected=1):
-    return _menu(w, h, "BITCOIN  CORE",
-                 [(label, note, "normal") for label, note in CORE_FILE_OPTIONS],
                  selected)
 
 
@@ -1018,6 +1076,8 @@ def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
         _fit(d, (w // 2, int(h * 0.79)),
              "write this down. it opens the wallet",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    if pages > 1:
+        scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
     if page + 1 < pages:
         _actions(d, w, h, ["ABORT" if page == 0 else "BACK", "NEXT"], 1)
     else:
@@ -1065,6 +1125,8 @@ def check_result(w, h, typed, wrong, label, page=0, pages=1):
                 cx = x0 + (gi * 5 + ci) * cell + cell // 2
                 d.text((cx, y), ch, font=_font(size),
                        fill=RED if at in wrong else CREAM, anchor="mm")
+    if pages > 1:
+        scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
     _actions(d, w, h, ["DONE"] if passed else ["ABORT", "FIX"],
              0 if passed else 1)
     return img
