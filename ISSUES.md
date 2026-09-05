@@ -236,6 +236,58 @@ all 256 values per channel, 20,000 random pixels, and a real 320x240 frame,
 byte-identical in every case. `tests/test_display_driver.py` stubs `spidev`
 and `RPi.GPIO` and reads back the bytes the driver would put on the bus.
 
+## Open: the export flow, reported from the board 2026-09-05
+
+Ben's report, on Export public key, Receiving addresses and the screens
+between them. He asked for these to be worked through `/mp-wayfinder`, so
+they are recorded here as evidence and NOT designed here. Two defects with
+no design choice in them were fixed on sight; the rest are open.
+
+**Fixed already (commit da16b1c).**
+
+- `/mnt/usb` is an ordinary directory on the boot card when no stick is
+  in the port, and `_file_channels` tested for a directory. So the device
+  offered "stick" with no stick, wrote the file to the SD card's root
+  filesystem, and said it was written without naming a place. The same
+  chooser carries the encrypted key backup, which makes it a PLAN A-23
+  problem and not only a wrong word. On the device a channel now needs a
+  real mount.
+- `screens.result` drew SIGNED over any message that went well, so
+  writing the watch-only wallet file said SIGNED and nothing was signed.
+
+**Open, and each one is a decision.**
+
+- **E-1 Scroll bars.** Ben: "if you can scroll for any screen you can
+  scroll." `_menu` draws one; `_page_addresses`, `export_text`,
+  `backup_page` and `check_result` do not, and the addresses screen gives
+  no sign that DOWN shows more.
+- **E-2 The export is four screens deep with no map.** QR, then the
+  descriptor over 4 pages, then straight into addresses where A steps
+  through them, then a Bitcoin Core menu on the way back. Ben walked it
+  and could not tell where he was or how to leave.
+- **E-3 "PUBLIC KEY" is not what the screen holds.** It holds Core's
+  output descriptor: script type, origin fingerprint, derivation path, an
+  xpub and a checksum. The QR is the same string. The label needs to say
+  what a coordinator is being given.
+- **E-4 The five coordinators.** The chooser was removed because the
+  research says Sparrow, BlueWallet and Green all read the same plain
+  descriptor QR for wpkh and tr, Bull Bitcoin reads wpkh only, and Core
+  reads no QR at all and takes a file. That research is in
+  `docs/wayfinder/e2e-before-testers/tickets/19,20,21`. NONE of it is
+  proven on a device yet: tickets 18 and 22 are the proofs, and both need
+  Ben, a phone and the Sparrow laptop.
+- **E-5 Bitcoin Core's file has nowhere to go.** Core is offered a
+  wallet file, and the only channel the unit configures is
+  `--stick-dir=/mnt/usb`. There is no `--card-dir`, so the boot microSD
+  is never offered even though PLAN A-23 permits it when asked for.
+- **E-6 Script policies.** Core creates FOUR descriptor pairs per wallet
+  and always has: `pkh` (BIP44, legacy), `sh(wpkh)` (BIP49, nested
+  segwit), `wpkh` (BIP84, native segwit) and `tr` (BIP86, taproot).
+  Verified against v31.1 on regtest, 2026-09-05. Corky exports and browses
+  two of the four. The key already signs for all four, so coins sent to a
+  legacy or nested address of this wallet are spendable and invisible on
+  the panel. Whether to show two, four, or make it a setting is open.
+
 ## Standing hardware-blocked work
 
 Not defects. Recorded so the list above is not confused with them.
