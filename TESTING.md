@@ -180,6 +180,32 @@ The rule: **when a limit belongs to the target's kernel, the dev machine is
 not evidence.** Name the limit, encode it as an assertion, and get on real
 hardware sooner.
 
+## Rule 11: a menu is two lists, and nothing joins them
+
+`screens.py` holds the labels a menu draws. `main.py` holds the
+`if selected == N` cascade that runs them. Nothing connected the two, so
+they drifted: the BACKUP menu drew "On paper" as row 0 and ran the FILE
+backup for it. Choosing paper asked for an encryption passphrase, which is
+the "back button does nothing on backup to paper" Ben reported off the
+board on 2026-09-05.
+
+Every suite was green through all of it. The screen test rendered the right
+labels. The end-to-end session made a real paper backup and checked the
+three xprv pages, because its script had been written by counting presses
+against the code rather than against the screen, so it pressed DOWN then A
+and called that "On paper (2nd)". The comment even said so. Both halves
+agreed with the bug.
+
+`tests/test_menu_wiring.py` drives the real `_pick` loop with a scripted
+keypad and asserts, for every row of every menu, that the handler which
+runs is the one the label names. It needs no bitcoind and no panel. It
+takes under a second, and it fails on the exact defect above.
+
+The rule: **assert the label, not the index.** A scripted session that
+counts presses proves the code agrees with itself. Where a list screen
+dispatches, one test must read the row's words and name the function it is
+supposed to call.
+
 ## What is still thin
 
 `ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18

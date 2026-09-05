@@ -105,6 +105,11 @@ def main():
         def _has(d, png):
             return any(p.read_bytes() == png for p in _frames(d))
 
+        def _where(d, png):
+            """Every frame number that drew this screen, in order shown."""
+            return [i for i, p in enumerate(_frames(d))
+                    if p.read_bytes() == png]
+
 
         # ---- Session B: xprv via QR + PSBT in AND out via QR ----
         xprv_file = work / "key.txt"
@@ -382,34 +387,40 @@ def main():
 
 
         # ---- Session G: exact-Core generation from the Keys screen (A-19) --
-        # Keys, New key, accept the tradeoff, then the BACKUP CHOICE. New
-        # key is the FIRST row on the Keys screen now, and the paper backup
-        # is the second backup option, so this session takes it
-        # deliberately: d then a, then one a per screenful of the master
-        # xprv, which is 111 characters and paginates into three. There is
-        # no address screen after it any more (Ben, 2026-09-05): one
-        # address with no instruction was not a check, and it fired after a
-        # FILE backup too, where nothing had been transcribed.
+        # New key generates and stops. No tradeoff screen, and no backup
+        # you have to walk through to keep the key (Ben, 2026-09-05:
+        # "when I click generate key it should just generate"). The paper
+        # backup is now a row on the key's own menu, taken here on
+        # purpose, and it is the FIRST backup row: row 0 read "On paper"
+        # and ran the file backup until this session caught it.
+        # The master xprv is 111 characters and paginates into three.
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
-                       "ra" + "a" + "a"           # Keys, New key (first row), accept
-                       + "da"                     # backup menu -> On paper
+                       "ra" + "a"                 # Keys, New key (first row)
+                       + "dda"                    # key menu -> Backup key
+                       + "a"                      # backup menu -> On paper
                        + "a" * xprv_pages         # one press per page
                        + "b" + "b" + "draa",      # key menu -> Keys -> home -> off
                        fg)
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
-        assert _has(fg, _render(scr.generate_warning)), \
-            "G: the tradeoff screen was never shown before generation"
         assert _has(fg, _render(scr.busy,
                                 "Bitcoin Core is generating your key…")), \
             "G: Core was not asked to create the wallet"
         assert not (rpc.wallet_dir / signer.WALLET).exists(), \
             "G: the session wallet was not deleted at teardown"
-        assert _has(fg, _render(scr.backup_menu, 0)), \
-            "G: the backup choice was never offered after generation"
-        print("ok   G: Core-RNG generation -> backup choice -> wallet open "
-              "in Core -> both wallets gone at teardown")
+        # The backup was chosen, not forced. Under the flow this replaces,
+        # the backup menu was the very next screen after Core finished, so
+        # its frame number sat one after the busy screen's. Here three
+        # presses of the key menu separate them.
+        made = _where(fg, _render(scr.busy,
+                                  "Bitcoin Core is generating your key…"))
+        chose = _where(fg, _render(scr.backup_menu, 0))
+        assert chose and chose[0] - made[-1] >= 3, \
+            ("G: the backup menu followed generation at once "
+             f"(generated at {made}, backup menu at {chose})")
+        print("ok   G: New key generates and stops; paper backup is a row "
+              "on the key menu; both wallets gone at teardown")
 
         print("\nSESSION PASS: xprv-QR, typed xprv, typed descriptor, "
               "Core-RNG generation, QR in/out, stick in/out, "

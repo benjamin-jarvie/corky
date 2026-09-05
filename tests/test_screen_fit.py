@@ -80,9 +80,6 @@ CASES = {
                ("Serial console", "on the GPIO header", "leak"),
                ("USB device mode", "active, can be a disk", "leak"),
                ("Core networking", "off", "normal")], 3),
-    "export-menu": lambda w, h: screens.export_menu(w, h, 4),
-    "export-script-menu": lambda w, h: screens.export_script_menu(
-        w, h, ("wpkh", "tr"), 1),
     "export-text": lambda w, h: screens.export_text(
         w, h, "wpkh([73c5da0a/84h/1h/0h]tpubDDRDHYNXyuoRVQwotDQHr", 1, 3),
     "address-taproot": lambda w, h: screens.address_page(w, h, 2, "bcrt1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "tr"),
@@ -92,12 +89,13 @@ CASES = {
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
     "no-passphrase": lambda w, h: screens.no_passphrase_warning(w, h, 1),
+    "encrypt-menu": lambda w, h: screens.encrypt_menu(w, h, 1),
+    "core-file-menu": lambda w, h: screens.core_file_menu(w, h, 0),
     "choose-key": lambda w, h: screens.choose_key(
         w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
                ("corky-5", "ba4c8bd5")], {"1df2e0b2"}, 2),
     "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
-    "generate-warning": lambda w, h: screens.generate_warning(w, h),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,
                                                                     "descriptor"),
 }
@@ -114,9 +112,9 @@ MENUS = {
     "tools": lambda w, h: screens.tools_menu(w, h, 0),
     "settings": lambda w, h: screens.settings_menu(w, h, 0),
     "channel": lambda w, h: screens.channel_menu(w, h, 0),
-    "export": lambda w, h: screens.export_menu(w, h, 0),
+    "encrypt": lambda w, h: screens.encrypt_menu(w, h, 0),
     "backup": lambda w, h: screens.backup_menu(w, h, 0),
-    "script type": lambda w, h: screens.export_script_menu(w, h, ("wpkh", "tr"), 0),
+    "core file": lambda w, h: screens.core_file_menu(w, h, 0),
 }
 
 

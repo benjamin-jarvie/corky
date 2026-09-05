@@ -198,6 +198,29 @@
   BITCOIN CORE for entropy, on an explicit opt-in path, in a v1.1 tool that
   sits beside the codex32 tools rather than in the seed-entry flow.
 
+  **A-19a: the tradeoff screen and the forced backup are removed (Ben,
+  2026-09-05).** New key showed three lines about what software entropy
+  can and cannot prove, and made you press A to accept them. It then walked
+  you into a backup you could not leave without losing the key.
+
+  Ben's call, in his words: *"when I click generate key it should just
+  generate"*, and *"Backup key or file should be an option after the key is
+  created, as it is, why is that in the flow?"*
+
+  The tradeoff is not deleted, it is moved. The README states it under
+  Core's entropy, at a length a 320x240 panel cannot carry, and it now
+  states it more accurately than the screen did: the software IS auditable,
+  because Core's builds are reproducible and the hashes are pinned in
+  `image/PINS`; the silicon and the kernel under it are not. The screen's
+  version said software entropy could not be audited at all, which was
+  wrong, and it was wrong in a place with no room to correct it.
+
+  A-19's substance is untouched: `createwallet` makes the master key with
+  Core's own RNG, Corky signs with that same wallet, and no line of ours
+  sits between the two. Backup key is a row on the key's own menu, taken
+  when the user wants it. `tests/e2e_session.py` session G asserts the
+  backup menu does not follow generation at once.
+
 - **A-20: the outbound QR carries fountain parts (Ben, 2026-09-03).**
   `psbt_to_frames` used to return exactly one pure cycle, which the display
   looped. That is fragile in a way only Sparrow's decoder shows. Corky renders

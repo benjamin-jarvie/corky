@@ -217,11 +217,13 @@ if entry(["a", "b", "b"]) is None:
 else:
     bad("B did not fall through to back once the buffer was empty")
 
-# DONE with nothing asks again, and only a deliberate confirmation makes an
-# unencrypted backup.
+# Encrypt or not is asked FIRST (Ben, 2026-09-05: "it should ask if you
+# want to encrypt it or not first"). An empty box after choosing to
+# encrypt is a slip, so it asks again rather than reading as a choice.
 sess = corky_main.Session(Recorder(), ScriptedButtons(
+    ["a"] +            # ENCRYPT IT, the first row
     ["p"] +            # DONE with an empty box
-    ["b"] +            # back out of the no-passphrase warning
+    ["a"] +            # read the "type a passphrase" message
     ["a", "p"]         # type one character, DONE
 ), FakeRpc())
 got = sess._ask_passphrase("PASSPHRASE")
@@ -231,13 +233,21 @@ else:
     bad(f"_ask_passphrase returned {got!r} after the box was left empty")
 
 sess = corky_main.Session(Recorder(), ScriptedButtons(
-    ["p"] +            # DONE with an empty box
-    ["r", "a"]         # move to NO PASSPHRASE and take it
+    ["d", "a"] +       # NO PASSPHRASE, the second row
+    ["r", "a"]         # move off the pre-selected BACK and confirm
 ), FakeRpc())
 if sess._ask_passphrase("PASSPHRASE") == corky_main.Session.NO_PASSPHRASE:
     ok("no passphrase is possible, but only after a deliberate choice")
 else:
     bad("the no-passphrase choice did not come back as such")
+
+# And backing out of the question leaves the flow, rather than dropping
+# into a passphrase grid the user never asked for.
+sess = corky_main.Session(Recorder(), ScriptedButtons(["b"]), FakeRpc())
+if sess._ask_passphrase("PASSPHRASE") is None:
+    ok("B on the encrypt question leaves the backup flow")
+else:
+    bad("B on the encrypt question did not leave the flow")
 
 # --- D9: the sign button explains its refusal -----------------------------
 img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001)

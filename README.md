@@ -564,7 +564,17 @@ watch-only wallet file its own GUI restores. Receiving addresses browses
 further, ten at a time, receive branch only. Backup key offers two: the
 master private key on paper, and a file that Core's own `encryptwallet` and
 `backupwallet` produce, which another computer running Core restores with
-your passphrase.
+your passphrase. The file backup asks whether to encrypt it before it asks
+for anything else, and takes no for an answer: Core writes an unencrypted
+backup too, and the device says what that costs before it does.
+
+**New key generates, and stops there.** It used to show a screen of
+tradeoffs you had to accept, and then walk you into a backup you could not
+leave without losing the key. Both are gone. The tradeoffs are stated
+above, under Core's entropy, where there is room to state them properly,
+and Backup key is a row on the key's own menu that you take when you want
+it. The same goes for exporting: the public key comes up first, and where
+to send it is asked after you have seen it.
 
 **Nothing persists.** A discard, a close, a crash-restart and a power-off
 each leave no byte of a key anywhere on the device; `tests/test_no_persistence.py`
@@ -606,12 +616,12 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1962 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1892 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (995) ·
-[`corky/screens.py`](corky/screens.py) (579) ·
+[`corky/main.py`](corky/main.py) (972) ·
+[`corky/screens.py`](corky/screens.py) (532) ·
 [`corky/signer.py`](corky/signer.py) (314) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
@@ -626,11 +636,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,210 lines** (3,833 with blanks/comments).
+**Total functional code: 2,140 lines** (3,736 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,963 lines — none of it ships on the device.**
+**Test code: 4,078 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

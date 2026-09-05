@@ -77,26 +77,6 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     d.text(xy, text, font=font, fill=fill, anchor=anchor)
 
 
-def _wrap(d, text, size, maxw):
-    """Break `text` into lines that fit `maxw` at `size`, on word boundaries.
-
-    The alternative is shrinking the type, which is what _fit does and what
-    the generate warning used to do. On a screen that already scrolls that
-    is the wrong trade: height is free and legibility is not.
-    """
-    out, cur = [], ""
-    for word in text.split():
-        trial = f"{cur} {word}".strip()
-        if not cur or _width(d, trial, size, "mm", (0, 0)) <= maxw:
-            cur = trial
-        else:
-            out.append(cur)
-            cur = word
-    if cur:
-        out.append(cur)
-    return out
-
-
 def _fit_block(d, lines, xs, size, fill, anchor, maxw):
     """Draw several lines of body copy at ONE shared size.
 
@@ -541,33 +521,7 @@ def tools_menu(w, h, selected=0):
                  selected)
 
 
-# Where a public key can go (ticket 06). All five are listed; the three
-# phones are marked untested until ticket 22 proves them on a real handset.
-# The third field is the script types that target can read: Bull Bitcoin's
-# parser throws on 86h, so it is offered native segwit only (ticket 21).
-EXPORT_TARGETS = [
-    ("Sparrow", "descriptor QR", ("wpkh", "tr")),
-    ("Bitcoin Core", "wallet file", ()),
-    ("BlueWallet", "untested", ("wpkh", "tr")),
-    ("Green", "untested", ("wpkh", "tr")),
-    ("Bull Bitcoin", "untested, segwit", ("wpkh",)),
-]
-
 SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot"}
-
-
-def export_menu(w, h, selected=0):
-    """Which coordinator is going to read this, as SeedSigner asks."""
-    return _menu(w, h, "EXPORT  TO",
-                 [(name, note, "normal") for name, note, _k in EXPORT_TARGETS],
-                 selected)
-
-
-def export_script_menu(w, h, kinds, selected=0):
-    return _menu(w, h, "SCRIPT  TYPE",
-                 [(SCRIPT_LABELS[k], "BIP84" if k == "wpkh" else "BIP86",
-                   "normal") for k in kinds],
-                 selected)
 
 
 def _groups(text):
@@ -636,10 +590,42 @@ def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
 BACKUP_PREFIX = signer.BACKUP_PREFIX
 BACKUP_SUFFIX = signer.BACKUP_SUFFIX
 
+# Encrypt or not, asked before the passphrase rather than discovered by
+# leaving the box empty (Ben, 2026-09-05).
+ENCRYPT_OPTIONS = [
+    ("Encrypt it", "you choose a passphrase"),
+    ("No passphrase", "anyone who finds it"),
+]
+
+
+def encrypt_menu(w, h, selected=0):
+    return _menu(w, h, "BACKUP  FILE",
+                 [(label, note, "normal") for label, note in ENCRYPT_OPTIONS],
+                 selected)
+
+
+# Offered at the END of the export, once the key is on screen.
+CORE_FILE_OPTIONS = [
+    ("Wallet file for Core", "Core reads no QR"),
+    ("Done", ""),
+]
+
+
+def core_file_menu(w, h, selected=1):
+    return _menu(w, h, "BITCOIN  CORE",
+                 [(label, note, "normal") for label, note in CORE_FILE_OPTIONS],
+                 selected)
+
+
 BACKUP_OPTIONS = [
     ("On paper", "the master xprv"),
     ("To a file", "encrypted by Core"),
 ]
+
+#: The paper row's number, named here beside the row it indexes. main.py
+#: used to hard-code 0 for the FILE backup while row 0 read "On paper", so
+#: choosing paper asked for an encryption passphrase.
+PAPER = 0
 
 
 def backup_menu(w, h, selected=0):
@@ -740,74 +726,6 @@ def choose_key(w, h, keys, owners, selected=0):
     return img
 
 
-GENERATE_LINES = [
-    # Ben, 2026-09-04: "we don't need all the slop of what it's not."
-    # Three statements, each about what this does and what you get. The
-    # honest caveat stays, because it changes the decision; the list of
-    # things Corky is not does not.
-    # The ochre headline above already says the entropy is Core's, so a
-    # body line repeating it is more slop.
-    "You can check Core's code is Core's code. You cannot check the "
-    "chip or the kernel it asks, and no output proves it was random.",
-    "Cards or dice move that step out of the machine, where you watch it.",
-    "Your backup is the private key itself: 111 characters to write down.",
-]
-
-#: Body copy never shrinks below this. The screen scrolls, so a long line
-#: wraps instead (Ben, 2026-09-04: "the font is too small to read on that,
-#: we already can scroll down"). Shrinking to fit the width buys nothing
-#: when height is free.
-MIN_BODY = 0.068          # fraction of panel height (16px at 240)
-GEN_VISIBLE = 5           # wrapped lines on screen at once; U/D scroll
-
-
-def _generate_body(d, w, h):
-    """GENERATE_LINES wrapped to the panel at the minimum readable size.
-
-    A blank line between each source line (Ben, 2026-09-04). Wrapping turns
-    every sentence into one or two lines, and without a gap the paragraphs
-    run together into a wall the eye cannot break up.
-    """
-    out = []
-    for line in GENERATE_LINES:
-        if out:
-            out.append("")
-        out.extend(_wrap(d, line, int(h * MIN_BODY), int(w * 0.90)))
-    return out
-
-
-def generate_scroll_max(w, h):
-    """How far the body can scroll. main.py must ask, because wrapping
-    means the line count depends on the panel, not on GENERATE_LINES."""
-    img = Image.new("RGB", (w, h))
-    return max(0, len(_generate_body(ImageDraw.Draw(img), w, h)) - GEN_VISIBLE)
-
-
-def generate_warning(w, h, selected=1, scroll=0):
-    """Shown before Core-RNG generation (PLAN A-19). The body scrolls with
-    U/D so the font stays readable; L/R toggle the action; more below is
-    marked with a down chevron."""
-    img, d = _frame(w, h, "GENERATE  A  KEY")
-    _fit(d, (w // 2, int(h * 0.22)), "Entropy comes from Bitcoin Core.",
-         int(h * 0.065), OCHRE, "mm", int(w * 0.94))
-    body = _generate_body(d, w, h)
-    last = min(scroll + GEN_VISIBLE, len(body))
-    visible = body[scroll:last]
-    size = int(h * MIN_BODY)
-    font = _font(size)
-    # Left-aligned: this is a paragraph, and centring every wrapped line
-    # gives a ragged left edge the eye has to re-find on each line.
-    for row, text in enumerate(visible):
-        d.text((int(w * 0.06), int(h * (0.35 + row * 0.077))), text,
-               font=font, fill=CREAM, anchor="lm")
-    if last < len(body):
-        cx, cy, r = w // 2, int(h * 0.77), int(h * 0.02)
-        d.polygon([(cx - r, cy - r), (cx + r, cy - r), (cx, cy + r)],
-                  fill=OCHRE)
-    _actions(d, w, h, ["BACK", "GENERATE"], selected)
-    return img
-
-
 def keymaterial_warning(w, h, kind="descriptor", selected=1):
     """Shown before accepting an xprv or descriptor (A-14): the QR IS the
     wallet — no passphrase layer protects it."""
@@ -824,15 +742,6 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
     return img
 
 
-
-
-# ---- text and grid entry --------------------------------------------------
-
-
-# One alphabet per job. A single 64-cell set could not serve all three:
-# base58 drops B, I, O and 0 (so an xprv needs its own), descriptors need
-# brackets and a star, and a BIP39 passphrase is arbitrary text that may
-# contain B, I, O or a space. Grids page when they do not fit 32 cells.
 CELLS_PER_PAGE = 32          # 8 columns x 4 rows, above the action bar
 BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
           "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l

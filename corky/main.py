@@ -646,33 +646,38 @@ class Session:
         return None if i is None else channels[i][1]
 
     def _export(self, name):
-        """Export public key: which wallet, then the form it can read."""
-        i = self._pick(lambda sel: screens.export_menu(self.w, self.h, sel),
-                       len(screens.EXPORT_TARGETS))
-        if i is None:
-            return
-        _label, _note, kinds = screens.EXPORT_TARGETS[i]
-        if not kinds:                      # Bitcoin Core reads a file
-            return self._export_file(name)
-        kind = kinds[0]
-        if len(kinds) > 1:
-            j = self._pick(lambda sel: screens.export_script_menu(
-                self.w, self.h, kinds, sel), len(kinds))
-            if j is None:
-                return
-            kind = kinds[j]
-        self._export_qr(name, kind)
+        """Show the public key. Nothing to choose first.
+
+        It used to ask which coordinator before showing anything, and the
+        research that motivated that chooser is what killed it: Sparrow,
+        BlueWallet, Green and Bull Bitcoin all read the same plain
+        descriptor, so four of the five entries produced an identical QR
+        (Ben, 2026-09-05: "cart before the horse"). Native segwit shows
+        first, LEFT or RIGHT switches to taproot, and the wallet file for
+        Bitcoin Core is offered at the end, once you have seen the key.
+        """
+        return self._export_qr(name, "wpkh")
 
     def _export_qr(self, name, kind):
         """The QR, then the same descriptor as text, then the first three
-        addresses in full so the coordinator can be checked against them."""
-        desc = signer.export_descriptor(self.rpc, name, kind)
-        img = qrchannel.fit_to_panel(
-            qrchannel.text_to_image(desc, panel=(self.w, self.h)),
-            self.w, self.h)
-        self.display.show(img)
-        if self.buttons.read() == "c":
-            return
+        addresses in full so the coordinator can be checked against them.
+
+        LEFT and RIGHT switch script type on the QR itself, so choosing
+        between native segwit and taproot is a glance rather than a gate.
+        """
+        while True:
+            desc = signer.export_descriptor(self.rpc, name, kind)
+            img = qrchannel.fit_to_panel(
+                qrchannel.text_to_image(desc, panel=(self.w, self.h)),
+                self.w, self.h)
+            self.display.show(img)
+            key = self.buttons.read()
+            if key in ("l", "r"):
+                kind = "tr" if kind == "wpkh" else "wpkh"
+                continue
+            if key in ("b", "c"):
+                return
+            break
         pages = screens.text_pages(desc)
         i = 0
         while True:
@@ -690,6 +695,12 @@ class Session:
                     break
                 i += 1
         self._show_addresses(name, kind)
+        # Bitcoin Core has no QR reader, so it takes a file. Offered here,
+        # after you have seen the key, rather than as a thing to choose
+        # before you have seen anything.
+        if self._pick(lambda sel: screens.core_file_menu(self.w, self.h, sel),
+                      len(screens.CORE_FILE_OPTIONS)) == 0:
+            self._export_file(name)
 
     def _show_addresses(self, name, kind, count=3):
         """The first `count` receive addresses, one per screen. Used at the
@@ -709,12 +720,10 @@ class Session:
         Change addresses are deliberately absent: nobody hands one out, and
         showing them beside the others invites giving one away.
         """
-        kinds = ("wpkh", "tr")
-        j = self._pick(lambda sel: screens.export_script_menu(
-            self.w, self.h, kinds, sel), len(kinds))
-        if j is None:
-            return
-        return self._page_addresses(name, kinds[j])
+        # Native segwit first, LEFT or RIGHT to switch to taproot on the
+        # screen itself. Asking which script type before showing a single
+        # address was a gate in front of the thing you came to see.
+        return self._page_addresses(name, "wpkh")
 
     def _page_addresses(self, name, kind, limit=None):
         """One address per screen, derived by Core.
@@ -740,9 +749,14 @@ class Session:
             key = self.buttons.read()
             if key in ("b", "c"):
                 return
-            if key in ("u", "l"):
+            if key in ("l", "r"):
+                # Switch script type here rather than gating the screen
+                # behind a chooser (Ben, 2026-09-05).
+                kind = "tr" if kind == "wpkh" else "wpkh"
+                i, base, block = 0, 0, []
+            elif key == "u":
                 i = max(0, i - 1)
-            elif key in ("a", "p", "d", "r"):
+            elif key in ("a", "p", "d"):
                 if limit is not None and i + 1 >= limit:
                     return
                 i += 1
@@ -764,27 +778,37 @@ class Session:
     NO_PASSPHRASE = ""
 
     def _ask_passphrase(self, title):
-        """The passphrase, typed on the grid. Blanked on the dev display
-        like every other secret-bearing screen.
+        """Encrypt or not, then the passphrase if so.
 
-        Returns the passphrase, NO_PASSPHRASE if the user deliberately
-        chose none, or None if they backed out. An empty box asks again
-        rather than dropping you back to the menu, because typing nothing
-        is a slip and being thrown out of the flow for it is a punishment
-        (Ben, on the board, 2026-09-05).
+        The question comes first now (Ben, 2026-09-05). Asking for a
+        passphrase and treating an empty box as "no thanks" made the
+        choice something you discovered by failing at the screen.
+
+        Returns the passphrase, NO_PASSPHRASE for a deliberate no, or None
+        if the user backed out.
         """
+        choice = self._pick(
+            lambda sel: screens.encrypt_menu(self.w, self.h, sel),
+            len(screens.ENCRYPT_OPTIONS))
+        if choice is None:
+            return None
+        if choice == 1:                      # no encryption
+            if not self._confirm_no_passphrase():
+                return None
+            return self.NO_PASSPHRASE
         while True:
             text = self._text_entry(title, "passphrase", secret=True)
             if text is None:
                 return None
             if text:
                 return text
-            if self._confirm_no_passphrase():
-                return self.NO_PASSPHRASE
+            # An empty box here is a slip, not a choice: the choice was
+            # made on the screen before this one.
+            self._hold("type a passphrase, or go back to choose no")
 
     def _confirm_no_passphrase(self):
-        """An empty passphrase means an UNENCRYPTED backup. Core allows it,
-        so Corky allows it, and says what it costs before you take it."""
+        """No passphrase means an UNENCRYPTED backup. Core allows it, so
+        Corky allows it, and says what it costs before you take it."""
         sel = 0
         while True:
             self.display.show(screens.no_passphrase_warning(
@@ -798,18 +822,25 @@ class Session:
                 return sel == 1
 
     def _backup(self, name, xfp):
-        """Two backups (ticket 04). The file is offered first, because Core
-        writes it and the key never passes through Corky to make it. The
-        paper backup is the one exposure that is a choice: it asks Core for
-        the key so a screen can draw it. Returns True if a backup was made.
+        """Two backups (ticket 04). The rows run in screens.BACKUP_OPTIONS
+        order: On paper, then To a file.
+
+        They ran in the opposite order to the screen until 2026-09-05. Row
+        0 read "On paper" and started the FILE backup, so choosing paper
+        asked for an encryption passphrase, which is the "back button does
+        nothing on backup to paper" Ben reported. Index the same list the
+        screen draws, so the two cannot disagree again.
+
+        The paper backup is the one exposure that is a choice: it asks Core
+        for the key so a screen can draw it. The file one never passes the
+        key through Corky at all. Returns True if a backup was made.
         """
         i = self._pick(lambda sel: screens.backup_menu(self.w, self.h, sel),
                        len(screens.BACKUP_OPTIONS))
         if i is None:
             return False
-        if i == 0:
-            return self._backup_file(name)
-        return self._backup_paper(name, xfp)
+        return (self._backup_paper(name, xfp) if i == screens.PAPER
+                else self._backup_file(name))
 
     def _backup_file(self, name):
         """Core's own encryptwallet then backupwallet. The medium is asked
@@ -1153,61 +1184,24 @@ class Session:
                 cursor = min(len(rows) - 1, cursor + 1)
 
     def _tool_generate(self):
-        """Seed generation and usage EXACTLY as a Bitcoin Core wallet
-        (PLAN A-19). Core's createwallet makes the master key with Core's
-        own RNG; Corky signs with that very wallet, and the backup shown
-        is Core's master xprv read verbatim from Core's descriptors.
-        Nothing of ours sits between Core's RNG and the paper. Restore is
-        the existing xprv entry mode (pure Core). The tradeoff screen
-        says plainly that software entropy cannot be audited as it runs
-        and that cards or dice remain the default.
+        """New key: Core makes one, and that is the whole flow.
+
+        It used to show a screen of tradeoffs you had to accept, then walk
+        you into a backup you could not leave without losing the key. Both
+        are gone (Ben, 2026-09-05). Clicking New key makes a key. The
+        tradeoffs are the README's job, where there is room to state them
+        properly, and Backup key is a row on the key's own menu, chosen
+        when you want it.
+
+        A-19 still holds underneath: `createwallet` makes the master key
+        with Core's own RNG and Corky signs with that very wallet. Nothing
+        of ours sits between Core's RNG and your paper.
         """
-        sel, scroll = 1, 0
-        # Wrapping means the line count depends on the panel, so ask the
-        # screen rather than counting the source strings.
-        max_scroll = screens.generate_scroll_max(self.w, self.h)
-        while True:
-            self.display.show(screens.generate_warning(
-                self.w, self.h, sel, scroll))
-            key = self.buttons.read()
-            if key in ("l", "r"):
-                sel = 1 - sel
-            elif key == "d":
-                scroll = min(scroll + 1, max_scroll)
-            elif key == "u":
-                scroll = max(scroll - 1, 0)
-            elif key in ("a", "p"):
-                if sel == 0:
-                    return False
-                break
-            elif key in ("b", "c"):
-                return False
         stop = self._busy("Bitcoin Core is generating your key…")
         try:
-            name = signer.generate_wallet(self.rpc)
+            self.key = signer.generate_wallet(self.rpc)
         finally:
             stop()
-        self.key = name
-        # The paper backup is the master xprv in Core's own encoding, in
-        # four-character groups. No split option: an xprv is a BIP32 node
-        # rather than a seed, so there is nothing to split. It is now the
-        # SECOND option, because the file backup never reads the key out of
-        # Core (Ben, 2026-09-05).
-        xfp = signer.master_fingerprint(self.rpc, wallet=name)
-        # The backup CHOICE, not the paper one by default (Ben, 2026-09-05).
-        # A key Core has just made can be backed up to an encrypted file
-        # without ever being drawn on a screen, and that is now the first
-        # option. A key with no backup at all is a key nobody can recover,
-        # so refusing to back it up still discards it.
-        if not self._backup(name, xfp):
-            signer.close_key(self.rpc, name)     # only the key just made
-            return False
-        # No address screen here (Ben, 2026-09-05). One address with no
-        # instruction is not a check, and it fired after a FILE backup
-        # too, where there is nothing to check: Core wrote that file and
-        # nothing was transcribed. The comparison that means something is
-        # in Export, which shows three addresses in full beside the
-        # public key the coordinator is about to be given.
         return True
 
     def _show_backup(self, text, label):

@@ -209,14 +209,13 @@ def main():
         # Backup key on paper, Discard key. Then Tools, which holds the leak
         # check alone. Then Keys, New key, which is the first row there now.
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan a key -> warning
-                  + "da" + "a" + "dda" + "b"      # Receiving addresses -> segwit -> page on, back
-                  + "da" + "da" + "aaa"           # Backup key -> On paper (2nd) -> 3 pages
+                  + "da" + "dda" + "b"            # Receiving addresses -> page on, back
+                  + "da" + "a" + "aaa"            # Backup key -> On paper (1st) -> 3 pages
                   + "da" + "ra"                   # Discard key -> confirm: DISCARD
                   + "da" + "a" + "c"              # Tools -> Check for leaks -> C leaves
                   + "b"                           # Tools -> home
-                  + "ra" + keys_press(0, "New key")   # Keys -> New key
-                  + "a"                           # accept the generate warning
-                  + "da" + "aaa"                  # backup choice -> On paper -> 3 pages
+                  + "ra" + keys_press(0, "New key")   # Keys -> New key, done
+                  + "dda" + "a" + "aaa"           # Backup key -> On paper -> 3 pages
                   + "b" + "b"                     # key menu -> keys -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -228,9 +227,9 @@ def main():
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), "K3: A's key menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 2)), "K3: Backup key highlighted"
         assert _has(fr, _render(scr.backup_menu, 0)), \
-            "K3: the backup chooser, with the file backup first"
-        assert _has(fr, _render(scr.backup_menu, 1)), \
-            "K3: On paper is the second row now, and was selected"
+            "K3: the backup chooser, with On paper first and selected"
+        assert not _has(fr, _render(scr.encrypt_menu, 0)), \
+            "K3: the PAPER backup asked about encryption, so row 0 ran the file backup"
         # The dev display blanks every sensitive frame (hal.DevDisplay), so
         # the three xprv pages are three blank frames in a row, and the
         # backup page itself is pinned by test_screen_fit.
@@ -253,10 +252,12 @@ def main():
             "K3: the leak check never ran"
         assert _has(fr, _render(scr.key_menu, xfp_a, 1)), \
             "K3: Receiving addresses highlighted"
-        assert _has(fr, _render(scr.export_script_menu, ("wpkh", "tr"), 0)), \
-            "K3: Receiving addresses asked which script type"
+        want = signer.receive_addresses(rpc, "corky", "wpkh", 1)[0] \
+            if "corky" in rpc.call("listwallets") else None
+        if want:
+            assert _has(fr, _render(scr.address_page, 0, want, "wpkh")), \
+                "K3: Receiving addresses showed the first address at once"
         assert _has(fr, _render(scr.home, 2)), "K3: Tools tile highlighted"
-        assert _has(fr, _render(scr.generate_warning, 1, 0)), "K3: New key warning"
         left = [w for w in rpc.call("listwallets") if w in signer.SLOTS]
         assert not left, f"K3: a key survived the session: {left}"
         print("ok   K3: Scan, Key, Tools, Settings; load, backup, discard, new key")
@@ -296,11 +297,11 @@ def main():
         signer.close_session(rpc)
         stick5 = work / "stick5"; stick5.mkdir()
         script = ("ra" + "da" + "a"                   # Keys -> Scan a key -> warning
-                  + "a" + "a" + "a"                   # Export public key (1st) -> Sparrow -> segwit
+                  + "a"                               # Export public key: the QR at once
                   + "a"                               # leave the QR
                   + "a" * desc_pages                  # the descriptor as text
                   + "a" * 3                           # three address pages
-                  + "a" + "da" + "a" + "a"            # Export again -> Bitcoin Core -> medium -> writes, dismiss
+                  + "a" + "a" + "a"                   # Core file? -> yes -> channel -> dismiss
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK5",
                        qr_key=key_a, stick=stick5)
@@ -313,9 +314,6 @@ def main():
         buf = io.BytesIO(); golden_qr.save(buf, format="PNG")
         assert _has(fr5, buf.getvalue()), \
             "K5: the panel never showed the export QR"
-        assert _has(fr5, _render(scr.export_menu, 0)), "K5: the wallet chooser"
-        assert _has(fr5, _render(scr.export_script_menu, ("wpkh", "tr"), 0)), \
-            "K5: the script-type chooser"
         assert _has(fr5, _render(scr.export_text, scr.text_pages(desc)[0],
                                  page=0, pages=desc_pages)), \
             "K5: the descriptor as grouped text"
@@ -340,7 +338,8 @@ def main():
         stick6 = work / "stick6"; stick6.mkdir()
         phrase = text_keys("passphrase", "hunter2")
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan -> warning
-                  + "dda" + "a" + phrase + "a" + "a"  # Backup key (3rd) -> To a file -> type -> channel -> dismiss
+                  + "dda" + "da"                  # Backup key (3rd) -> To a file (2nd)
+                  + "a" + phrase + "a" + "a"      # Encrypt it -> type -> channel -> dismiss
                   + "da" + "ra"                       # Discard key -> DISCARD
                   + "ra" + keys_press(0, "Restore from file")
                   + "a" + phrase                  # pick the backup, type the passphrase
@@ -353,8 +352,10 @@ def main():
         assert len(backups) == 1, f"K6: backup not written: {list(stick6.iterdir())}"
         assert xfp_a in backups[0].name, f"K6: wrong name {backups[0].name}"
         fr6 = work / "framesK6"
-        assert _has(fr6, _render(scr.backup_menu, 0)), \
-            "K6: the backup chooser, with the file backup pre-selected"
+        assert _has(fr6, _render(scr.backup_menu, 1)), \
+            "K6: To a file is the second backup row, and was selected"
+        assert _has(fr6, _render(scr.encrypt_menu, 0)), \
+            "K6: encrypt or not is asked before the passphrase"
         assert _has(fr6, _render(scr.restore_menu, [backups[0].name], 0)), \
             "K6: the restore chooser listed the backup by fingerprint"
         assert _has(fr6, _render(scr.result, ok=True,
