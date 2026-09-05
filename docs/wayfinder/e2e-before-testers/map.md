@@ -19,9 +19,13 @@ Done: every ticket except the three that need hardware or a person.
 Decisions 01 to 07; built 08, 09, 10, 11, 12, 13, 14, 15, 16, 17; research
 19, 20, 21. **Left: 18 (the board run with Ben and his Sparrow laptop), 22
 (the phone proofs with Ben's phone), 23 (docs, PINS and the two-axis
-review).** 18 is the gate the other two wait on. The board at
-`corky-zero` still runs the ticket-10-era build: a sync was stopped
-mid-copy, so run the rsync below before touching the board, then
+review).** 18 is the gate the other two wait on.
+
+The board at `corky-zero` was synced and restarted on 2026-09-05 at
+commit "Generate just generates", and it runs clean: no error in the
+journal, and the leak check reports 13 of 34 open, which is the SSH-safe
+development state. `image/harden.sh` closes the rest and takes SSH with
+them, so it runs last. Re-sync with the rsync below after any change, then
 `sudo systemctl restart corky`.
 
     rsync -a --delete --exclude .git --exclude .hypothesis --exclude __pycache__ \
@@ -29,8 +33,8 @@ mid-copy, so run the rsync below before touching the board, then
       --rsync-path="sudo rsync" ./ corky-zero:/opt/corky/
 
 Tests: `./run_tests.sh` (fast), `RUN_NODE=1 ./run_tests.sh` (needs bitcoind),
-always with `PYTHONDONTWRITEBYTECODE=1` (TESTING.md). Nothing is committed
-yet: the whole map's work sits in the working tree for the two-axis review.
+always with `PYTHONDONTWRITEBYTECODE=1` (TESTING.md). 32 suites green as of
+2026-09-05, the three Sparrow interop suites among them.
 
 ## Notes
 
