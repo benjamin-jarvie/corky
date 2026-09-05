@@ -79,6 +79,19 @@ documentation, and someone can go and build it without another decision.
   claimed cards and dice were the default AND that dice entropy was out of
   scope. Corrected, and recorded as PLAN A-19b.
 
+- [R5 Does the paper backup actually get the money back](tickets/R5-recovery.md)
+  — yes, in Bitcoin Core and Sparrow, and nowhere else. Sparrow's own
+  library rebuilds a spending wallet from the 111 characters for all four
+  policies and signs spends the network accepts (21 checks). BlueWallet,
+  Green and Bull Bitcoin all refuse a private key; they are coordinators
+  here, not recovery targets.
+- [R6 The M0 memory gate, run on the board](tickets/R6-m0-on-real-hardware.md)
+  — **FAILS at 81MB against a 100MB requirement**, on an image still
+  running SSH, NetworkManager and wpa_supplicant, which `harden.sh`
+  removes. Roughly 30MB of that is dev-only, but an estimate is not a
+  pass. The gate has to be re-run on a hardened flash, and that is the
+  gate on a beta.
+
 ## Not yet specified
 
 - What the export screen sequence becomes once the policy list is settled.
