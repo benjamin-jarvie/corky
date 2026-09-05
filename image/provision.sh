@@ -46,10 +46,25 @@ bitcoind --version | head -1
 
 echo "== 2/5 system packages"
 apt-get update -qq
+# Every package the device needs, each installed on its own line, so a
+# name that does not exist in this release cannot take another package
+# down with it. The old form asked for seven at once and fell back to a
+# list that quietly dropped python3-picamera2, so an unavailable
+# python3-zbar would have cost the camera and said nothing until a scan
+# failed on the board.
 # libzbar0: pyzbar (in PIP_PINS) dlopens it at import; pip cannot provide it.
-apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev \
-    python3-picamera2 python3-zbar libzbar0 python3-pip 2>/dev/null \
-  || apt-get install -y -qq python3-pil python3-rpi.gpio python3-spidev libzbar0 python3-pip
+REQUIRED_PKGS="python3-pil python3-rpi.gpio python3-spidev python3-picamera2 libzbar0 python3-pip"
+for pkg in $REQUIRED_PKGS; do
+    apt-get install -y -qq "$pkg" || {
+        echo "!! required package $pkg did not install. Stopping."
+        echo "!! The signer needs all of: $REQUIRED_PKGS"
+        exit 1
+    }
+done
+# python3-zbar may not exist in this release. pyzbar comes from pip and
+# only needs libzbar0 above, so this is a convenience, not a requirement.
+apt-get install -y -qq python3-zbar 2>/dev/null \
+  || echo "   (python3-zbar unavailable; pyzbar from pip covers it)"
 # shellcheck disable=SC2086
 python3 -m pip install --quiet --break-system-packages $PIP_PINS
 
