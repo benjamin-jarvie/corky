@@ -61,12 +61,34 @@ concede. Corky holds the Core side with its eyes open.
 
 ## What you are trusting — stated plainly, not in fine print
 
-**Nothing in Corky touches your key.**
+**Nothing in Corky computes on your key. Some of it carries and draws
+your key, and here is exactly which parts.**
 
-That used to be almost true. Corky carried one translator, because Bitcoin
-Core does not read BIP39 seed words and its developers have said it never
-will, so something had to turn words into the xprv Core imports. PLAN A-22
-removed it. This build cannot read a seed phrase at all.
+An earlier version of this section said "nothing in Corky touches your
+key". That was too strong, and the layer table below contradicted it three
+paragraphs later. A signer has to get the key from your hand into Bitcoin
+Core, and it has to put a backup on the screen for you to write down, and
+both of those mean the key is a string in Corky's memory for a moment.
+Saying otherwise invites exactly the criticism it is trying to duck.
+
+So, plainly. **Bitcoin Core does all key management**: it generates the
+key, derives every child, holds it, and signs with it. Corky derives
+nothing, hashes nothing, and signs nothing. `tests/test_integrity.py`
+fails if any shipped module so much as imports a cryptographic library.
+
+**Corky sees your key at three moments, and no others:**
+
+1. **On the way in.** What you type on the grid, or what the camera reads,
+   is a string in Python until it reaches Core through `bitcoin-cli
+   -stdin`. Never the command line, so it is never in a process listing.
+2. **On the way to paper.** For a backup, Corky asks Core for the master
+   key and renders it as pixels. This is the one time a key is pulled
+   **out** of Core for a reason that is not cryptographic.
+3. **The backup passphrase**, typed on the grid, on its way to Core's own
+   `encryptwallet`.
+
+Everything else, including the whole file channel and the whole QR channel,
+carries transactions and public keys only.
 
 What is left is a body of code that draws screens, reads buttons, and carries
 bytes between you and Bitcoin Core:
@@ -91,6 +113,41 @@ codex32 and SeedQR, and is meant for people who read code.
 Corky's claim is not "trustless". It is: **you trust Bitcoin Core's wallet
 implementation instead of a rewrite of it, and nothing else of ours computes
 on your key, because there is no such code to compute with.**
+
+## The radios, and the two claims that are not the same claim
+
+The image turns the wireless hardware off at every layer the operating
+system controls: the `disable-wifi` and `disable-bt` overlays in
+`config.txt`, a modprobe blacklist that also routes the drivers to
+`/bin/false`, the Broadcom firmware moved aside so no driver can bring the
+chip up, and `wpa_supplicant`, `bluetooth`, `hciuart` and the network
+managers disabled and masked. Bitcoin Core is separately started with
+`networkactive=0`.
+
+`sudo bash /opt/corky/image/radio-check.sh`, on the device, checks all of
+it and prints a verdict.
+
+**A clean run proves the OS is not driving the radio. It does not prove
+the radio is off.** Raspberry Pi documents a hardware disable pin for the
+Compute Modules and not for the Zero 2 W, and the `disable-wifi` overlay
+disables the SDIO host controller while the chip keeps its power. Nothing
+in Raspberry Pi's documentation claims a power-down.
+
+So there are two claims:
+
+| Claim | What proves it |
+|---|---|
+| The OS is silent | `radio-check.sh` on the device |
+| The radio cannot transmit | the part is not on the board |
+
+The Zero 2 W's radio is a **separate Synaptics component beside the
+processor**, not inside the processor package, so removal does not touch
+the processor. That is what the pocket build asks for, and it is the only
+version of this that is physics rather than configuration. The primary
+sources are in
+[`docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md`](docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md),
+including the part number change of 1 November 2025, which means the board
+in your hand has to be looked at rather than assumed from a guide.
 
 ## The freedom property
 
@@ -121,6 +178,45 @@ commentator excluded DIY devices from consideration, and Corky is one.
 That is the price of the property today: Corky is DIY while we perfect
 it. An assembled device would change the labor, not the architecture,
 and may come later.
+
+## What a Python signer cannot promise, measured
+
+The three moments above are honest about WHERE the key is. This is honest
+about what happens to it there, because it is the first thing a reader who
+knows Python will ask.
+
+**Python strings cannot be overwritten.** They are immutable, so the
+runtime is free to copy them and there is no way to zero one when you are
+done. `_text_entry` builds a typed key one character at a time, and each
+character makes a new string. Typing the 111-character master key leaves
+**111 separate objects holding 6,216 characters of key prefixes** in the
+heap, the longest of them 110 of the 111 characters, and not one of them
+can be wiped. Nothing in CPython can fix that, and any signer written in
+Python has the same property whether or not its authors mention it.
+
+What actually bounds the damage is the shape of the device, not the code:
+
+- The datadir is a **tmpfs**. It is RAM. Power off and it is gone.
+- The process ends at power off, and the heap goes with it.
+- Nothing is written to the card. `tests/test_no_persistence.py` searches
+  every byte under the datadir for the raw private key and the chain code,
+  after a discard, after a close, after a crash restart, and after Core's
+  own shutdown.
+- Core's errors are redacted before they can reach the screen or the
+  journal, because Core quotes the key back in them.
+
+**What is left, stated so nobody has to find it:** while the device is
+powered, copies of your key exist in RAM that Corky cannot erase. Cold
+boot memory remanence is a real attack against that, and the answer to it
+is to power the device off, which is also the answer to everything else on
+this device. It is an M3 question and it is not solved here.
+
+**The one exposure that is a choice, not a necessity.** Getting a key IN
+requires it to pass through memory. Showing a paper backup does not: for a
+key Core generated, Corky asks Core for the master key purely to draw it
+on the screen. The encrypted file backup has no such step, because Core
+writes that file itself. If you never need words on paper, using only the
+file backup removes an entire exposure.
 
 ## The trade-offs, before critics find them
 
