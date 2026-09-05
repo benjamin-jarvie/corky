@@ -22,6 +22,9 @@ import signer  # noqa: E402 - needs the path above
 INK = "#1A1714"
 CREAM = "#F5EFE0"
 RED = "#9E2B25"
+# Removed as dead on 2026-09-05 and brought back the same day: the leak
+# report is the one screen that has good news worth colouring.
+GREEN = "#2E4A3B"
 GREY = "#B8B2A6"
 OCHRE = "#C8912F"
 
@@ -455,7 +458,43 @@ KEY_MENU_OPTIONS = [
     ("Discard key", "Core forgets it"),
 ]
 
-TOOLS_OPTIONS = [("New key", "Core's own RNG")]
+TOOLS_OPTIONS = [("New key", "Core's own RNG"),
+                 ("Check for leaks", "every way off")]
+
+
+LEAK_ROWS = 5
+
+
+def leak_report(w, h, passed, failures, page=0):
+    """What image/leak-check.sh found, on the panel.
+
+    The device may be the only place this can be read: a hardened board has
+    no SSH. Green when nothing can carry data off, ochre otherwise, because
+    a dev image is expected to fail the radio rows and that is not an alarm.
+    """
+    total = passed + len(failures)
+    img, d = _frame(w, h, "LEAK  CHECK")
+    if not failures:
+        _status_circle(img, d, w, h, "CLEAR", GREEN)
+        _fit(d, (w // 2, int(h * 0.66)), f"{passed} of {total} checks pass",
+             int(h * 0.055), CREAM, "mm", int(w * 0.9))
+        _fit(d, (w // 2, int(h * 0.75)), "the OS drives nothing off this board",
+             int(h * 0.042), GREY, "mm", int(w * 0.92))
+        _actions(d, w, h, ["DONE"], 0)
+        return img
+    pages = max(1, (len(failures) + LEAK_ROWS - 1) // LEAK_ROWS)
+    page = max(0, min(page, pages - 1))
+    head = f"{len(failures)} of {total} can leak"
+    if pages > 1:
+        head += f"   {page + 1}/{pages}"
+    _fit(d, (w // 2, int(h * 0.17)), head, int(h * 0.062), OCHRE, "mm",
+         int(w * 0.92))
+    shown = failures[page * LEAK_ROWS:(page + 1) * LEAK_ROWS]
+    for i, line in enumerate(shown):
+        _fit(d, (int(w * 0.05), int(h * (0.30 + i * 0.105))), line,
+             int(h * 0.045), CREAM, "lm", int(w * 0.90))
+    _actions(d, w, h, ["BACK", "MORE" if pages > 1 else "DONE"], 1)
+    return img
 
 
 def keys_menu(w, h, keys, selected=0):

@@ -155,47 +155,11 @@ blacklist usb_f_ecm
 blacklist usb_f_rndis
 GEOF
 
-echo "== radios off at every layer the OS controls"
-# PLAN v1 promised this and nothing implemented it until 2026-09-05.
-#
-# Read the ladder in README "The freedom property" before trusting any of
-# it: these layers stop the OS driving the radio. They do NOT prove the
-# chip is unpowered. Raspberry Pi documents a hardware disable pin for the
-# Compute Modules and not for the Zero 2 W, and `disable-wifi` disables the
-# SDIO host controller while the chip keeps its power
-# (docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md). Only
-# removing the part is physics. This is everything short of that.
-for ov in disable-wifi disable-bt; do
-    grep -q "^dtoverlay=$ov" "$CFG0" || echo "dtoverlay=$ov" >> "$CFG0"
-done
-
-# 2. The drivers cannot load, so nothing binds even if an overlay is lost.
-cat > /etc/modprobe.d/corky-no-radio.conf <<'MODEOF'
-# Corky: this device has no use for a radio.
-blacklist brcmfmac
-blacklist brcmutil
-blacklist cfg80211
-blacklist bluetooth
-blacklist btbcm
-blacklist hci_uart
-blacklist btsdio
-install brcmfmac /bin/false
-install bluetooth /bin/false
-install hci_uart /bin/false
-MODEOF
-
-# 3. No firmware, so the chip cannot be brought up even by a loaded driver.
-#    Kept, not deleted, so the change is reversible and auditable.
-if [ -d /lib/firmware/brcm ] && [ ! -d /lib/firmware/brcm.corky-disabled ]; then
-    mv /lib/firmware/brcm /lib/firmware/brcm.corky-disabled
-fi
-
-# 4. Nothing tries to bring a network up.
-for unit in wpa_supplicant bluetooth hciuart dhcpcd NetworkManager \
-            systemd-networkd avahi-daemon triggerhappy; do
-    systemctl disable --now "$unit" 2>/dev/null || true
-    systemctl mask "$unit" 2>/dev/null || true
-done
+# The radios, the serial console and SSH are NOT touched here. This script
+# builds the DEV image, and the dev image keeps them so you can work on the
+# board over the network. Taking them away is image/harden.sh, which is a
+# one-way step you run when the device is about to hold a real key.
+echo "== dev image: radios and SSH stay. Run image/harden.sh before real keys."
 
 # SPI for the display hat
 raspi-config nonint do_spi 0 || true

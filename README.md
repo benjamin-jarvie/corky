@@ -118,16 +118,37 @@ on your key, because there is no such code to compute with.**
 
 ## Every way off this board, and the two claims that are not the same claim
 
-The image turns the wireless hardware off at every layer the operating
-system controls: the `disable-wifi` and `disable-bt` overlays in
-`config.txt`, a modprobe blacklist that also routes the drivers to
-`/bin/false`, the Broadcom firmware moved aside so no driver can bring the
-chip up, and `wpa_supplicant`, `bluetooth`, `hciuart` and the network
-managers disabled and masked. Bitcoin Core is separately started with
-`networkactive=0`.
+A radio is not the only way off a board, and on this one it was not even
+the worst. Ten areas are checked and closed: the two firmware overlays, the
+drivers, the firmware blobs, the interfaces, the services, what the kernel
+saw at boot, **swap**, **the journal**, **the serial console and USB device
+mode**, and Bitcoin Core's own networking.
 
-`sudo bash /opt/corky/image/leak-check.sh`, on the device, checks all of
-it and prints a verdict.
+Swap was the worst of them. Raspberry Pi OS enables it by default, so the
+memory holding a key could be written to the card, and nothing in this
+repository turned it off until 2026-09-05. The serial console was the next
+worst: Raspberry Pi OS puts a login on two GPIO pins, so three wires and
+physical access was a root shell. And the Zero's USB port can act as a
+device, which would let the board present itself to any computer as a
+network card, a serial port or a disk.
+
+**Tools, Check for leaks** runs it on the device and puts the verdict on
+the panel: green when nothing can carry data off, otherwise the failures,
+five to a screen. That matters most on a hardened board, where the panel is
+the only place a report can be read, because there is no SSH left.
+
+From a terminal it is `sudo bash /opt/corky/image/leak-check.sh`, and
+`--porcelain` is what the Tools screen reads. One implementation, two
+readers.
+
+**Two images, and they are not the same device.** `provision.sh` builds the
+**dev image**: it keeps SSH, the radios and a login, because you cannot work
+on a board without them. It still closes the paths that have no development
+value, so swap, the journal, the serial console and USB device mode are shut
+there. `image/harden.sh` is the **one-way step** you run when the board is
+about to hold a real key: it takes the radios and SSH away, and reflashing
+the card is the only way back. A dev image is expected to fail the radio
+rows of the leak check, and the report says so rather than crying wolf.
 
 **A clean run proves the OS is not driving the radio. It does not prove
 the radio is off.** Raspberry Pi documents a hardware disable pin for the
@@ -248,7 +269,7 @@ carries the same risk there as anywhere.
 you trust, you are not trusting a third party's rendering of Core's
 numbers.
 
-**Corky.** Core computes the fee and the outputs, and then **our 2,159
+**Corky.** Core computes the fee and the outputs, and then **our 2,226
 lines draw them**. If `screens.py` renders the wrong address, you sign the
 wrong thing, and no amount of Core underneath saves you.
 
@@ -496,12 +517,12 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1911 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1978 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (972) ·
-[`corky/screens.py`](corky/screens.py) (556) ·
+[`corky/main.py`](corky/main.py) (1012) ·
+[`corky/screens.py`](corky/screens.py) (583) ·
 [`corky/signer.py`](corky/signer.py) (313) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
@@ -516,11 +537,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,159 lines** (3,657 with blanks/comments).
+**Total functional code: 2,226 lines** (3,743 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,789 lines — none of it ships on the device.**
+**Test code: 3,801 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

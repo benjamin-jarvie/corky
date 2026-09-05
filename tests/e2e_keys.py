@@ -189,7 +189,8 @@ def main():
                   + "dda" + "a" + "dda" + "b"     # Receiving addresses -> segwit -> page on, back
                   + "da" + "da" + "aaa"           # Backup key -> On paper (2nd) -> 3 pages
                   + "da" + "ra"                   # Discard key -> confirm: DISCARD
-                  + "da" + "a" + "a"              # Tools -> New key -> proceed
+                  + "da" + "da" + "c"             # Tools -> Check for leaks -> C leaves the report
+                  + "a" + "a"                     # Tools -> New key -> proceed
                   + "da" + "aaa" + "a"            # backup choice -> On paper -> 3 pages -> address
                   + "b" + "b"                     # key menu -> keys list -> home
                   + "draa")
@@ -220,6 +221,10 @@ def main():
         assert _has(fr, _render(scr.confirm_discard, xfp_a, 1)), \
             "K3: DISCARD was never the selected action"
         assert _has(fr, _render(scr.tools_menu, 0)), "K3: Tools menu"
+        assert _has(fr, _render(scr.tools_menu, 1)), \
+            "K3: Check for leaks is the second Tools entry"
+        assert _has(fr, _render(scr.busy, "checking every way off this board…")), \
+            "K3: the leak check never ran"
         assert _has(fr, _render(scr.key_menu, xfp_a, 2)), \
             "K3: Receiving addresses highlighted"
         assert _has(fr, _render(scr.export_script_menu, ("wpkh", "tr"), 0)), \

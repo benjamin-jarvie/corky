@@ -69,7 +69,14 @@ CASES = {
                ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
                ("corky-5", "ba4c8bd5")], 5),
     "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 4),
-    "tools-menu": lambda w, h: screens.tools_menu(w, h, 0),
+    "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
+    "leak-clear": lambda w, h: screens.leak_report(w, h, 34, []),
+    "leak-failures": lambda w, h: screens.leak_report(
+        w, h, 17, ["/boot/firmware/config.txt does NOT set dtoverlay=disable-wifi",
+                   "module brcmfmac is LOADED",
+                   "SWAP IS ON. Key pages can be written to the card.",
+                   "a serial console is on the GPIO header: three wires is a root shell",
+                   "/var/log/journal exists, so the journal is written to the card"], 0),
     "export-menu": lambda w, h: screens.export_menu(w, h, 4),
     "export-script-menu": lambda w, h: screens.export_script_menu(
         w, h, ("wpkh", "tr"), 1),

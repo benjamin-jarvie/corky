@@ -589,9 +589,14 @@ class Session:
         """Tools holds New key, which is Core's Create Wallet (ticket 07).
         A new key lands on its own menu, as SeedSigner does."""
         while True:
-            if self._pick(lambda sel: screens.tools_menu(self.w, self.h, sel),
-                          len(screens.TOOLS_OPTIONS)) is None:
+            choice = self._pick(
+                lambda sel: screens.tools_menu(self.w, self.h, sel),
+                len(screens.TOOLS_OPTIONS))
+            if choice is None:
                 return None
+            if choice == 1:
+                self._tool_leak_check()
+                continue
             if self._tool_generate():
                 outcome = self.state_key_menu(self.key)
                 return outcome if outcome in (POWER_OFF, TO_HOME) else None
@@ -1083,6 +1088,48 @@ class Session:
         finally:
             stop()
         return True
+
+    #: The check itself is image/leak-check.sh, written once and read two
+    #: ways: by a person over a terminal, and by this screen through
+    #: --porcelain. A hardened board has no SSH, so the panel may be the
+    #: only place this report can be read.
+    LEAK_CHECK = Path(__file__).resolve().parent.parent / "image" / "leak-check.sh"
+
+    def _tool_leak_check(self):
+        """Run the leak check and put its verdict on the panel."""
+        stop = self._busy("checking every way off this board…")
+        try:
+            out = subprocess.run(["bash", str(self.LEAK_CHECK), "--porcelain"],
+                                 capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.SubprocessError) as exc:
+            stop()
+            return self._hold(f"leak check did not run: {str(exc)[:38]}")
+        finally:
+            stop()
+        passed, failures = 0, []
+        for line in out.stdout.splitlines():
+            parts = line.split("\t")
+            if parts[0] == "ok":
+                passed += 1
+            elif parts[0] == "FAIL" and len(parts) > 1:
+                failures.append(parts[1])
+        if not passed and not failures:
+            return self._hold("leak check produced no report")
+        page = 0
+        while True:
+            self.display.show(screens.leak_report(
+                self.w, self.h, passed, failures, page))
+            key = self.buttons.read()
+            if key in ("b", "c"):
+                return
+            if key in ("u", "l"):
+                page -= 1
+            elif key in ("a", "p", "d", "r"):
+                pages = max(1, (len(failures) + screens.LEAK_ROWS - 1)
+                            // screens.LEAK_ROWS)
+                if not failures or page + 1 >= pages:
+                    return
+                page += 1
 
     def _tool_generate(self):
         """Seed generation and usage EXACTLY as a Bitcoin Core wallet
