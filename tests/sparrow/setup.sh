@@ -58,5 +58,5 @@ ls -d "$B/ext"/*/ | grep -v -E '/(java|jdk|javafx)\.[^/]*/$' | tr '\n' ':' | sed
 printf ':%s' "$B/res" >> "$B/cp.txt"
 
 mkdir -p "$B/out"
-"$JH/bin/javac" -nowarn -cp "$(cat "$B/cp.txt")" -d "$B/out" "$DIR/SparrowGen.java"
+"$JH/bin/javac" -nowarn -cp "$(cat "$B/cp.txt")" -d "$B/out" "$DIR/SparrowGen.java" "$DIR/SparrowQr.java" "$DIR/SparrowDesc.java"
 echo "ok   harness built at $B"

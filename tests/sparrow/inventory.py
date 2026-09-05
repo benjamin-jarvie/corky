@@ -7,7 +7,6 @@ was unnecessary two lines from an RPC that already does it.
 Run: python3 inventory.py
 """
 import sys
-from decimal import Decimal
 
 import harness
 from harness import Java, Regtest

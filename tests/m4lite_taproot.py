@@ -4,12 +4,30 @@ accepted by mainnet consensus. Two chained txs from the same burner seed:
   B: that P2TR utxo            -> receive[2] (P2WPKH)         [Schnorr spend]
 Tx B is the new coverage: taproot key-path signing on real funds.
 Broadcast is a separate manual step (prints both signed hexes)."""
-import sys, subprocess, tempfile, time, shutil, struct, base64, hashlib
-sys.path.insert(0, "corky"); sys.path.insert(0, "shim")
-from bip39_shim import mnemonic_to_xprv
+import base64
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+sys.path.insert(0, "corky")
 import signer
 
-MN = open("/private/tmp/claude-502/-Users-ai-sandbox/34ce17fa-ff17-409e-9d56-ec137a14fc59/scratchpad/burner_seed.txt").read().strip()
+# The burner key, as an xprv. A-22 left this branch with no BIP39, so the
+# key arrives in the form Core itself understands. Pass the file holding it
+# as argv[1], or set CORKY_BURNER_XPRV. It was a mnemonic in the original
+# 2026-08-19 run; the recorded result (tx 19d1180b, block 963255) stands.
+def burner_xprv():
+    import os
+    if len(sys.argv) > 1:
+        return open(sys.argv[1]).read().strip()
+    key = os.environ.get("CORKY_BURNER_XPRV", "").strip()
+    if not key:
+        sys.exit("give the burner xprv: a file as argv[1], or "
+                 "CORKY_BURNER_XPRV in the environment")
+    return key
+
 # funding UTXO = receive[1] P2WPKH, 9800 sats
 FUND_TXID = "19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41"
 FUND_VOUT = 0; FUND_AMT = 9800
@@ -35,7 +53,7 @@ def txid_of(rawhex):
     return None
 
 def main():
-    xprv = mnemonic_to_xprv(MN, mainnet=True)
+    xprv = burner_xprv()
     dd = tempfile.mkdtemp(prefix="m4tr-")
     daemon = subprocess.Popen(
         ["bitcoind", f"-datadir={dd}", "-networkactive=0", "-listen=0",

@@ -354,7 +354,7 @@ def attack_sighash(rpc):
     if not sig.endswith("01"):
         fail(f"attack5: signature sighash byte is 0x{sig[-2:]}, not 0x01")
         return
-    ok(f"attack5 sighash byte: signature ends 0x01 (SIGHASH_ALL)")
+    ok("attack5 sighash byte: signature ends 0x01 (SIGHASH_ALL)")
 
 
 # ======================================================================

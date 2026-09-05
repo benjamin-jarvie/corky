@@ -1,0 +1,30 @@
+# Rules chosen to find defects and waste, not to argue about style.
+#   F     pyflakes: undefined names (F821 caught a real rename bug on
+#         2026-09-05), unused imports and variables
+#   E, W  the errors pycodestyle still counts as errors
+#   B     bugbear: mutable defaults, unused loop variables, and friends
+#   ARG   a parameter nobody reads is code that does not earn its keep
+#   SIM   a branch that could be simpler
+#   C901  a function past the complexity line gets a second look
+#   PLE   pylint's error tier only
+line-length = 88
+target-version = "py311"
+
+[lint]
+select = ["F", "E", "W", "B", "ARG", "SIM", "C901", "PLE"]
+# Long lines in prose-heavy docstrings are not a defect.
+ignore = ["E501"]
+
+[lint.mccabe]
+max-complexity = 12
+
+[lint.per-file-ignores]
+# Tests fake device objects and accept the real signatures they stand in
+# for, so an unused parameter there is the contract, not waste (ARG).
+# They are written compactly on purpose, one assertion per line with its
+# print beside it (E701, E702), they put sys.path before their imports
+# because they run as scripts (E402), and a test's main() is one long
+# walk through a session by design (C901). None of that is a defect.
+"tests/**" = ["ARG", "E701", "E702", "E402", "C901", "SIM105", "SIM115", "E731"]
+"tools/**" = ["ARG", "E402"]
+"m0/**" = ["E402", "C901"]

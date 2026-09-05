@@ -56,7 +56,13 @@ def read_psbt(path: Path) -> str:
 
 def wait_stable(path: Path, checks=3, interval=0.2) -> bool:
     """True once the file size stops changing (guards against reading a
-    file mid-copy from the coordinator — the stick is a shared medium)."""
+    file mid-copy from the coordinator, because the stick is shared).
+
+    A file that stays at zero bytes is stable, and read_psbt refuses it by
+    size with a message that names it. Requiring size > 0 here instead made
+    an empty file invisible: the device waited on "insert the stick…" for
+    ever with the file already in front of it (found 2026-09-05).
+    """
     import time
     last = -1
     stable = 0
@@ -65,7 +71,7 @@ def wait_stable(path: Path, checks=3, interval=0.2) -> bool:
             size = path.stat().st_size
         except OSError:
             return False
-        if size == last and size > 0:
+        if size == last:
             stable += 1
             if stable >= checks:
                 return True
@@ -78,7 +84,27 @@ def wait_stable(path: Path, checks=3, interval=0.2) -> bool:
 
 def write_signed(source: Path, signed_psbt_b64: str) -> Path:
     """Write the signed PSBT next to the source, binary format (Sparrow
-    and Core both load it). Returns the path written."""
+    and Core both load it). Returns the path written.
+
+    The bytes are forced to the medium before this returns. The user's next
+    act after the result screen is to pull the stick, and a signature still
+    sitting in the page cache is a signature that never left the device.
+    """
+    import os
     out = source.with_name(source.name[: -len(".psbt")] + SIGNED_SUFFIX)
-    out.write_bytes(base64.b64decode(signed_psbt_b64))
+    raw = base64.b64decode(signed_psbt_b64)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, raw)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    # And the directory entry itself, so the file is findable after a pull.
+    dfd = os.open(out.parent, os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    except OSError:
+        pass            # not every filesystem allows this; the data is down
+    finally:
+        os.close(dfd)
     return out

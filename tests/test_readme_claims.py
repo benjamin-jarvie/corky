@@ -41,9 +41,15 @@ README = (ROOT / "README.md").read_text()
 # A-22: Layer 1 is empty on main. tests/test_integrity.py is the guard
 # that keeps it empty; this file only has to stop claiming otherwise.
 LAYER1 = []
+# signer.py moved from layer 3 to layer 2 on 2026-09-05, after the two-axis
+# review pointed out that it takes an xprv (open_session_xprv,
+# build_descriptors, master_xprv) and a passphrase (backup_encrypted,
+# restore_encrypted) as parameters. CONTEXT.md: "Layer 2 sees secrets and
+# carries them as strings. Layer 3 is opaque to secrets." It always carried
+# the xprv; the README said otherwise for longer than it should have.
 LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
-          "corky/hal.py"]
-LAYER3 = ["corky/signer.py", "corky/filechannel.py", "corky/qrchannel.py"]
+          "corky/hal.py", "corky/signer.py"]
+LAYER3 = ["corky/filechannel.py", "corky/qrchannel.py"]
 
 def claimed(pattern, label):
     m = re.search(pattern, README)
@@ -113,15 +119,14 @@ if c is not None:
         bad(f"vendored: README {c}, actual {vend}")
 
 # Every file the README links must exist
-broken = [l for l in set(re.findall(r"\]\((?!http)([^)#]+)\)", README))
-          if not (ROOT / l).exists()]
-for l in broken:
-    bad(f"README links a missing path: {l}")
+broken = [link for link in set(re.findall(r"\]\((?!http)([^)#]+)\)", README))
+          if not (ROOT / link).exists()]
+for link in broken:
+    bad(f"README links a missing path: {link}")
 if not broken:
     ok("every relative README link resolves")
 
 # Prose figures the README asserts about the test campaign.
-import subprocess
 # Count the session markers themselves. The old rule matched only
 # `print("ok   X:` with a single-letter label, so it silently ignored
 # sessions named D3, H3/H4, R3 or T2 and undercounted by a third.

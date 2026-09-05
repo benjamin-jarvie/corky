@@ -37,7 +37,7 @@ def main():
             # 1. derivation agreement with Core, both branches
             derived = {}
             for branch, purpose in ((0, "RECEIVE"), (1, "CHANGE")):
-                mine = [l.split("\t")[1] for l in
+                mine = [line.split("\t")[1] for line in
                         java("SparrowGen", "addresses", "REGTEST", script_type,
                              xpub, fp, path, 12, purpose)]
                 core = list(net.rpc.call("deriveaddresses",
@@ -49,7 +49,7 @@ def main():
                          "" if mine == core else f"{mine[:1]} vs {core[:1]}")
 
             # 2. fund two batches so no case reuses another's UTXOs
-            def batch(spec):
+            def batch(spec, derived=derived):
                 out = {}
                 for purpose, index in spec:
                     txid, vout, raw = net.fund(derived[purpose][index])
@@ -66,9 +66,14 @@ def main():
             print(f"     funded {len(first) + len(second)} outputs")
 
             d1, d2 = net.new_address(), net.new_address()
-            Rx = lambda *ix: [first[("RECEIVE", i)] for i in ix]
-            Cx = lambda *ix: [first[("CHANGE", i)] for i in ix]
-            S = lambda purpose, i: second[(purpose, i)]
+            def Rx(*ix, first=first):
+                return [first[("RECEIVE", i)] for i in ix]
+
+            def Cx(*ix, first=first):
+                return [first[("CHANGE", i)] for i in ix]
+
+            def S(purpose, i, second=second):
+                return second[(purpose, i)]
 
             cases = [
                 ("1 receive input, payment + change",   Rx(0),        [f"p={d1},500000,false"]),

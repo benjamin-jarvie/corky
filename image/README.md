@@ -10,6 +10,18 @@ Dev-image build, two steps, both scripted:
    cable. The Zero 2 W has no Ethernet port: set WiFi in Imager's
    settings before flashing, as m0/FLASH.md says.
 
+What the device ends up carrying, and why each package is there, is one
+table in the top-level README under "What runs on the signer". Developer
+tools come from `requirements-dev.txt` and never go on the board.
+
+The USB PSBT channel mounts itself: `99-corky-usb.rules` starts
+`corky-usb@.service` when a stick is plugged in, which mounts its first
+partition at `/mnt/usb`, and stops it when the stick is pulled. Only vfat
+and exfat, and `noexec,nosuid,nodev`, because auto-detecting the filesystem
+would hand an untrusted stick its pick of the kernel's filesystem drivers.
+The boot card is the other file medium: `/boot/firmware` is FAT32 and any
+computer reads it after power-off.
+
 The result is the **dev image**: Corky at `/opt/corky`, verified Core
 binary, ramdisk datadir at `/run/corky`, SPI enabled, `corky.service`
 installed but not enabled, SSH on. The **release image** (no network

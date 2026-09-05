@@ -5,7 +5,7 @@ Run ON THE PI (works on a dev machine too, with reduced measurements):
 
 What it does, with the exact production memory flags from m0/bitcoin.conf:
   1. Starts bitcoind on regtest in a temp datadir.
-  2. Opens a Corky session (shim -> importdescriptors), timed.
+  2. Opens a Corky session (importdescriptors), timed.
   3. A miner wallet funds Corky with N separate UTXOs.
   4. Corky builds and signs a PSBT spending ALL N inputs (the stress case:
      PSBT size and signing cost scale with input count).
@@ -28,7 +28,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 import signer  # noqa: E402
 
-MNEMONIC = "abandon " * 11 + "about"
+# A-22 removed the BIP39 shim. This is the key that mnemonic
+# produced on a test network, so the gate measures the same wallet
+# it always did.
+XPRV = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvp"
+        "AjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 FLAGS = ["-regtest", "-dbcache=4", "-maxmempool=5", "-rpcthreads=1",
          "-networkactive=0", "-listen=0", "-server=1",
          "-fallbackfee=0.0001", "-debuglogfile=0"]
@@ -174,8 +178,8 @@ def main():
         report["bitcoind start (s)"] = round(time.time() - t0, 1)
 
         t = time.time()
-        signer.open_session(rpc, MNEMONIC)
-        report["session open: shim + importdescriptors (s)"] = round(time.time() - t, 1)
+        signer.open_session_xprv(rpc, XPRV)
+        report["session open: importdescriptors (s)"] = round(time.time() - t, 1)
 
         # Miner funds Corky with n UTXOs, batched to keep this quick.
         rpc.call("createwallet", "miner")

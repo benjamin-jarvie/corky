@@ -7,7 +7,7 @@ RequiresMountsFor=/run/corky
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --datadir=/run/corky --stick-dir=/mnt/usb
+ExecStart=/usr/bin/python3 /opt/corky/corky/main.py --datadir=/run/corky --stick-dir=/mnt/usb --card-dir=/boot/firmware
 Restart=on-failure
 RestartSec=2
 User=root

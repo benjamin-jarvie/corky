@@ -1,0 +1,6 @@
+# Developer tools. NONE of this goes on the signer: see README "What runs on
+# the signer" and image/PINS, which list every package the device gets.
+# Pinned to the versions the repo was checked with on 2026-09-05.
+ruff==0.16.6
+vulture==2.16
+mypy==2.3.1

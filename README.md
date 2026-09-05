@@ -212,11 +212,14 @@ That is the mitigation, not a cure, for a small project's maintenance risk.
 
 ## v1 scope (frozen)
 
-Single-sig BIP84 (native segwit) and BIP86 (taproot). BIP39 with optional
-passphrase. Key entry in two forms: a raw **xprv** or a **Core-native
-private descriptor**, each arriving as a static QR or typed on the grid,
-and neither transformed by anything of ours at
-all: pure Core from the first byte. (Descriptor mode is the answer to
+Single-sig BIP84 (native segwit) and BIP86 (taproot). **Up to five keys at
+once**, one Core wallet each, named on screen by fingerprint; a transaction
+is matched to its key by the fingerprints Core reads off its inputs. Key
+entry in four forms: a raw **xprv** or a **Core-native private
+descriptor**, each arriving as a static QR or typed on the grid, and
+**restore from a Core wallet backup** on a stick or the boot card. None of
+them is transformed by anything of ours at all: pure Core from the first
+byte. (Descriptor mode is the answer to
 Maxwell's BIP39 critique: the backup carries its own derivation path, script
 type and checksum. Its trade-off: it is a printed/engraved QR, not stampable
 steel words, and has no passphrase layer — the QR is the wallet.) PSBT in/out via **three channels**: animated QR, which carries fountain parts past the pure cycle so a frame the scanner cannot read never strands a transfer;
@@ -246,11 +249,28 @@ and reads from anywhere in the frame. Corky does not refuse large frames, so
 holding the camera closer works too, but it says so on screen when it sees
 them. Numbers and method: `tests/m1/legibility_rig.py`.
 
-Out of scope for v1: multisig, message signing, address explorer, and dice
-entropy. Corky signs for seeds that already live on metal, and writes no
-randomness of its own; the one generation path it offers (v1.1, opt-in)
-asks Bitcoin Core for the entropy and gives you a codex32 string to write
-down. See PLAN A-19 for the tradeoff, stated plainly.
+**Export and backup.** Export public key writes what a coordinator needs:
+a plain-text QR of Core's own output descriptor, the same string in
+four-character groups for typing, and the first three receive addresses in
+full for comparison. Sparrow, BlueWallet, Green and Bull Bitcoin all read
+that descriptor as written; Bitcoin Core has no QR reader, so it gets a
+watch-only wallet file its own GUI restores. Receiving addresses browses
+further, ten at a time, receive branch only. Backup key offers two: the
+master xprv on paper, and a file that Core's own `encryptwallet` and
+`backupwallet` produce, which another computer running Core restores with
+your passphrase.
+
+**Nothing persists.** A discard, a close, a crash-restart and a power-off
+each leave no byte of a key anywhere on the device; `tests/test_no_persistence.py`
+searches the whole datadir for the raw key bytes to prove it. The one
+exception is the file backup, which is a key on a medium **because you
+asked for it**, encrypted by Core with a passphrase you typed (PLAN A-23).
+
+Out of scope for v1: multisig, message signing, and dice entropy. Corky
+signs for keys that already live on metal, and writes no randomness of its
+own; the one generation path it offers asks Bitcoin Core for the entropy
+and gives you Core's own master xprv to write down. See PLAN A-19 for the
+tradeoff, stated plainly.
 
 
 ## The code, in layers: Core, and a body that never touches your key
@@ -280,26 +300,31 @@ words. The `lab` branch carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1065 lines.**
-The device's body: menus, screens, buttons. It routes and displays key
-material during entry and backup but performs no arithmetic on it.
-[`corky/main.py`](corky/main.py) (572) ·
-[`corky/screens.py`](corky/screens.py) (423) ·
+**Layer 2 — sees secrets, computes nothing with them. 1909 lines.**
+The device's body, and the wire to Core: menus, screens, buttons, and the
+calls that hand Core what you supplied. It routes and displays key material
+during entry and backup, and performs no arithmetic on any of it.
+[`corky/main.py`](corky/main.py) (971) ·
+[`corky/screens.py`](corky/screens.py) (556) ·
+[`corky/signer.py`](corky/signer.py) (312) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (57).
 
-**Layer 3 — never touches secrets at all. 394 lines.**
-[`corky/signer.py`](corky/signer.py) (165) drives Core over RPC;
-[`corky/filechannel.py`](corky/filechannel.py) (45) and
-[`corky/qrchannel.py`](corky/qrchannel.py) (184) move PSBTs as opaque
-bytes — Core is the only parser, by law
-([PLAN.md A-11](PLAN.md)).
+`signer.py` sat in layer 3 until 2026-09-05, when a review pointed out that
+it takes an xprv and a passphrase as parameters and always had. It carries
+them to Core and computes nothing with them, which is layer 2 by this
+README's own definition.
 
-**Total functional code: 1,459 lines** (2,462 with blanks/comments).
+**Layer 3 — never touches secrets at all. 248 lines.**
+[`corky/filechannel.py`](corky/filechannel.py) (59) and
+[`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
+bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
+
+**Total functional code: 2,157 lines** (3,637 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 2,572 lines — none of it ships on the device.**
+**Test code: 3,689 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,
@@ -334,6 +359,44 @@ attribution. Theirs to audit upstream; only the integration points are
 ours. The home icons are a six-glyph subset of Font Awesome Free Solid
 ([`hw/vendor/fonts/`](hw/vendor/fonts/), CC BY 4.0 / SIL OFL, attributed
 in that directory's NOTICE); no other glyphs ship.
+
+## What runs on the signer
+
+Everything the device carries, and why. A package goes on the signer only
+if a shipped module imports it or the board needs it to drive the panel or
+the camera. `tests/test_integrity.py` holds the same list as an allowlist,
+so a new import fails the suite until this section, `image/PINS` and
+`image/provision.sh` are all changed on purpose. Nothing under "Dev
+machine only" is ever installed on the device.
+
+| On the signer | Source | Why it is there |
+|---|---|---|
+| Raspberry Pi OS Lite, 64-bit | image pinned in `image/PINS` | the OS; its hash is recorded on first flash |
+| Bitcoin Core 31.1 | official binary, sha256 in `image/PINS`, 11 GPG signatures checked out of band | the wallet, all of it |
+| Python 3 | the OS's own | runs Corky |
+| Pillow | apt `python3-pil` | every screen is a PIL image |
+| qrcode 7.4.2 | pip, pinned in `PIP_PINS` | renders the outbound QR frames |
+| pyzbar 0.1.9 + libzbar0 | pip, pinned; apt `libzbar0` | decodes what the camera sees |
+| picamera2 | apt `python3-picamera2` | the camera |
+| spidev | apt `python3-spidev` | the SPI bus the panel hangs off |
+| RPi.GPIO | apt `python3-rpi.gpio` | the buttons |
+| ST7789 driver | vendored, `hw/vendor/st7789.py` (MIT, SeedSigner) | the panel |
+| UR codec | vendored, `hw/vendor/ur2` (BSD-2, Foundation) | animated-QR fountain frames |
+| one icon font subset | vendored, `hw/vendor/fonts` (CC BY 4.0) | seven home and settings glyphs |
+| Corky | `/opt/corky`, three systemd units, one udev rule | this repository |
+
+**Two things on the dev image that should not survive to the release
+image.** `python3-pip` is there only to install the two pinned packages;
+Debian ships both as `python3-qrcode` and `python3-pyzbar`, and if their
+versions match the pins, apt can supply them and pip leaves the device.
+`python3-zbar` is named on `provision.sh`'s first apt line and probably
+does not exist as a package; the fallback line omits it. Both are checked
+on the board at the next provision (ticket 23).
+
+**Dev machine only, never on the signer:** `ruff`, `vulture` and `mypy`
+from `requirements-dev.txt`; Sparrow 2.5.4 and a JDK under
+`tests/sparrow/.build`; the Rosetta virtualenv under `tests/m1/.build`;
+and a `bitcoind` for the regtest suites.
 
 ## How this is tested
 
@@ -374,20 +437,26 @@ apart.
 
 ## Status
 
-Planning complete (see [PLAN.md](PLAN.md), two devil's-advocate rounds).
-Everything provable without hardware is proven on a dev machine against
-Core v31.1: the shim (all official vectors), the full signing pipeline on
-regtest (QR-channel equivalent and both file formats of the file channel),
-address derivation against the published BIP84/BIP86 vectors, and the screen
-set rendered at both display resolutions. Next gate: **M0** — measured proof
-that wallet-only bitcoind fits and signs on the Zero 2 W's 512MB
-(`m0/FLASH.md`).
+**M0 passed on the Pi Zero 2 W** (PLAN A-21): 226MB of headroom signing 250
+ordinary inputs, once a GPU split the device never uses was cut to 32MB.
+**M1 passed except the optics**, then the camera itself was wired and reads
+a real Sparrow frame on the board.
+
+Everything else provable without hardware is proven on a dev machine
+against Core v31.1: the full signing pipeline on regtest, address
+derivation against the published BIP84/BIP86 vectors, the screen set at
+both display resolutions, and the whole interop claim run against
+**Sparrow's own library** out of its signed release, because a QR tested
+with your own decoder is not an interop test (TESTING.md rule 8).
+
+Next: the end-to-end run on the board with a Sparrow laptop, then the
+phone wallets. `docs/wayfinder/e2e-before-testers/` charts it.
 
 ## Build gates
 
 | Gate | Deliverable | Pass condition |
 |---|---|---|
-| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | signs stress PSBT; peak RSS recorded; ≥100MB headroom |
+| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | **PASSED 2026-09-03**: 226MB headroom at 250 ordinary inputs (PLAN A-21) |
 | M1 | QR round trip vs Sparrow watch-only, testnet | fee/outputs match Sparrow; signed PSBT broadcasts |
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |

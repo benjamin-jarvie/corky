@@ -185,9 +185,9 @@ try:
     import signer as _signer
     real_sign = _signer.sign_psbt
     _fake = base64.b64encode(b"psbt\xff" + bytes(range(256))).decode()
-    _signer.sign_psbt = lambda rpc, psbt: {"complete": True, "psbt": _fake}
+    _signer.sign_psbt = lambda rpc, psbt, **kw: {"complete": True, "psbt": _fake}
     try:
-        outcome = boom.state_sign(_fake, None)
+        outcome = boom.state_sign(_fake, None, "corky")
     finally:
         _signer.sign_psbt = real_sign
 except qrchannel.QrChannelError:

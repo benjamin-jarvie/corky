@@ -59,7 +59,7 @@ class DeviceDisplay:
         self._lcd = ST7789(width=width, height=height)
         self.width, self.height = width, height
 
-    def show(self, image, sensitive=False):
+    def show(self, image, sensitive=False):  # noqa: ARG002 - the display contract; only the dev display blanks
         self._lcd.show_image(image, 0, 0)
 
 

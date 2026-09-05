@@ -40,6 +40,26 @@ check("absent: the whole shim/ directory", not (ROOT / "shim").exists())
 
 # 2. No shipped module imports a cryptographic primitive. Corky does no
 #    hashing, no HMAC, no key stretching: Core does all of it.
+# Everything a shipped module may import from outside the standard library.
+# This is the signer's whole third-party surface, and the README section
+# "What runs on the signer" lists the same names with their purpose. A new
+# import fails here until both are updated on purpose (Ben, 2026-09-05: no
+# unneeded dependencies left on the pinned signer).
+import sys as _sys
+_STDLIB = set(_sys.stdlib_module_names)
+_OURS = {"signer", "screens", "filechannel", "qrchannel", "hal", "splash", "main"}
+
+ALLOWED_THIRD_PARTY = {
+    "PIL",         # Pillow: every screen is a PIL image     (apt python3-pil)
+    "qrcode",      # renders the outbound QR frames           (pip, pinned)
+    "pyzbar",      # decodes what the camera sees, via libzbar0 (pip, pinned)
+    "picamera2",   # the camera                              (apt)
+    "spidev",      # the SPI bus the panel hangs off         (apt)
+    "RPi",         # RPi.GPIO: the buttons                   (apt)
+    "ur2",         # vendored: UR fountain codec, hw/vendor/ur2
+    "st7789",      # vendored: the panel driver, hw/vendor/st7789.py
+}
+
 BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "ecdsa", "coincurve",
                   "bip32", "cryptography", "nacl"}
 # Every shipped .py, wherever it lives. The first version of this scanned
@@ -58,6 +78,10 @@ for src in SHIPPED:
             found |= {a.name.split(".")[0] for a in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module:
             found.add(node.module.split(".")[0])
+    third_party = {n for n in found if n not in _STDLIB and n not in _OURS}
+    stray = third_party - ALLOWED_THIRD_PARTY
+    check(f"{src.name}: imports only the listed third-party packages",
+          not stray, f"unlisted: {sorted(stray)}" if stray else "")
     bad = found & BANNED_IMPORTS
     check(f"no crypto import: {src.relative_to(ROOT)}", not bad,
           f"found {sorted(bad)}" if bad else "")

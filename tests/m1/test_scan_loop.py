@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qrchannel  # noqa: E402
-from replay_source import (ReplaySource, ImageReplaySource,  # noqa: E402
+from replay_source import (ReplaySource, ImageReplaySource, scan_psbt,  # noqa: E402
                            OVERSIZE, out_of_order, with_foreign, with_garbage)
 
 R = []
@@ -58,29 +58,29 @@ def main():
     print(f"PSBT A -> {len(fa)} frames, PSBT B -> {len(fb)} frames\n")
 
     # --- the happy path ---
-    got = qrchannel.scan_psbt(ReplaySource(fa))
+    got = scan_psbt(ReplaySource(fa))
     check("clean scan completes", got == PSBT_A, f"{len(fa)} frames")
 
-    got = qrchannel.scan_psbt(ReplaySource(fa, repeat_each=5))
+    got = scan_psbt(ReplaySource(fa, repeat_each=5))
     check("duplicate frames are harmless", got == PSBT_A, "5x each, as zbar emits")
 
-    got = qrchannel.scan_psbt(ReplaySource(out_of_order(fa)))
+    got = scan_psbt(ReplaySource(out_of_order(fa)))
     check("out of order completes", got == PSBT_A)
 
     # --- ticket 05: bad frames are skipped, never fatal ---
     log, on_event = events()
-    got = qrchannel.scan_psbt(ReplaySource(with_garbage(fa)), on_event=on_event)
+    got = scan_psbt(ReplaySource(with_garbage(fa)), on_event=on_event)
     skips = [d for k, d in log if k == "skipped"]
     check("garbage QR is skipped, not fatal", got == PSBT_A and len(skips) == 1,
           f"1 skip: {skips[0][:34] if skips else 'none'}")
 
     log, on_event = events()
-    got = qrchannel.scan_psbt(ReplaySource(with_foreign(fa)), on_event=on_event)
+    got = scan_psbt(ReplaySource(with_foreign(fa)), on_event=on_event)
     check("foreign UR type is skipped, not fatal",
           got == PSBT_A and sum(1 for k, _ in log if k == "skipped") == 1)
 
     log, on_event = events()
-    got = qrchannel.scan_psbt(ReplaySource([OVERSIZE] + fa), on_event=on_event)
+    got = scan_psbt(ReplaySource([OVERSIZE] + fa), on_event=on_event)
     check("oversize frame is skipped, not fatal",
           got == PSBT_A and sum(1 for k, _ in log if k == "skipped") == 1,
           "MAX_FRAME_CHARS refuses, scan survives")
@@ -88,23 +88,23 @@ def main():
     # --- ticket 05: no-progress timeout ---
     clock = Clock()
     try:
-        qrchannel.scan_psbt(Ticking(fa[:2], clock, tick=1.0, idle_after=40),
+        scan_psbt(Ticking(fa[:2], clock, tick=1.0, idle_after=40),
                             clock=clock, timeout=20.0)
         check("stalled scan times out", False, "no exception raised")
     except qrchannel.ScanTimeout as e:
         check("stalled scan times out", True, str(e)[:44])
 
     clock = Clock()
-    got = qrchannel.scan_psbt(Ticking(fa, clock, tick=15.0), clock=clock, timeout=20.0)
+    got = scan_psbt(Ticking(fa, clock, tick=15.0), clock=clock, timeout=20.0)
     check("slow but healthy scan is not killed", got == PSBT_A,
           f"15s between frames, {len(fa)} frames, well past 20s total")
 
     # --- ticket 05: a second PSBT restarts the scan ---
     log, on_event = events()
-    got = qrchannel.scan_psbt(ReplaySource(fa[:3] + fb), on_event=on_event)
+    got = scan_psbt(ReplaySource(fa[:3] + fb), on_event=on_event)
     restarts = [d for k, d in log if k == "restart"]
     check("second PSBT restarts the scan", got == PSBT_B and len(restarts) == 1,
-          f"switched after 3 frames of A, got B")
+          "switched after 3 frames of A, got B")
 
     # --- ticket 05: abort ---
     box = {"n": 0}
@@ -112,7 +112,7 @@ def main():
         box["n"] += 1
         return box["n"] > 3
     try:
-        qrchannel.scan_psbt(ReplaySource(fa), abort=pressed)
+        scan_psbt(ReplaySource(fa), abort=pressed)
         check("button aborts the scan", False, "no exception raised")
     except qrchannel.ScanAborted:
         check("button aborts the scan", True, "raised after 3 frames")
@@ -120,13 +120,13 @@ def main():
     # --- ticket 03: the density advisory ---
     log, on_event = events()
     long_frames = ["ur:crypto-psbt/1-2/" + "a" * 500] + fa
-    qrchannel.scan_psbt(ReplaySource(long_frames), on_event=on_event)
+    scan_psbt(ReplaySource(long_frames), on_event=on_event)
     advis = [d for k, d in log if k == "advisory"]
     check("long frames raise the density advisory", len(advis) == 1,
           f"once, at {advis[0]} chars" if advis else "never fired")
 
     log, on_event = events()
-    qrchannel.scan_psbt(ReplaySource(fa), on_event=on_event)
+    scan_psbt(ReplaySource(fa), on_event=on_event)
     check("short frames raise no advisory",
           not any(k == "advisory" for k, _ in log),
           f"Corky's own frames are {max(len(f) for f in fa)} chars")
@@ -139,7 +139,7 @@ def main():
         qrchannel.fit_to_panel(img, 320, 240).save(q)
         paths.append(q)
     src = ImageReplaySource(paths)
-    got = qrchannel.scan_psbt(src)
+    got = scan_psbt(src)
     check("real PNGs through pyzbar complete", got == PSBT_A,
           f"{len(paths)} images, {src.undecodable} undecodable")
 
@@ -162,7 +162,7 @@ def main():
             for _ in range(self.blanks):
                 yield None                            # ticks with nothing seen
 
-    got = qrchannel.scan_psbt(FileImages(paths))
+    got = scan_psbt(FileImages(paths))
     check("ImageQrSource drives a real scan", got == PSBT_A,
           f"{len(paths)} PNGs plus blank views and idle ticks")
 
@@ -175,12 +175,15 @@ def main():
           list(CameraQrSource().scan_psbt_frames()) == [],
           "yields nothing until capture lands, as before M1")
 
-    try:
-        CameraQrSource().scan_key()
-        check("CameraQrSource.scan_key still points at the stick", False, "no raise")
-    except RuntimeError as exc:
-        check("CameraQrSource.scan_key still points at the stick",
-              "USB stick" in str(exc), str(exc))
+    # Ticket 09 replaced scan_key with the strings() contract: a source
+    # yields decoded text and the caller owns every stopping rule. On a
+    # machine with no camera the stream is empty and the reason is parked
+    # on the source, which is what lets the caller say why at once (I-8).
+    src = CameraQrSource()
+    check("CameraQrSource.strings() yields nothing without a camera",
+          list(src.strings()) == [], "empty stream")
+    check("and says why, for the caller to show",
+          bool(src.unavailable), str(src.unavailable)[:60])
 
     # --- ticket 09: an unreadable frame must not strand a transfer ---------
     fountain = qrchannel.psbt_to_frames(PSBT_A)
@@ -193,7 +196,7 @@ def main():
     for drop in range(1, seq_len + 1):
         survivors = [f for f in fountain
                      if not f.split("/")[1].startswith(f"{drop}-")]
-        if qrchannel.scan_psbt(ReplaySource(survivors)) == PSBT_A:
+        if scan_psbt(ReplaySource(survivors)) == PSBT_A:
             recovered += 1
     check("any single unreadable frame is recoverable",
           recovered == seq_len,

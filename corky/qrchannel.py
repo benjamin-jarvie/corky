@@ -215,7 +215,7 @@ class PsbtScan:
     def __init__(self, clock=None, timeout=NO_PROGRESS_TIMEOUT, on_event=None):
         self._clock = clock or time.monotonic
         self._timeout = timeout
-        self._say = on_event or (lambda kind, detail: None)
+        self._say = on_event or (lambda _kind, _detail: None)
         self._assembler = FrameAssembler()
         self._identity = None
         self._advised = False
@@ -275,23 +275,6 @@ class PsbtScan:
         return f"{reason} at {self.progress:.0%}{tail}"
 
 
-def scan_psbt(source, clock=None, timeout=NO_PROGRESS_TIMEOUT,
-              on_event=None, abort=None):
-    """Drive a QR source to completion. Returns the base64 PSBT.
-
-    A convenience loop over PsbtScan, for callers with nothing else to do.
-    `state_load` drives PsbtScan directly instead, because it must also watch
-    the USB stick and the buttons.
-    """
-    scan = PsbtScan(clock=clock, timeout=timeout, on_event=on_event)
-    for frame in source.scan_psbt_frames():
-        if abort is not None and abort():
-            raise ScanAborted("scan cancelled")
-        if scan.feed(frame):
-            return scan.psbt_b64
-    raise ScanTimeout(scan._why("frames ran out"))
-
-
 def frames_to_images(frames, box_size=4, border=2, panel=None):
     """Render UR frames as PIL images for the display (lazy import so this
     module stays importable without Pillow/qrcode, e.g. in logic tests).
@@ -328,6 +311,32 @@ def frames_to_images(frames, box_size=4, border=2, panel=None):
                           back_color="white").convert("RGB") for qr in codes]
 
 
+def text_to_image(text, panel=None, box_size=8, border=2):
+    """One static QR of arbitrary text, for the public key export.
+
+    NOT `frames_to_images`: that uppercases its input to reach QR
+    alphanumeric mode, which is right for UR frames (they are lowercase by
+    definition) and destroys a descriptor, where `xpub` and the checksum
+    are case-sensitive. This encodes the bytes as given.
+
+    `panel` lowers box_size so the code fits the screen, as the frame
+    renderer does.
+    """
+    import qrcode
+    qr = qrcode.QRCode(box_size=box_size, border=border,
+                       error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr.add_data(text)
+    qr.make(fit=True)
+    if panel:
+        span = qr.modules_count + 2 * border
+        box_size = max(1, min(box_size, min(panel) // span))
+        qr = qrcode.QRCode(box_size=box_size, border=border,
+                           error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(text)
+        qr.make(fit=True)
+    return qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+
 def fit_to_panel(img, w, h):
     """Scale a square QR to the panel by an INTEGER factor and letterbox it.
 
@@ -346,7 +355,7 @@ def fit_to_panel(img, w, h):
             f"a {img.width}x{img.height} QR does not fit a {w}x{h} panel")
     factor = min(w // img.width, h // img.height)
     scaled = img.resize((img.width * factor, img.height * factor),
-                        Image.NEAREST)
+                        Image.Resampling.NEAREST)
     panel = Image.new("RGB", (w, h), "white")
     panel.paste(scaled, ((w - scaled.width) // 2, (h - scaled.height) // 2))
     return panel

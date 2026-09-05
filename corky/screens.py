@@ -10,15 +10,18 @@ Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
 """
 
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import signer  # noqa: E402 - needs the path above
+
 INK = "#1A1714"
 CREAM = "#F5EFE0"
 RED = "#9E2B25"
-GREEN = "#2E4A3B"
 GREY = "#B8B2A6"
 OCHRE = "#C8912F"
 
@@ -39,7 +42,8 @@ def _iconfont(size):
 
 # Font Awesome Free Solid codepoints (see hw/vendor/fonts/NOTICE.md).
 ICON = {"load": "\uf019", "key": "\uf084", "tools": "\uf7d9",
-        "gear": "\uf013", "power": "\uf011", "about": "\uf05a"}
+        "gear": "\uf013", "power": "\uf011", "about": "\uf05a",
+        "qrcode": "\uf029"}
 
 
 def _icon(d, cx, cy, size, name, col):
@@ -54,7 +58,7 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     address, an error string, a wrapped warning) goes through here, so a
     longer string degrades in size instead of vanishing off the edge. If the
     floor size still overflows, the tail is cut to a visible ellipsis; backup
-    key material never reaches that path (share_pages sizes each page, and
+    key material never reaches that path (text_pages sizes each page, and
     test_screen_fit pins every string inside the canvas).
     """
     while True:
@@ -110,7 +114,7 @@ def _fit_block(d, lines, xs, size, fill, anchor, maxw):
             break
         size -= 1
     font = _font(size)
-    for text, xy in zip(lines, xs):
+    for text, xy in zip(lines, xs, strict=True):
         if _width(d, text, size, anchor, xy) > maxw:
             _fit(d, xy, text, size, fill, anchor, maxw)   # floor reached
         else:
@@ -134,7 +138,7 @@ def _actions(d, w, h, labels, selected=1):
               for t in labels]
     x = (w - sum(widths) - gap * (len(labels) - 1)) // 2
     cy = int(h * 0.93)
-    for i, (t, bw) in enumerate(zip(labels, widths)):
+    for i, (t, bw) in enumerate(zip(labels, widths, strict=True)):
         active = i == selected
         d.rounded_rectangle([x, cy - box_h // 2, x + bw, cy + box_h // 2],
                             radius=4, outline=OCHRE if active else GREY)
@@ -169,15 +173,17 @@ def _frame(w, h, title=None):
     return img, d
 
 
-# order: load key, key generation, tools, settings (Ben, 2026-09-01)
-HOME_TILES = [("load key", "load"), ("key generation", "key"),
+# SeedSigner's four: Scan, Seeds, Tools, Settings (Ben, 2026-09-04, map
+# e2e-before-testers ticket 02). Key generation lives under Tools, where
+# SeedSigner keeps "New seed".
+HOME_TILES = [("scan", "qrcode"), ("key", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
 
 def home(w, h, selected=0, xfp=None):
     """SeedSigner-style 2x2 home: four tiles, each a Font Awesome icon and a
-    title. Load key first, key generation second, tools, settings (which
-    holds power off). No CORKY text. It is a KEY, not a wallet.
+    title. Scan, Key, Tools, Settings (which holds power off). No CORKY
+    text. It is a KEY, not a wallet.
 
     `xfp` is the loaded wallet's master fingerprint, shown at the top in
     ochre (Ben, 2026-09-04). It is the one fact that tells you WHICH key is
@@ -245,7 +251,7 @@ def about(w, h):
 SETTINGS_OPTIONS = ["Power off", "About"]
 
 
-def review(w, h, outputs, fee_btc, input_count, input_total_btc=None, warn=True,
+def review(w, h, outputs, fee_btc, input_total_btc=None,
            page=0, unseen_pages=False, actions_sel=1):
     """The screen that matters. outputs: [(address, amount_btc), ...]
     Two outputs per page (Ben, 2026-09-01): less going on per frame."""
@@ -323,11 +329,14 @@ def busy(w, h, message="working…", phase=0):
 # PLAN A-22: the pure signer accepts only what Core itself understands. The
 # codex32 and seed-word modes moved to the lab branch with the code that
 # transformed them; nothing here converts anything.
-SEED_MENU_OPTIONS = [
-    ("Scan descriptor QR", "pure Core"),
-    ("Scan xprv QR", "pure Core"),
+# Load a key (ticket 07). One scan entry: what the camera read decides
+# whether it is an xprv or a descriptor (ticket 05). Restore from file
+# joins the list with ticket 13.
+LOAD_KEY_OPTIONS = [
+    ("Scan a key", "xprv or descriptor"),
     ("Type descriptor", "pure Core"),
     ("Type xprv", "pure Core"),
+    ("Restore from file", "stick or card"),
 ]
 
 
@@ -405,26 +414,247 @@ def scanning(w, h, frame, message, progress=0.0):
     return img
 
 
-def seed_menu(w, h, selected=0):
-    """Choose the key input mode. A-22: only forms Core understands."""
-    img, d = _frame(w, h, "LOAD  KEY")
-    options = SEED_MENU_OPTIONS
-    # Rows are pitched to fit the panel rather than a fixed 0.115.
+def _menu(w, h, title, rows, selected):
+    """One list screen for every menu: rows of (label, note, tone), tone
+    "normal" or "red". Rows are pitched to fit the panel, so six rows and
+    three rows both land inside 240 pixels."""
+    img, d = _frame(w, h, title)
     top, bottom = 0.155, 0.94
-    pitch = (bottom - top) / max(len(options) - 1, 1)
-    for i, (label, note) in enumerate(options):
+    pitch = (bottom - top) / max(len(rows) - 1, 1)
+    pitch = min(pitch, 0.2)
+    for i, (label, note, tone) in enumerate(rows):
         y = int(h * (top + i * pitch))
-        if i == selected:
+        active = i == selected
+        if active:
             d.rounded_rectangle([int(w * 0.04), y - int(h * pitch * 0.46),
                                  int(w * 0.96), y + int(h * pitch * 0.46)],
                                 radius=4, outline=OCHRE)
-        _fit(d, (int(w * 0.08), y), label, int(h * 0.052),
-             CREAM if i == selected else GREY, "lm", int(w * 0.60))
+        colour = CREAM if active else GREY
+        if tone == "red":
+            colour = RED if not active else "#D9433B"
+        _fit(d, (int(w * 0.08), y), label, int(h * 0.052), colour, "lm",
+             int(w * 0.58))
         _fit(d, (int(w * 0.92), y), note, int(h * 0.04),
-             OCHRE if i == selected else GREY, "rm", int(w * 0.28))
+             OCHRE if active else GREY, "rm", int(w * 0.30))
     return img
 
 
+def load_key_menu(w, h, selected=0):
+    """Load a key. A-22: only forms Core understands."""
+    return _menu(w, h, "LOAD  A  KEY",
+                 [(label, note, "normal") for label, note in LOAD_KEY_OPTIONS],
+                 selected)
+
+
+# SeedSigner's per-seed menu, in Core's words (ticket 07).
+KEY_MENU_OPTIONS = [
+    ("Sign transaction", "QR or stick"),
+    ("Export public key", "for a coordinator"),
+    ("Receiving addresses", "Core derives"),
+    ("Backup key", "paper or file"),
+    ("Discard key", "Core forgets it"),
+]
+
+TOOLS_OPTIONS = [("New key", "Core's own RNG")]
+
+
+def keys_menu(w, h, keys, selected=0):
+    """The loaded keys by fingerprint, then Load a key. SeedSigner's Seeds
+    screen. `keys` are (wallet name, fingerprint) pairs in slot order."""
+    rows = [((xfp or "????????").upper(), "loaded", "normal") for _n, xfp in keys]
+    rows.append(("Load a key", "", "normal"))
+    return _menu(w, h, "KEYS", rows, selected)
+
+
+def key_menu(w, h, xfp, selected=0):
+    """What one key can do. The title names it by fingerprint."""
+    rows = [(label, note, "red" if label == "Discard key" else "normal")
+            for label, note in KEY_MENU_OPTIONS]
+    return _menu(w, h, f"KEY  {(xfp or '').upper()}", rows, selected)
+
+
+def tools_menu(w, h, selected=0):
+    return _menu(w, h, "TOOLS",
+                 [(label, note, "normal") for label, note in TOOLS_OPTIONS],
+                 selected)
+
+
+# Where a public key can go (ticket 06). All five are listed; the three
+# phones are marked untested until ticket 22 proves them on a real handset.
+# The third field is the script types that target can read: Bull Bitcoin's
+# parser throws on 86h, so it is offered native segwit only (ticket 21).
+EXPORT_TARGETS = [
+    ("Sparrow", "descriptor QR", ("wpkh", "tr")),
+    ("Bitcoin Core", "wallet file", ()),
+    ("BlueWallet", "untested", ("wpkh", "tr")),
+    ("Green", "untested", ("wpkh", "tr")),
+    ("Bull Bitcoin", "untested, segwit", ("wpkh",)),
+]
+
+SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot"}
+
+
+def export_menu(w, h, selected=0):
+    """Which coordinator is going to read this, as SeedSigner asks."""
+    return _menu(w, h, "EXPORT  TO",
+                 [(name, note, "normal") for name, note, _k in EXPORT_TARGETS],
+                 selected)
+
+
+def export_script_menu(w, h, kinds, selected=0):
+    return _menu(w, h, "SCRIPT  TYPE",
+                 [(SCRIPT_LABELS[k], "BIP84" if k == "wpkh" else "BIP86",
+                   "normal") for k in kinds],
+                 selected)
+
+
+def _groups(text):
+    return [text[i:i + 4] for i in range(0, len(text), 4)]
+
+
+ADDR_GROUPS_PER_ROW = 4
+
+
+def address_page(w, h, index, address, kind):
+    """One receive address, in full, for comparison against a coordinator.
+
+    Ben's rule: never truncate, group in fours, colour the first and last
+    group differently from the middle. The middle keeps the same size and
+    weight, and the footer asks for every group, because matching only the
+    ends is the shortcut address-replacement malware relies on.
+    """
+    img, d = _frame(w, h, f"RECEIVE  {index}  ·  {SCRIPT_LABELS[kind].upper()}")
+    groups = _groups(address)
+    rows = [groups[i:i + ADDR_GROUPS_PER_ROW]
+            for i in range(0, len(groups), ADDR_GROUPS_PER_ROW)]
+    size = int(h * 0.075)
+    top = 0.26 if len(rows) <= 3 else 0.22
+    step = 0.13 if len(rows) <= 3 else 0.105
+    # One row is measured whole, then drawn group by group at that spacing,
+    # so the first and last group carry their colour IN PLACE. Colouring
+    # them anywhere else would not help the eye track the comparison.
+    widest = max(len(" ".join(r)) for r in rows)
+    while size > int(h * 0.03):
+        if d.textlength("W" * widest, font=_font(size)) <= int(w * 0.92):
+            break
+        size -= 1
+    font = _font(size)
+    space = d.textlength(" ", font=font)
+    for r, row in enumerate(rows):
+        y = int(h * (top + r * step))
+        line_w = d.textlength(" ".join(row), font=font)
+        x = (w - line_w) / 2
+        for g, group in enumerate(row):
+            first = r == 0 and g == 0
+            last = r == len(rows) - 1 and g == len(row) - 1
+            d.text((x, y), group, font=font,
+                   fill=OCHRE if (first or last) else CREAM, anchor="lm")
+            x += d.textlength(group, font=font) + space
+    _fit(d, (w // 2, int(h * 0.90)), "compare every group", int(h * 0.045),
+         GREY, "mm", int(w * 0.6))
+    return img
+
+
+def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
+    """One screenful of the descriptor, in four-character groups, for
+    someone typing it into a coordinator by hand. Public: no blanking."""
+    head = title if pages == 1 else f"{title}  ·  PART  {page + 1}/{pages}"
+    img, d = _frame(w, h, head)
+    groups = _groups(chunk)
+    for row_start in range(0, len(groups), GROUPS_PER_ROW):
+        y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
+        _fit(d, (w // 2, y),
+             "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
+             int(h * 0.075), CREAM, "mm", int(w * 0.92))
+    _actions(d, w, h, ["BACK", "NEXT" if page + 1 < pages else "DONE"], 1)
+    return img
+
+
+# Read from signer so the screen and the writer cannot drift apart.
+BACKUP_PREFIX = signer.BACKUP_PREFIX
+BACKUP_SUFFIX = signer.BACKUP_SUFFIX
+
+BACKUP_OPTIONS = [
+    ("On paper", "the master xprv"),
+    ("To a file", "encrypted by Core"),
+]
+
+
+def backup_menu(w, h, selected=0):
+    """Two backups, and they are not alternatives. The paper one is the key
+    itself; the file one is what another computer running Core restores."""
+    return _menu(w, h, "BACKUP  KEY",
+                 [(label, note, "normal") for label, note in BACKUP_OPTIONS],
+                 selected)
+
+
+def fingerprint_of_backup(filename):
+    """The key a backup file holds, by the fingerprint in its name. One
+    place, so the screen and signer.BACKUP_SUFFIX cannot drift apart."""
+    stem = filename[:-len(BACKUP_SUFFIX)] if filename.endswith(BACKUP_SUFFIX) \
+        else filename
+    return stem[len(BACKUP_PREFIX):] if stem.startswith(BACKUP_PREFIX) else stem
+
+
+def restore_menu(w, h, names, selected=0):
+    """The backup files found on the medium, by the fingerprint in the
+    name, so the user picks a key rather than a filename."""
+    rows = [(fingerprint_of_backup(n).upper(), "Core backup", "normal")
+            for n in names]
+    return _menu(w, h, "RESTORE  A  KEY", rows or [("none found", "", "normal")],
+                 selected)
+
+
+# CONTEXT.md calls these channels: how bytes cross the air gap. QR is the
+# third; only the two file channels can carry a file.
+FILE_CHANNELS = {"stick": ("USB stick", "/mnt/usb"),
+                 "card": ("boot card", "/boot/firmware")}
+
+
+def choose_channel(w, h, channels, selected=0):
+    """Which file channel a file goes to. Asked every time (ticket 04)."""
+    return _menu(w, h, "WRITE  IT  WHERE",
+                 [(FILE_CHANNELS[c][0], FILE_CHANNELS[c][1], "normal")
+                  for c in channels], selected)
+
+
+def confirm_discard(w, h, xfp, selected=0):
+    """Discard asks first. BACK is pre-selected; DISCARD must be chosen."""
+    img, d = _frame(w, h, "DISCARD  KEY")
+    _fit(d, (w // 2, int(h * 0.32)), (xfp or "").upper(), int(h * 0.11),
+         CREAM, "mm", int(w * 0.9))
+    _fit_block(d, ["Core forgets this key now.",
+                   "Your backup is the only copy."],
+               [(w // 2, int(h * 0.55)), (w // 2, int(h * 0.65))],
+               int(h * 0.05), GREY, "mm", int(w * 0.92))
+    _actions(d, w, h, ["BACK", "DISCARD"], selected)
+    return img
+
+
+
+
+def choose_key(w, h, keys, owners, selected=0):
+    """Which key signs (map e2e-before-testers, ticket 03). Shown only when
+    more than one key is loaded. `keys` are (wallet name, fingerprint)
+    pairs in slot order; `owners` are the fingerprints Core found on the
+    transaction's inputs. The owner is pre-selected by the caller; a key
+    that owns nothing is greyed, because Core will not complete it."""
+    img, d = _frame(w, h, "WHICH  KEY")
+    top, bottom = 0.18, 0.80
+    pitch = (bottom - top) / max(len(keys) - 1, 1)
+    for i, (_name, xfp) in enumerate(keys):
+        y = int(h * (top + i * pitch))
+        owns = xfp in owners
+        if i == selected:
+            d.rounded_rectangle([int(w * 0.04), y - int(h * min(pitch, 0.2) * 0.46),
+                                 int(w * 0.96), y + int(h * min(pitch, 0.2) * 0.46)],
+                                radius=4, outline=OCHRE)
+        _fit(d, (int(w * 0.08), y), (xfp or "????????").upper(), int(h * 0.065),
+             CREAM if owns else GREY, "lm", int(w * 0.50))
+        _fit(d, (int(w * 0.92), y), "owns the inputs" if owns else "not this one",
+             int(h * 0.04), OCHRE if owns else GREY, "rm", int(w * 0.38))
+    _actions(d, w, h, ["BACK", "SIGN WITH IT"], 1)
+    return img
 
 
 GENERATE_LINES = [
@@ -514,10 +744,6 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
 
 # ---- text and grid entry --------------------------------------------------
 
-import sys as _sys
-from pathlib import Path as _Path
-_sys.path.insert(0, str(_Path(__file__).resolve().parent))
-
 
 # One alphabet per job. A single 64-cell set could not serve all three:
 # base58 drops B, I, O and 0 (so an xprv needs its own), descriptors need
@@ -531,8 +757,16 @@ DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
 
 # A-22: the passphrase charset went with the BIP39 passphrase prompt. An
 # xprv and a descriptor are the only things typed on this device now.
+# A passphrase is the user's own string, so the grid must be able to type
+# anything a person would pick. 84 characters, three pages of 32.
+PASSPHRASE_CHARSET = ("abcdefghijklmnopqrstuvwxyz"
+                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                      "0123456789"
+                      " .,-_!?@#$%&*+=/:;()")
+
 CHARSETS = {"xprv": BASE58,
-            "descriptor": DESCRIPTOR_CHARSET}
+            "descriptor": DESCRIPTOR_CHARSET,
+            "passphrase": PASSPHRASE_CHARSET}
 
 
 def charset_pages(name):
@@ -594,7 +828,7 @@ ROWS_PER_PAGE = 4           # rows between the title and the footer note
 CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 
 
-def share_pages(text):
+def text_pages(text):
     """Split a backup string into screenfuls, in order, losing nothing.
 
     Core's
@@ -610,21 +844,6 @@ def share_pages(text):
 
 
 
-
-
-_LOGO_MASK = None
-
-
-def _logo_mask(target_h):
-    """The brand mark as a binary stencil scaled to target_h pixels tall.
-    Nearest-neighbour keeps it strictly two-tone at any panel size."""
-    global _LOGO_MASK
-    if _LOGO_MASK is None:
-        _LOGO_MASK = Image.open(
-            Path(__file__).resolve().parent.parent
-            / "art" / "bb-logo-mask.png").convert("L")
-    target_w = round(target_h * _LOGO_MASK.width / _LOGO_MASK.height)
-    return _LOGO_MASK.resize((target_w, target_h), Image.NEAREST)
 
 
 def splash(w, h):
@@ -651,16 +870,17 @@ def splash(w, h):
 # Core's master xprv, which is the pure signer's only backup.
 
 
-def backup_page(w, h,
-                          share="MS12NAMEA320ZYXRPP5QSRJG",
-                          index=1, total=3, page=0, pages=1):
-    """One screenful of a backup string. `share` is already one page's worth
-    (see share_pages); `page`/`pages` drive the position line."""
-    title = f"SHARE  {index} / {total}  ·  WRITE  IT  DOWN"
+def backup_page(w, h, chunk, label, page=0, pages=1):
+    """One screenful of the key, on its way to paper.
+
+    `chunk` is already one page's worth (see text_pages). `label` names the
+    key, "KEY  D2B7E45C", so the paper says which key it opens.
+    """
+    title = f"{label}  ·  WRITE  IT  DOWN"
     if pages > 1:
-        title = f"SHARE  {index}/{total}  ·  PART  {page + 1}/{pages}"
+        title = f"{label}  ·  PART  {page + 1}/{pages}"
     img, d = _frame(w, h, title)
-    groups = [share[i:i + 4] for i in range(0, len(share), 4)]
+    groups = _groups(chunk)
     for row_start in range(0, len(groups), GROUPS_PER_ROW):
         y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
         _fit(d, (w // 2, y),
@@ -669,7 +889,7 @@ def backup_page(w, h,
     if pages > 1:
         _fit(d, (w // 2, int(h * 0.79)),
              f"characters {page * CHARS_PER_PAGE + 1}"
-             f"-{page * CHARS_PER_PAGE + len(share)} of this share",
+             f"-{page * CHARS_PER_PAGE + len(chunk)} of the key",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     else:
         _fit(d, (w // 2, int(h * 0.79)),

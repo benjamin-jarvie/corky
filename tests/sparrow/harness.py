@@ -17,12 +17,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "corky"))
-sys.path.insert(0, str(REPO / "shim"))
 import signer  # noqa: E402
 
 BUILD = Path(__file__).resolve().parent / ".build"
 JAVA_BIN = BUILD / "jdk-25.0.4.1+1/Contents/Home/bin/java"
-MNEMONIC = "abandon " * 11 + "about"
+# A-22 left this repo with no BIP39. This is exactly the key the old
+# "abandon x11 about" mnemonic produced on regtest, so every address, fee
+# and signature this suite asserts is unchanged by the cut.
+XPRV = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpA"
+        "joLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 MINER = "miner"
 
 SCRIPT_TYPES = (("P2WPKH", "wpkh("), ("P2TR", "tr("))
@@ -92,8 +95,8 @@ class Regtest:
                 break
             except RuntimeError:
                 time.sleep(0.5)
-        signer.open_session(self.rpc, MNEMONIC)
-        self.pubs = signer.public_descriptors(self.rpc)
+        self.wallet = signer.open_session_xprv(self.rpc, XPRV)
+        self.pubs = signer.public_descriptors(self.rpc, wallet=self.wallet)
         self.rpc.call("createwallet", MINER)
         self.miner_addr = self.rpc.call("getnewaddress", wallet=MINER)
         self.mine(self.mine_blocks)
@@ -118,7 +121,6 @@ class Regtest:
 
     def account(self, script_type, branch=0):
         """(fingerprint, path, xpub) for one of Corky's exported descriptors."""
-        prefix = dict(SCRIPT_TYPES)[script_type]
         desc = self.descriptor(script_type, branch)
         m = re.search(r"\[([0-9a-f]{8})((?:/\d+h)+)\](\w+)", desc)
         return m.group(1), "m" + m.group(2), m.group(3)

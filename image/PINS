@@ -14,4 +14,7 @@ CORE_URL="https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-aarch64-lin
 CORE_SHA256="dcf1873f2208ba4f962f3398d47e154c39c0084be8f4553e05c940d0ace3d004"
 CORKY_COMMIT="HEAD"                             # pin to a tag for release images
 PIP_PINS="qrcode==7.4.2 pyzbar==0.1.9"          # everything pip installs, pinned
+# The complete list of what the signer carries, with reasons, is the README
+# section "What runs on the signer"; tests/test_integrity.py enforces it as
+# an import allowlist. Add nothing here without adding it there.
 DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"     # sha256 of the provisioned SD image (A-16)

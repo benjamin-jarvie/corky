@@ -51,7 +51,7 @@ def tilt(img, degrees):
     dst = [(d, 0), (w, 0), (w - d, h), (0, h)]
     # solve the 8-coefficient perspective transform
     A, B = [], []
-    for (x, y), (u, v) in zip(dst, src):
+    for (x, y), (u, v) in zip(dst, src, strict=True):
         A += [[x, y, 1, 0, 0, 0, -u * x, -u * y], [0, 0, 0, x, y, 1, -v * x, -v * y]]
         B += [u, v]
     coeffs = np.linalg.solve(np.array(A, dtype=float), np.array(B, dtype=float))
@@ -123,7 +123,7 @@ def main():
     print("=" * 78)
     for density in ("NORMAL", "LOW"):
         worst = []
-        for (st, d, fill), cells in verdicts.items():
+        for (_st, d, fill), cells in verdicts.items():
             if d != density or fill < 0.60:
                 continue
             worst += [c for c in cells]

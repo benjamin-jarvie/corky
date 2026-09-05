@@ -1,17 +1,35 @@
 """M4-lite: the real mainnet signing path against a funded burner UTXO.
 
 Coordinator role (this file, online-derived data): builds the funded PSBT
-with witness_utxo. Signer role (offline bitcoind + the shim): imports the
+with witness_utxo. Signer role (offline bitcoind): imports the
 burner descriptors and signs. Sweeps burner receive[0] -> receive[1] so the
 sats stay under the harness for further test rounds. Broadcast is a separate
 manual step (prints the signed hex).
 """
-import sys, subprocess, tempfile, time, shutil, struct, base64
-sys.path.insert(0, "corky"); sys.path.insert(0, "shim")
-from bip39_shim import mnemonic_to_xprv
+import base64
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+sys.path.insert(0, "corky")
 import signer
 
-MN = open("/private/tmp/claude-502/-Users-ai-sandbox/34ce17fa-ff17-409e-9d56-ec137a14fc59/scratchpad/burner_seed.txt").read().strip()
+# The burner key, as an xprv. A-22 left this branch with no BIP39, so the
+# key arrives in the form Core itself understands. Pass the file holding it
+# as argv[1], or set CORKY_BURNER_XPRV. It was a mnemonic in the original
+# 2026-08-19 run; the recorded result (tx 19d1180b, block 963255) stands.
+def burner_xprv():
+    import os
+    if len(sys.argv) > 1:
+        return open(sys.argv[1]).read().strip()
+    key = os.environ.get("CORKY_BURNER_XPRV", "").strip()
+    if not key:
+        sys.exit("give the burner xprv: a file as argv[1], or "
+                 "CORKY_BURNER_XPRV in the environment")
+    return key
+
 TXID = "de2b23a1ced68cc80c8b1bf04c609e7fe096987db3b62d15ea3fc0d12fa650d8"
 VOUT = 0; AMT = 10000; FEE = 200; SEND = AMT - FEE
 
@@ -19,7 +37,7 @@ def cvarint(n):
     return bytes([n]) if n < 0xfd else b"\xfd" + struct.pack("<H", n)
 
 def main():
-    xprv = mnemonic_to_xprv(MN, mainnet=True)
+    xprv = burner_xprv()
     dd = tempfile.mkdtemp(prefix="m4-")
     daemon = subprocess.Popen(
         ["bitcoind", f"-datadir={dd}", "-networkactive=0", "-listen=0",

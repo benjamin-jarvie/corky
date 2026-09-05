@@ -32,7 +32,7 @@ def main():
             except RuntimeError: time.sleep(0.5)
 
         # 1. Core generates; the returned key is Core's depth-0 master.
-        xprv = signer.generate_wallet(rpc)
+        _, xprv = signer.generate_wallet(rpc)
         if xprv.startswith("tprv8ZgxMBicQKsP") or xprv.startswith("xprv9s21ZrQH143K"):
             ok("master xprv is depth-0 (Core's own master key)")
         else:

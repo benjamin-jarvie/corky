@@ -7,6 +7,10 @@ tickets, worked one at a time with `/mp-wayfinder`.
   Complete: nine tickets, and it found the defect where zxing could not read
   one frame in 125 of Corky's output (PLAN A-20, ISSUES I-9).
 - **zero2w-m0-fixes** — what the M0 gate needed before it could run.
+- **e2e-before-testers** — the pure signer end to end before outsiders
+  test it: SeedSigner-shaped menus, several keys, export public key, Core's
+  own encrypted file backup, the board run with Sparrow, and the three phone
+  wallets. Charted 2026-09-04; seven decisions closed in charting.
 
 ## Moved out
 

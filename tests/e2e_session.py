@@ -111,7 +111,7 @@ def main():
         xprv_file.write_text(XPRV)
         frames_file = work / "psbt_frames.txt"
         frames_file.write_text("\n".join(qrchannel.psbt_to_frames(fund_psbt(1.0))))
-        r = run_device(datadir, "a" + "da" + "a" + "a" + "ra", work / "framesB",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "a" + "ra", work / "framesB",
                        qr_key=xprv_file, qr_psbt=frames_file)
         assert r.returncode == 0, f"B failed:\n{r.stderr}"
         shots = sorted((work / "framesB").glob("frame-*.png"))
@@ -136,7 +136,7 @@ def main():
         key_file2.write_text(XPRV)
         # 5 outputs = 3 pages at two per page: forced 'a' walks pages 2
         # and 3, the fourth 'a' signs
-        r = run_device(datadir, "a" + "da" + "a" + "aaa" + "ra", work / "framesD",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "aaa" + "ra", work / "framesD",
                        stick=stickd, qr_key=key_file2)
         assert r.returncode == 0, f"D failed:\n{r.stderr}"
         assert (stickd / "many-signed.psbt").exists(), "D: signed file missing"
@@ -152,7 +152,7 @@ def main():
         key_sq3 = work / "key3.txt"; key_sq3.write_text(XPRV)
         # load key, scan xprv, review: ONE 'a' (force-advance only) then 'c'
         # rejects; 'a' dismisses the rejection, then settings -> power off.
-        r = run_device(datadir, "a" + "da" + "a" + "ac" + "a" + "draa",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "ac" + "a" + "draa",
                        work / "framesD2",
                        stick=stickd2, qr_key=key_sq3)
         assert not (stickd2 / "many-signed.psbt").exists(), \
@@ -177,7 +177,7 @@ def main():
         (stickd3 / "many.psbt").write_bytes(base64.b64decode(many3))
         key_sq4 = work / "key4.txt"; key_sq4.write_text(XPRV)
         # review: d,u,d,d touch pages 1,0,1,2 -> all three seen via nav
-        r = run_device(datadir, "a" + "da" + "a" + "dudda" + "ra", work / "framesD3",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "dudda" + "ra", work / "framesD3",
                        stick=stickd3, qr_key=key_sq4)
         assert r.returncode == 0, f"D3 failed:\n{r.stderr}"
         assert (stickd3 / "many-signed.psbt").exists(), "D3: nav-sign missing"
@@ -188,7 +188,7 @@ def main():
                          0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickd4 / "many.psbt").write_bytes(base64.b64decode(many4))
         key_sq5 = work / "key5.txt"; key_sq5.write_text(XPRV)
-        r = run_device(datadir, "a" + "da" + "a" + "uua" + "ra", work / "framesD4",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "uua" + "ra", work / "framesD4",
                        stick=stickd4, qr_key=key_sq5)
         assert r.returncode == 0, f"D4 failed:\n{r.stderr}"
         assert (stickd4 / "many-signed.psbt").exists(), "D4: wraparound broken"
@@ -203,7 +203,7 @@ def main():
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickr / "p3.psbt").write_bytes(base64.b64decode(p3))
         key_sqr = work / "sq_r3.txt"; key_sqr.write_text(XPRV)
-        r = run_device(datadir, "a" + "da" + "a" + "a" + "ra", work / "framesR3",
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "a" + "ra", work / "framesR3",
                        stick=stickr, qr_key=key_sqr)
         assert r.returncode == 0, f"R3 failed:\n{r.stderr}"
         assert (stickr / "p3-signed.psbt").exists(), "R3: 2-out page count wrong"
@@ -224,7 +224,7 @@ def main():
         # (hw/HARDWARE.md), so the two need different tails.
         for abkey, tail in (("b", "c" + "draa"), ("c", "draa")):
             r = run_device(datadir,
-                           "a" + "da" + "a" + "a" + abkey + tail,
+                           "ra" + "a" + "a" + "a" + "a" + abkey + tail,
                            work / ("framesI" + abkey),
                            stick=emptystick, qr_key=key_sqi, qr_psbt=part)
             assert r.returncode == 0, f"I({abkey}) failed:\n{r.stderr}"
@@ -251,7 +251,11 @@ def main():
                            0, {"fee_rate": 10}, True, wallet="foreignJ")["psbt"]
         (stickj / "alien.psbt").write_bytes(base64.b64decode(foreign))
         key_sqj = work / "key_j.txt"; key_sqj.write_text(XPRV)
-        r = run_device(datadir, "a" + "da" + "a" + "a" + "a" + "draa", work / "framesJ",
+        foreign_xfp = signer.master_fingerprint(rpc, wallet="foreignJ")
+        # Ticket 03: the transaction names its key, so the refusal comes
+        # BEFORE review and names the fingerprint it wants. One key
+        # dismisses it, then settings, power off.
+        r = run_device(datadir, "ra" + "a" + "a" + "a" + "a" + "draa", work / "framesJ",
                        stick=stickj, qr_key=key_sqj)
         assert r.returncode == 0, f"J failed:\n{r.stderr}"
         assert not (stickj / "alien-signed.psbt").exists(), "J: signed foreign PSBT!"
@@ -259,7 +263,7 @@ def main():
         # rendered byte-identically somewhere in the run.
         assert _has(work / "framesJ", _render(
             scr.result, ok=False,
-            detail="wallet cannot complete this PSBT")), \
+            detail=f"no loaded key owns it; wants {foreign_xfp}")), \
             "J: the exact cannot-complete screen was never shown"
         print("ok   J: foreign PSBT -> cannot-complete refusal, golden-verified")
 
@@ -283,14 +287,13 @@ def main():
             # Each page has two renders now: the plain one, and the one
             # that says why SIGN was refused (unseen pages remain).
             pages = [[_render(scr.review, outs, info["fee_btc"],
-                              info["input_count"],
                               input_total_btc=info["input_total_btc"],
                               page=i, unseen_pages=refused)
                       for refused in (False, True)]
                      for i in range(4)]
             key_sq = work / ("key_n" + tag + ".txt")
             key_sq.write_text(XPRV)
-            r = run_device(datadir, "a" + "da" + "a" + navkeys + "ra",
+            r = run_device(datadir, "ra" + "a" + "a" + "a" + navkeys + "ra",
                            work / ("framesN" + tag), stick=st, qr_key=key_sq)
             assert r.returncode == 0, f"N{tag} failed:\n{r.stderr}"
             assert (st / "n-signed.psbt").exists(), f"N{tag}: sign missing"
@@ -349,7 +352,7 @@ def main():
             out.append("p")                            # centre press = done
             return "".join(out)
 
-        stickt = word = None
+        stickt = None
         typed_xprv = XPRV
         assert not {c for c in typed_xprv
                     if c not in _scr.CHARSETS["xprv"]}, \
@@ -359,10 +362,10 @@ def main():
                       [{rpc.call("getnewaddress", wallet="watch"): 0.3}],
                       0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
         (stickt / "typed.psbt").write_bytes(base64.b64decode(pt))
-        # load key -> "Type xprv" is index 3 -> type it -> sign -> power off
+        # Key tile -> "Type xprv" is index 2 -> type it -> Sign transaction -> sign
         r = run_device(datadir,
-                       "a" + "ddda" + text_keys("xprv", typed_xprv)
-                       + "a" + "ra",   # sign, then POWER OFF
+                       "ra" + "dda" + text_keys("xprv", typed_xprv)
+                       + "a" + "a" + "ra",   # Sign transaction, sign, POWER OFF
                        work / "framesT", stick=stickt)
         assert r.returncode == 0, f"T failed:\n{r.stderr}"
         assert (stickt / "typed-signed.psbt").exists(), \
@@ -413,10 +416,10 @@ def main():
                        0, {"fee_rate": 10, "add_inputs": False}, True,
                        wallet="watch")["psbt"]
         (stickt2 / "desc.psbt").write_bytes(base64.b64decode(_p2))
-        # load key -> "Type descriptor" is index 2 -> type it -> sign
+        # Key tile -> "Type descriptor" is index 1 -> type it -> Sign transaction -> sign
         r = run_device(datadir,
-                       "a" + "dda" + text_keys("descriptor", _priv)
-                       + "a" + "ra",
+                       "ra" + "da" + text_keys("descriptor", _priv)
+                       + "a" + "a" + "ra",
                        work / "framesT2", stick=stickt2)
         assert r.returncode == 0, f"T2 failed:\n{r.stderr}"
         assert (stickt2 / "desc-signed.psbt").exists(), \
@@ -433,8 +436,8 @@ def main():
         fg = work / "framesG"
         xprv_pages = 3
         r = run_device(datadir,
-                       "ra" + "a" + "a" * xprv_pages + "a" + "b" + "draa",
-                       fg)   # home->key generation(TR), accept, pages, verify, abort load
+                       "da" + "a" + "a" + "a" * xprv_pages + "a" + "b" + "b" + "draa",
+                       fg)   # Tools, New key, accept, pages, verify, back, back, power off
         assert r.returncode == 0, f"G failed:\n{r.stderr}"
         assert _has(fg, _render(scr.generate_warning)), \
             "G: the tradeoff screen was never shown before generation"

@@ -41,7 +41,7 @@ def main():
             print(f"\n=== {script_type} ===")
 
             # a 6-input PSBT, big enough that Sparrow must fragment it
-            addrs = [l.split("\t")[1] for l in
+            addrs = [line.split("\t")[1] for line in
                      java("SparrowGen", "addresses", "REGTEST", script_type,
                           xpub, fp, path, 6, "RECEIVE")]
             utxos = [(i, *net.fund(a)) for i, a in enumerate(addrs)]

@@ -52,7 +52,17 @@ check("missing file not stable", filechannel.wait_stable(tmp / "nope.psbt"), Fal
 # An empty file is never "stable" (size > 0 is required), so it times out.
 empty = tmp / "empty.psbt"
 empty.write_bytes(b"")
-check("empty file not stable", filechannel.wait_stable(empty, checks=2, interval=0.01), False)
+# An empty file IS stable: a coordinator that has finished writing never
+# leaves zero bytes, and read_psbt is the one that refuses it, by size,
+# with a message naming the file. Requiring size > 0 here instead made an
+# empty file invisible to the device, which waited on "insert the stick…"
+# for ever with the file already in front of it (found 2026-09-05).
+check("empty file is stable", filechannel.wait_stable(empty, checks=2, interval=0.01), True)
+try:
+    filechannel.read_psbt(empty)
+    check("empty file refused by read_psbt", "no error", "FileChannelError")
+except filechannel.FileChannelError as exc:
+    check("empty file refused by name and size", "0 bytes" in str(exc) and empty.name in str(exc), True)
 
 # A file still being written must NOT be reported stable until writing
 # stops. Drive wait_stable with a scripted stat() so the timing is exact:

@@ -185,8 +185,20 @@ hardware sooner.
 `ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18
 as open. The standing milestone work (M0 to M3) genuinely does need the board.
 
-`tests/sparrow` and `tests/m1` are **not in `run_tests.sh`**. They need a
-one-time `setup.sh` that downloads Sparrow and a JDK, and `tests/m1` needs
-Rosetta on Apple Silicon. Run them by hand after a change to the QR channel.
-A reader who runs only `./run_tests.sh` gets no interop coverage at all, and
-nothing in the output says so.
+`tests/sparrow` runs from `run_tests.sh` whenever its one-time `setup.sh`
+has built it, and the run says so when it has not (since 2026-09-05).
+`tests/m1` still needs Rosetta on Apple Silicon and its own `setup.sh`;
+run `tests/m1/run test_scan_loop.py` by hand after a change to the QR
+channel, and remember that it pins the camera-source contract too: it is
+where a stale assertion about `scan_key` survived ticket 09 for a day.
+
+## Rule 10: a tool that does not ship is not a dependency of the signer
+
+`ruff`, `vulture` and `mypy` run first in `run_tests.sh` when they are
+installed from `requirements-dev.txt`, and the run says so when they are
+not. They are the cheapest checks in the repo: `F821` finds an undefined
+name in one second where the end-to-end suites took five minutes, and
+`vulture` found four pieces of dead shipped code the day it was tried. None
+of them goes on the device. The README section "What runs on the signer" is
+the whole list of what does, and `tests/test_integrity.py` enforces it as an
+import allowlist, so the two cannot drift apart without a red suite.

@@ -1,0 +1,15 @@
+[Unit]
+Description=Mount a USB stick at /mnt/usb for Corky's PSBT channel
+# Started and stopped by udev (see 99-corky-usb.rules) as sticks come and go.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# vfat and exfat only. Auto-detecting the filesystem would hand an
+# untrusted stick its pick of the kernel's filesystem drivers, which is a
+# large attack surface on a signer. noexec, nosuid and nodev because
+# nothing on a stick may ever be executable here, and umask=0077 because
+# a PSBT is nobody else's business. flush writes through, so a stick
+# pulled straight after the signed file appears still carries it.
+ExecStart=/bin/mount -t vfat,exfat -o rw,noatime,noexec,nosuid,nodev,flush,umask=0077 /dev/%i /mnt/usb
+ExecStop=/bin/umount -l /mnt/usb

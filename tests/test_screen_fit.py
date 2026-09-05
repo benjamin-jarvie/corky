@@ -53,17 +53,38 @@ OUTPUTS = [(ADDR, 0.03444556), ("bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
 CASES = {
     "splash": lambda w, h: screens.splash(w, h),
     "home": lambda w, h: screens.home(w, h, 1),
-    "review-1page": lambda w, h: screens.review(w, h, OUTPUTS[:2], 0.0000851, 3,
+    "review-1page": lambda w, h: screens.review(w, h, OUTPUTS[:2], 0.0000851,
                                                 input_total_btc=21.3),
-    "review-paged": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851, 9,
+    "review-paged": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851,
                                                 input_total_btc=21.3, page=1),
-    "review-refused": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851, 9,
+    "review-refused": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851,
                                                   input_total_btc=21.3,
                                                   unseen_pages=True),
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
-    "seed-menu": lambda w, h: screens.seed_menu(w, h, 3),
+    "load-key-menu": lambda w, h: screens.load_key_menu(w, h, 2),
+    "keys-menu": lambda w, h: screens.keys_menu(
+        w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
+               ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
+               ("corky-5", "ba4c8bd5")], 5),
+    "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 4),
+    "tools-menu": lambda w, h: screens.tools_menu(w, h, 0),
+    "export-menu": lambda w, h: screens.export_menu(w, h, 4),
+    "export-script-menu": lambda w, h: screens.export_script_menu(
+        w, h, ("wpkh", "tr"), 1),
+    "export-text": lambda w, h: screens.export_text(
+        w, h, "wpkh([73c5da0a/84h/1h/0h]tpubDDRDHYNXyuoRVQwotDQHr", 1, 3),
+    "address-taproot": lambda w, h: screens.address_page(w, h, 2, "bcrt1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "tr"),
+    "address-segwit": lambda w, h: screens.address_page(
+        w, h, 0, "bc1q635yhaml2afumm27jxsjmqayczf5nf0xmm9zh0", "wpkh"),
+    "choose-channel": lambda w, h: screens.choose_channel(
+        w, h, ["stick", "card"], 1),
+    "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
+    "choose-key": lambda w, h: screens.choose_key(
+        w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
+               ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
+               ("corky-5", "ba4c8bd5")], {"1df2e0b2"}, 2),
     "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
     "generate-warning": lambda w, h: screens.generate_warning(w, h),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,
@@ -115,19 +136,19 @@ else:
 # Neither fits one page, so the screen must paginate rather than overrun.
 for w, h in [(320, 240), (240, 240)]:
     for label, payload in (("xprv", XPRV),):
-        pages = screens.share_pages(payload)
+        pages = screens.text_pages(payload)
         if len(pages) < 2:
-            bad(f"{label}: share_pages did not split a {len(payload)}-char string")
+            bad(f"{label}: text_pages did not split a {len(payload)}-char string")
             continue
         if "".join(pages) != payload:
-            bad(f"{label}: share_pages loses or reorders characters")
+            bad(f"{label}: text_pages loses or reorders characters")
             continue
         for i, page in enumerate(pages):
-            _ctx.update(w=w, h=h, name=f"share-{label}-{i}", over=[])
-            screens.backup_page(w, h, page, 1, 1,
-                                          page=i, pages=len(pages))
+            _ctx.update(w=w, h=h, name=f"backup-{label}-{i}", over=[])
+            screens.backup_page(w, h, page, "KEY  D2B7E45C",
+                                page=i, pages=len(pages))
             for text, box in _ctx["over"]:
-                bad(f"{w}x{h} share {label} page {i}: {text[:32]!r} at {box}")
+                bad(f"{w}x{h} backup {label} page {i}: {text[:32]!r} at {box}")
         ok(f"{w}x{h} {label} paginates into {len(pages)} pages that fit")
 
 print(f"\n{len(fails)} failure(s)")

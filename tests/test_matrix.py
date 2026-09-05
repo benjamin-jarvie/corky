@@ -54,9 +54,7 @@ MINER = "miner"
 
 def open_mode(rpc, mode):
     """Open the Corky wallet through one seed-entry mode."""
-    if mode == "words":
-        signer.open_session_xprv(rpc, XPRV)
-    elif mode == "xprv":
+    if mode == "words" or mode == "xprv":
         signer.open_session_xprv(rpc, XPRV)
     elif mode == "desc":
         xprv = XPRV

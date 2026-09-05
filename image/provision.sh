@@ -70,8 +70,12 @@ echo "== 5/5 systemd units (installed, NOT enabled on the dev image)"
 install -m 644 "$BOOT/corky.service" /etc/systemd/system/corky.service
 install -m 644 "$BOOT/corky-bitcoind.service" /etc/systemd/system/corky-bitcoind.service
 install -m 644 "$BOOT/corky-splash.service" /etc/systemd/system/corky-splash.service
-# The USB PSBT channel's mount point. Mounting the stick here is the
-# operator's step; until it is mounted the directory is simply empty.
+# The USB PSBT channel mounts itself (map e2e-before-testers, ticket 15).
+install -m 644 /opt/corky/image/corky-usb@.service /etc/systemd/system/corky-usb@.service
+install -m 644 /opt/corky/image/99-corky-usb.rules /etc/udev/rules.d/99-corky-usb.rules
+udevadm control --reload-rules || true
+# The USB PSBT channel's mount point. A stick that is plugged in mounts
+# itself here through the udev rule above; until one is, it is empty.
 mkdir -p /mnt/usb
 systemctl daemon-reload
 echo "   enable boot-to-corky with: sudo systemctl enable --now corky"

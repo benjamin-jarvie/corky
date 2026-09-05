@@ -1,0 +1,5 @@
+# Corky's USB PSBT channel: mount the first partition of a USB stick at
+# /mnt/usb, and unmount it when the stick is pulled. Partitions only, so a
+# whole-disk node never gets mounted twice.
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="corky-usb@%k.service"
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", RUN+="/bin/systemctl --no-block stop corky-usb@%k.service"

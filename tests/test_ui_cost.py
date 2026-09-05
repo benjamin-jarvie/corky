@@ -58,7 +58,7 @@ class ScriptedButtons:
 def named_screens(display):
     """Paint names instead of images, so a session's screen order is
     assertable without rendering."""
-    for name in ("home", "seed_menu", "result", "busy", "review",
+    for name in ("home", "load_key_menu", "result", "busy", "review",
                  "settings_menu"):
         setattr(screens, name,
                 (lambda n: lambda *a, **k: n)(name))
@@ -123,18 +123,18 @@ backup_calls = []
 real_backup_screen = screens.backup_page
 try:
     screens.backup_page = (
-        lambda _w, _h, page_text, _index, _total, page, pages:
+        lambda _w, _h, page_text, _label, page, pages:
         backup_calls.append((page_text, page, pages)) or "backup")
     buttons = ScriptedButtons("aac")
     session = corky_main.Session(RecordingDisplay(), buttons, FakeRpc())
-    completed = session._show_backup("x" * 97, 1, 1)
+    completed = session._show_backup("x" * 97, "KEY  D2B7E45C")
     abort_calls = list(backup_calls)
 
     backup_calls.clear()
     success_buttons = ScriptedButtons("aa")
     success_session = corky_main.Session(
         RecordingDisplay(), success_buttons, FakeRpc())
-    succeeded = success_session._show_backup("y" * 49, 1, 1)
+    succeeded = success_session._show_backup("y" * 49, "KEY  D2B7E45C")
     success_calls = list(backup_calls)
 finally:
     screens.backup_page = real_backup_screen
@@ -152,14 +152,15 @@ else:
 
 # --- D6: a failing seed mode must hold its message ------------------------
 _real = {n: getattr(screens, n) for n in
-         ("home", "seed_menu", "result", "busy", "review",
+         ("home", "load_key_menu", "result", "busy", "review",
           "settings_menu")}
 display = named_screens(RecordingDisplay())
-# A opens load key (top-left tile), one D then A -> "Scan xprv QR" (index 1
-# of the four A-22 load-key modes), which raises because scan_key is not
-# wired; ONE key dismisses the error, then D,R,A,A goes home -> settings ->
-# power off. If the error is not held, the dismissing A re-opens the menu.
-buttons = ScriptedButtons(["a"] + ["d"] * 1 + ["a", "a"] + ["a"] +
+# R,A opens the Key tile; with no key loaded that is Load a key. A picks
+# "Scan a key", A accepts the warning, and the scan raises because the key
+# scan is not wired (ticket 09); ONE key dismisses the error, then D,R,A,A
+# goes home -> settings -> power off. If the error is not held, the
+# dismissing A re-opens the menu.
+buttons = ScriptedButtons(["r", "a"] + ["a", "a"] + ["a"] +
                           ["d", "r", "a", "a"])
 session = corky_main.Session(display, buttons, FakeRpc())
 session.qr = corky_main.CameraQrSource()
@@ -182,14 +183,14 @@ if raised is not None:
 elif not (painted[0] == "home"
           and "result" in painted
           and painted[painted.index("result") + 1] == "home"
-          and painted.count("seed_menu") >= 1):
+          and painted.count("load_key_menu") >= 1):
     bad(f"unexpected screen order after a failing seed mode: {painted}")
 else:
     ok("a failing seed mode holds its error until a key is pressed")
 
 # --- D9: the sign button explains its refusal -----------------------------
-img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001, 1)
-img_loud = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001, 1,
+img_quiet = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001)
+img_loud = _real["review"](320, 240, [("bc1q", 1.0)], 0.0001,
                            unseen_pages=True)
 if img_quiet.tobytes() == img_loud.tobytes():
     bad("review() renders the same frame whether or not SIGN was refused")

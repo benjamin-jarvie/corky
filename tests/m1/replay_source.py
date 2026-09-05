@@ -16,6 +16,9 @@ import itertools
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
+import qrchannel  # noqa: E402
+
 
 class ReplaySource:
     """Yields a scripted list of decoded QR payloads.
@@ -173,3 +176,22 @@ def _selftest():
 
 if __name__ == "__main__":
     sys.exit(_selftest())
+
+
+def scan_psbt(source, clock=None, timeout=qrchannel.NO_PROGRESS_TIMEOUT,
+              on_event=None, abort=None):
+    """Drive a QR source to completion and return the base64 PSBT.
+
+    A test-side loop over PsbtScan. It lived in corky/qrchannel.py until
+    2026-09-05, when a dead-code pass found the device never calls it:
+    state_load drives PsbtScan itself, because it must also watch the
+    buttons and paint the viewfinder. Shipped code that exists only for a
+    test is weight the signer carries for nothing, so it moved here.
+    """
+    scan = qrchannel.PsbtScan(clock=clock, timeout=timeout, on_event=on_event)
+    for frame in source.scan_psbt_frames():
+        if abort is not None and abort():
+            raise qrchannel.ScanAborted("scan cancelled")
+        if scan.feed(frame):
+            return scan.psbt_b64
+    raise qrchannel.ScanTimeout(scan._why("frames ran out"))

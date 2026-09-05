@@ -351,6 +351,33 @@
   and the BIP39 word-entry flow all move to the lab. M4's "metal-backed seed"
   means an xprv on metal for `main`.
 
+- **A-23: the file backup is Core's own, and the SD-card rule is amended
+  (Ben, 2026-09-04).** Charted with the e2e-before-testers map
+  (`docs/wayfinder/e2e-before-testers/`), where each decision has a ticket.
+
+  **The file backup.** `encryptwallet` then `backupwallet`, Core's own
+  commands, give a passphrase-encrypted wallet file that another Core
+  restores with `restorewallet` and unlocks with `walletpassphrase`. Proven
+  2026-09-04 on two regtest nodes: no plaintext key in the file, spend
+  refused without the passphrase, spend allowed after. Corky's part is one
+  passphrase screen and two RPC calls. Ben's condition, met: it is what Core
+  does, so Corky's value proposition and line count do not move.
+
+  **The fixed decision "No keys on the SD card, ever" now reads:** Corky
+  never writes a key on its own. A backup the user asks for, encrypted by
+  Core with a passphrase the user typed, written to a medium the user names
+  (the USB stick or the boot card, asked every time), is allowed. The
+  README states it plainly.
+
+  **Also decided in the same session, recorded in the map's tickets:** home
+  becomes SeedSigner's Scan, Key, Tools, Settings, with generation under
+  Tools; Corky holds up to five keys at once, one Core wallet per key named
+  by fingerprint, measured at about 3MB each on the Zero 2 W; Scan detects
+  by content; export follows SeedSigner's wallet chooser with a plain
+  descriptor QR, no UR, and a watch-only wallet file for Bitcoin Core;
+  menus use Core's vocabulary (Receiving addresses, not an address
+  explorer). Mainnet only for this map; a network switch is out of scope.
+
 ## Post-v1 todo / hardening backlog (from the round-2 audit, 2026-08-18)
 
 - **Secret hygiene: xprv-bearing RPC params travel as bitcoin-cli argv**,
