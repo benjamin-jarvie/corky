@@ -141,8 +141,12 @@ class ImageQrSource:
 class CameraQrSource(ImageQrSource):
     """Device QR source: picamera2 into pyzbar.
 
-    Measured on a Zero 2 W with an ov5647, 2026-09-04: 512x384 at 30fps,
-    three times hw/HARDWARE.md's 10fps target, for both RGB888 and YUV420.
+    Measured on a Zero 2 W with an ov5647. On an idle board, 2026-09-04:
+    512x384 at 30fps for both RGB888 and YUV420. On the board as it
+    SHIPS, with bitcoind running beside it, 2026-09-05: 10.6fps over 30
+    frames. That is still above hw/HARDWARE.md's 10fps target, and it is
+    the number that matters, because the idle figure is not a condition
+    the device is ever in while scanning.
 
     YUV420, because zbar works in greyscale. capture_array returns
     (height * 3 // 2, width) for that format, and the first `height` rows

@@ -627,6 +627,24 @@ and Backup key is a row on the key's own menu that you take when you want
 it. The same goes for exporting: the public key comes up first, and where
 to send it is asked after you have seen it.
 
+**Recovery: where your paper backup opens, and where it does not.** The
+paper backup is Core's 111-character master private key. Sparrow Wallet's
+own library rebuilds a spending wallet from it for all four policies,
+derives the same addresses Core derives, and signs a real transaction that
+Core finalises and the network accepts
+([`tests/sparrow/test_recovery.py`](tests/sparrow/test_recovery.py), 21
+checks). Bitcoin Core takes it too, by building the descriptor and
+importing it. The encrypted file backup restores on a second Core node
+through Core's own `restorewallet`.
+
+**BlueWallet, Green and Bull Bitcoin cannot open it.** BlueWallet accepts
+an xprv only as a multisig cosigner, Green never handles one, and Bull
+Bitcoin refuses it in as many words: "Watch-only imports require public
+extended keys". Those three are coordinators here, not recovery targets:
+they watch and build, Corky signs. But if Corky is gone, the two places
+your paper backup opens are Bitcoin Core and Sparrow. Know that before you
+need it.
+
 **Nothing persists.** A discard, a close, a crash-restart and a power-off
 each leave no byte of a key anywhere on the device; `tests/test_no_persistence.py`
 searches the whole datadir for the raw key bytes to prove it. The one
@@ -687,7 +705,7 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,373 lines** (4,246 with blanks/comments).
+**Total functional code: 2,373 lines** (4,250 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 

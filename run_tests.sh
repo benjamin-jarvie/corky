@@ -45,7 +45,7 @@ done
 # so they run here when that build exists, and say so when it does not.
 if [ -x "tests/sparrow/.build/jdk-25.0.4.1+1/Contents/Home/bin/java" ]; then
   for t in tests/sparrow/test_sparrow_interop.py tests/sparrow/test_qr_airgap.py \
-           tests/sparrow/test_export_interop.py; do
+           tests/sparrow/test_export_interop.py tests/sparrow/test_recovery.py; do
     if (cd tests/sparrow && $PY "$(basename "$t")" >/dev/null 2>&1); then
       echo "PASS $t"
     else
