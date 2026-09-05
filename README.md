@@ -324,7 +324,7 @@ bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 3,689 lines — none of it ships on the device.**
+**Test code: 3,775 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,
@@ -392,6 +392,12 @@ versions match the pins, apt can supply them and pip leaves the device.
 `python3-zbar` is named on `provision.sh`'s first apt line and probably
 does not exist as a package; the fallback line omits it. Both are checked
 on the board at the next provision (ticket 23).
+
+The image carries the program and nothing else: `corky/`, the vendored
+drivers and font, the systemd units and the udev rule, one `bitcoin.conf`
+and the licence. 39 files, 0.27MB. It used to be the whole repository, 1.09MB,
+including every test and ticket; `tests/test_image_contents.py` now fails if
+development files reach the card or if the program's own files leave it.
 
 **Dev machine only, never on the signer:** `ruff`, `vulture` and `mypy`
 from `requirements-dev.txt`; Sparrow 2.5.4 and a JDK under

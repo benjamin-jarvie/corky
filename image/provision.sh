@@ -111,4 +111,4 @@ fi
 
 echo
 echo "PROVISION DONE (dev image). Sanity check:"
-echo "  cd /opt/corky && python3 shim/test_shim.py && python3 m0/m0_gate.py"
+echo "  the suites do not ship; run them from a clone on the dev machine"

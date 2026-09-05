@@ -17,7 +17,13 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$BOOT/config.txt" ] || { echo "$BOOT does not look like a Pi boot partition"; exit 1; }
 
 echo "-- packing corky @ $(git -C "$REPO" rev-parse --short HEAD)"
-git -C "$REPO" archive --format=tar.gz -o "$BOOT/corky.tar.gz" HEAD
+# Only what the device runs. `git archive HEAD` shipped the whole
+# repository: 56 documentation files, 48 test files, and 38 Python files
+# that never execute on the signer. A signer should carry the program and
+# nothing else, and every extra file is one more thing to audit.
+# tests/test_image_contents.py pins this list against provision.sh.
+git -C "$REPO" archive --format=tar.gz -o "$BOOT/corky.tar.gz" HEAD \
+    corky hw/vendor hw/HARDWARE.md image m0/bitcoin.conf LICENSE
 
 cp "$REPO/image/PINS" "$BOOT/corky-PINS"
 cp "$REPO/image/provision.sh" "$BOOT/corky-provision.sh"
