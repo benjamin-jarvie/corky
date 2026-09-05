@@ -181,6 +181,103 @@ That is the price of the property today: Corky is DIY while we perfect
 it. An assembled device would change the labor, not the architecture,
 and may come later.
 
+## Against the honest alternative: Core on an air-gapped laptop
+
+The people most likely to pick this apart already have a better answer than
+a hardware wallet: a laptop with its radios out, running the same Bitcoin
+Core, signing PSBTs from a USB stick. Corky should be measured against that
+and not against a vendor's sealed box. Here is where it wins, and where it
+does not.
+
+### Loading a key in
+
+**Laptop.** You type or paste the key into a terminal or Core's console.
+On a command line it is in the process list while it runs, and in
+`~/.bash_history` afterwards, which is a file on a disk. In the GUI console
+it is in the scrollback. If you pasted it, it is in the clipboard, and
+clipboard managers are common.
+
+**Corky.** Typed on a grid or read from a QR, held in memory, handed to
+Core on standard input. Never on a command line, so never in a process
+list. There is no shell, no history file, and no clipboard.
+
+**Corky wins.** The shell history file is the persistence path people
+forget, and it is on the laptop's real disk.
+
+### Generation
+
+**Laptop.** Core generates the key onto the laptop's own disk. Backing it
+up means copying `wallet.dat` off, or reading the key out in the console
+and into the scrollback. Deleting either afterwards is not deletion: flash
+storage with wear levelling does not reliably overwrite in place.
+
+**Corky.** Core generates onto a tmpfs, which is RAM. The default backup
+is Core's own encrypted file, and the key is never read out of Core to
+make it. Power off and the wallet is gone.
+
+**Corky wins**, on where the key rests rather than on how it is made. The
+generation itself is identical, because it is the same Core.
+
+### Exporting the public key
+
+**Laptop.** `listdescriptors`, then carry the text across on a stick, or
+retype it.
+
+**Corky.** A QR on the panel, read by a camera. Nothing crosses but light.
+
+**Corky wins**, and it is the difference between a medium and a photon.
+
+### Signing
+
+**Laptop.** The unsigned PSBT arrives on a USB stick that has been in an
+online computer. Your air-gapped machine then mounts a filesystem written
+by that computer, which means its kernel parses attacker-influenced
+structures before Core sees anything. Then the signed PSBT goes back the
+same way. The stick crosses the gap twice, in both directions.
+
+**Corky.** The camera reads pixels and the panel emits pixels. A QR code
+carries no filesystem. The only thing that ever parses PSBT bytes is Core.
+The USB stick still exists as an option for people who want it, and it
+carries the same risk there as anywhere.
+
+**Corky wins**, and this is the largest single difference between the two.
+
+### Reviewing what you are about to sign
+
+**Laptop.** Core's own interface shows you the transaction. Whatever else
+you trust, you are not trusting a third party's rendering of Core's
+numbers.
+
+**Corky.** Core computes the fee and the outputs, and then **our 2,159
+lines draw them**. If `screens.py` renders the wrong address, you sign the
+wrong thing, and no amount of Core underneath saves you.
+
+**The laptop wins.** This is the sharpest cost of the whole design, and it
+is the reason the review screen has more tests than anything else here:
+Corky's numbers are checked against Sparrow's own library, to the satoshi,
+across both script types and eight transaction shapes. That is evidence,
+not a rebuttal.
+
+### Everything else about the laptop
+
+It has a real keyboard, and typing 111 characters on a five-way pad is
+miserable and error-prone. It has more memory, so it can hold transactions
+that this board cannot. It can be reinstalled from scratch. Its Core is
+reviewed by everyone who reviews Core, which is the same Core Corky runs.
+
+Against that: a laptop is a general-purpose computer with a package
+manager, a desktop, and years of installed history, and you are asked to
+believe all of it. Corky is one program, a panel, a camera and a battery,
+and the numbers for how much of it is ours are printed above.
+
+### What neither can do
+
+Neither can verify the input amounts a coordinator claims. An air-gapped
+signer has no chain to check them against, so the fee on the screen is
+computed from numbers the coordinator supplied. Corky says so on the review
+screen. A laptop running Core says so nowhere, because it assumes you
+know.
+
 ## What a Python signer cannot promise, measured
 
 The three moments above are honest about WHERE the key is. This is honest
