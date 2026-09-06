@@ -86,6 +86,15 @@ this device to a person who is not Ben, and why.
   checked by the suite. **One thing needs Ben:** the board answers 320x240
   on a Zero 2 W, which is neither documented build.
 
+- [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md):
+  `ISSUES.md` opens with "fixed items leave this file" and held 112 lines
+  of fixed history; seven of the eight items in its Open section were
+  already fixed. Rewritten, 298 lines to 97. The other three candidates
+  were KEPT on the ticket's own test: `docs/audit/ui-and-branding.md`
+  carries the D/S/I numbering cited twelve times from `corky/main.py`
+  alone, and both closed maps are cited by `PLAN.md` and `m0/m0_gate.py`.
+  Each now says it is closed and what replaced it.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -97,7 +106,6 @@ reader knows what is takeable without opening eleven files.
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
 - [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md): unblocked by A1.
-- [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md): unblocked by A8.
 
 **Waiting:**
 
