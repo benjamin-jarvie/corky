@@ -95,6 +95,17 @@ this device to a person who is not Ben, and why.
   alone, and both closed maps are cited by `PLAN.md` and `m0/m0_gate.py`.
   Each now says it is closed and what replaced it.
 
+- [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md):
+  the payload was well defended; the envelope had one hole and it was on
+  the WRITE. `os.write` may be short, and `write_signed` ignored the
+  count, so a full stick took 100 of 4,005 bytes and the device said it
+  wrote the file. A half-written PSBT is not a PSBT and the user pulls
+  the stick before anyone finds out. Everything else was contained, and
+  attack 7 now says so with eleven checks: a directory, a FIFO that would
+  block for ever, a dangling symlink, a vanished file, a read-only
+  medium. Verified on the board that `/boot/firmware` is a real vfat
+  mount and `/mnt/usb` with no stick is correctly not offered.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -105,7 +116,6 @@ reader knows what is takeable without opening eleven files.
 - [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
-- [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md): unblocked by A1.
 
 **Waiting:**
 
