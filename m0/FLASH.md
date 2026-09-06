@@ -118,6 +118,7 @@ Do not read the failure as "512MB is not enough". The same board signs a
 thousand ordinary inputs with 184MB spare. See PLAN.md A-21.
 
 The old reference figure here said bitcoind RSS about 99MB, taken from the
-Mac. It was wrong in a way the Mac could not show: see ISSUES.md I-10.
+Mac. It was wrong in a way the Mac could not show: see TESTING.md
+rule 9, which is the rule that defect produced.
 
 Paste the report block back to Claude and M0 is closed either way.

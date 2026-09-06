@@ -876,8 +876,9 @@ in a state where it could not work past a fully green suite: every input
 surface needs a real-data round-trip test, the shipping branch must be the one
 under test, a cost or count claim must come from a measurement, and
 "needs hardware" is a claim that needs checking before anything is deferred
-on it. [ISSUES.md](ISSUES.md) records what those rules have caught so far, and
-lists what is still open: audit items D17 and D18, on error reporting.
+on it. [ISSUES.md](ISSUES.md) is the open list and nothing else: what is fixed
+lives in git, and what it taught lives in TESTING.md as a numbered rule.
+D17 and D18, on error reporting, are both closed.
 
 ## Audit record
 

@@ -1,5 +1,21 @@
 # Audit: remaining software work, on-device UI, and branding
 
+> **Closed, 2026-09-01. Kept for its numbering, not for its screens.**
+>
+> All fifteen items are done, and the screens described below have since
+> been redrawn: the dial became a letter grid (D4), the home tiles became
+> SeedSigner's four, the export flow was rebuilt on the board with Ben on
+> 2026-09-05, and PLAN A-22 deleted the seed and codex32 entry paths this
+> document spends pages on. Read it as a record of WHY, never as a
+> description of the device.
+>
+> It survives deletion because its D, S and I numbering is cited from
+> shipped code and from TESTING.md: `corky/main.py` alone carries twelve
+> such references, and TESTING.md's rules 1, 6 and 7 are only
+> comprehensible with the items they came from. Audit A9 checked that
+> before keeping it. `tasks/audit-ui-and-branding.md`, named below, was
+> the prompt for this work and is not in the repository.
+
 Scope: the three questions in `tasks/audit-ui-and-branding.md`. Every claim
 below cites a file and line, or a measurement that this document explains how
 to reproduce. The signing code, `shim/bip39_shim.py` and `SHIM_HASH` were read

@@ -141,8 +141,8 @@ reported a confident 546 for a device that no longer worked that way.
 
 ## Rule 7: "needs hardware" is a claim, and it needs checking
 
-I-1 (a cropped QR) and I-2 (POWER OFF that did not power off) sat in
-`ISSUES.md` under "wait for M1, neither can be proven without hardware".
+I-1 (a cropped QR) and I-2 (POWER OFF that did not power off) were
+deferred with "wait for M1, neither can be proven without hardware".
 Neither needed hardware. I-1 is panel geometry, provable with two integers.
 I-2 is a teardown sequence where only the final `systemctl poweroff` touches
 the board, and that one call fakes cleanly.
@@ -242,8 +242,10 @@ supposed to call.
 
 ## What is still thin
 
-`ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18
-as open. The standing milestone work (M0 to M3) genuinely does need the board.
+`ISSUES.md` is the open list and nothing else since audit A9: what is
+fixed lives in git, and what it taught lives here as a numbered rule.
+D17 and D18 are both closed. The standing milestone work (M1 to M3)
+genuinely does need the board; M0 passed on 2026-09-03.
 
 Coverage across both architectures is 86% of statements in `corky/`; the
 arm64 suites alone report 84%. One statement is unreachable in any
