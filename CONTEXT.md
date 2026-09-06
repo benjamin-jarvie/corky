@@ -37,17 +37,25 @@ checksum. Corky passes descriptors through and never rewrites one.
 **transaction**: a PSBT, on screen and in the tickets. Corky reviews it with
 Core's numbers, signs it with Core, and hands it back.
 
-**backup**: two forms. The **paper backup** is the key's xprv, written by
-hand from the screen. The **file backup** is a wallet file encrypted by
-Core with a passphrase, written to a stick or a card. Only the file backup
-can be restored on another computer running Core.
+**backup**: the **paper backup**, and there is no other kind. It is the
+key's xprv, written by hand from the screen, and Bitcoin Core and Sparrow
+both open it. PLAN A-24 deleted the encrypted file backup, so this device
+never writes a private key to any medium. _Avoid_: file backup, which was
+a real thing until 2026-09-05 and is now only a thing that was removed.
 
 **channel**: how bytes cross the air gap. **QR**: the camera reads, the
 screen shows. **stick**: a USB stick in the OTG port. **card**: the boot
 microSD, read in another computer.
 
-**primary build**: the CM4 on the Waveshare carrier with the Display HAT
-Mini. **pocket build**. the Pi Zero 2 W in the SeedSigner case.
+**primary build**: the CM4 Lite with the SeedSigner+ display hat, 2.8"
+ST7789 at 320x240 (PLAN A-13b/A-15). **pocket build**: the Pi Zero 2 W in
+the SeedSigner case.
+
+Panel size is NOT decided by which of the two it is. The board on Ben's
+desk is a Zero 2 W and it answers 320x240, measured 2026-09-06 by asking
+`hal.DeviceDisplay` on the board itself. Every screen is written for both
+320x240 and 240x240 and `tests/test_screen_fit.py` renders both, so the
+pairing is a fact about one board rather than a rule.
 
 **Layer 1, 2, 3**: the README's trust layers. Layer 1 transforms secret
 material and is zero lines on main. Layer 2 sees secrets and carries them

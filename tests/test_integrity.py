@@ -60,8 +60,13 @@ ALLOWED_THIRD_PARTY = {
     "st7789",      # vendored: the panel driver, hw/vendor/st7789.py
 }
 
-BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "ecdsa", "coincurve",
-                  "bip32", "cryptography", "nacl"}
+# `random` is here for the same reason as `secrets`: the README's first
+# security claim is "no `os.urandom`, no `random`, no `secrets`, enforced
+# by a test", and audit A8 (2026-09-06) found the test enforced one of the
+# three. A device RNG is the one thing PLAN A-19 forbids outright, so the
+# claim is now true rather than nearly true.
+BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "random", "ecdsa",
+                  "coincurve", "bip32", "cryptography", "nacl"}
 # Every shipped .py, wherever it lives. The first version of this scanned
 # corky/*.py only, so a reintroduced Layer 1 in a new top-level directory
 # would have passed. Found by the A-22 spec review, 2026-09-04.
@@ -88,8 +93,10 @@ for src in SHIPPED:
 
 # 3. No key-derivation vocabulary survives in the shipped code. A rename
 #    would not hide the intent; this catches the obvious reintroduction.
+# urandom is an attribute on an allowed stdlib module, so no import scan
+# can see it. It has to be read out of the text.
 BANNED_TEXT = ("pbkdf2", "mnemonic_to_", "seed_to_xprv", "Bitcoin seed",
-               "BIP39_WORDLIST", "load_wordlist")
+               "BIP39_WORDLIST", "load_wordlist", "urandom")
 for src in SHIPPED:
     body = src.read_text()
     hits = [t for t in BANNED_TEXT if t in body]

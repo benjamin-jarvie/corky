@@ -194,7 +194,7 @@ So there are two claims:
 
 | Claim | What proves it |
 |---|---|
-| The OS is silent | `radio-check.sh` on the device |
+| The OS is silent | `leak-check.sh` on the device, or Tools, Check for leaks |
 | The radio cannot transmit | the part is not on the board |
 
 The Zero 2 W's radio is a **separate Synaptics component beside the
@@ -783,7 +783,7 @@ bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,106 lines — none of it ships on the device.**
+**Test code: 5,185 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 6 adversarial attack scenarios,
 21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
@@ -802,21 +802,25 @@ if any count above drifts from the tree or a link goes dead. Run it all:
 [`./run_tests.sh`](run_tests.sh) (`RUN_NODE=1` adds the
 bitcoind suites).
 
-**Plus 86 checks against Sparrow itself**, which the count above excludes and
-`run_tests.sh` does not run. [`tests/sparrow/`](tests/sparrow/) drives Sparrow
-2.5.4's own library out of its sha256-verified release, so the PSBTs Corky
-signs are the PSBTs Sparrow really builds: 38 interop checks across both script
-types and eight transaction shapes, with Corky's review fee and outputs
-compared to Sparrow's own to the satoshi, and 20 more that put a real PSBT
-through the QR channel in both directions. [`tests/m1/`](tests/m1/) adds 28
-covering the scan rules, and two rigs that measure whether each side can
-actually read the other's screen. Both need a one-time `setup.sh`, and
-`tests/m1` needs Rosetta on Apple Silicon.
+**Plus 132 checks against Sparrow itself**, which the count above excludes.
+[`tests/sparrow/`](tests/sparrow/) drives Sparrow 2.5.4's own library out of
+its sha256-verified release, so the PSBTs Corky signs are the PSBTs Sparrow
+really builds: 38 interop checks across both script types and eight
+transaction shapes, with Corky's review fee and outputs compared to
+Sparrow's own to the satoshi; 20 that put a real PSBT through the QR
+channel in both directions; 53 on the exported public key; and 21 that
+rebuild a spending wallet from the paper backup and spend from it.
+[`tests/m1/`](tests/m1/) adds 20 covering the scan rules, and two rigs that
+measure whether each side can actually read the other's screen. Both need a
+one-time `setup.sh`, and `tests/m1` needs Rosetta on Apple Silicon.
+`run_tests.sh` runs the Sparrow suites when that build exists and prints
+the count it observed, so these numbers are measured rather than written
+down: three hardcoded totals in two files were wrong at once (A8).
 
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/) —
 SeedSigner's display drivers and BC-UR codec, unmodified, MIT/BSD with
 attribution. Theirs to audit upstream; only the integration points are
-ours. The home icons are a six-glyph subset of Font Awesome Free Solid
+ours. The home icons are a seven-glyph subset of Font Awesome Free Solid
 ([`hw/vendor/fonts/`](hw/vendor/fonts/), CC BY 4.0 / SIL OFL, attributed
 in that directory's NOTICE); no other glyphs ship.
 

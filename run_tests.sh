@@ -43,12 +43,18 @@ done
 # Corky's own decoder reading Corky's own codes proves nothing (TESTING.md
 # rule 8). They need a one-time setup.sh that downloads Sparrow and a JDK,
 # so they run here when that build exists, and say so when it does not.
+SPARROW=0
 if [ -x "tests/sparrow/.build/jdk-25.0.4.1+1/Contents/Home/bin/java" ]; then
   for t in tests/sparrow/test_sparrow_interop.py tests/sparrow/test_qr_airgap.py \
            tests/sparrow/test_export_interop.py tests/sparrow/test_recovery.py; do
     SLOG="$LOGDIR/$(basename "$t").log"
     if (cd tests/sparrow && $PY "$(basename "$t")" >"$SLOG" 2>&1); then
-      echo "PASS $t"
+      # Report the count the suite OBSERVED, never one written down here.
+      # Three hardcoded totals in two files were all wrong at once (audit
+      # A8, 2026-09-06): 86 and 81 for a set that runs 132.
+      N=$(grep -oE "PASS +[0-9]+" "$SLOG" | tail -1 | grep -oE "[0-9]+")
+      SPARROW=$((SPARROW + ${N:-0}))
+      echo "PASS $t${N:+  ($N checks)}"
     else
       echo "FAIL $t"
       sed 's/^/      | /' "$SLOG" | tail -12
@@ -56,12 +62,13 @@ if [ -x "tests/sparrow/.build/jdk-25.0.4.1+1/Contents/Home/bin/java" ]; then
       FAILED=1
     fi
   done
+  echo "     tests/sparrow total: $SPARROW checks against Sparrow's own library"
 else
-  echo "(not run: tests/sparrow, 81 checks against Sparrow's own library."
-  echo "          Run tests/sparrow/setup.sh once to build it. Without it"
-  echo "          nothing here reads a QR with anything but our own decoder.)"
+  echo "(not run: tests/sparrow, the only checks that read a QR with"
+  echo "          anything but our own decoder. Run tests/sparrow/setup.sh"
+  echo "          once to build it; the run then prints its own count.)"
 fi
-echo "(not run here: tests/m1  28 checks + the two legibility rigs;"
+echo "(not run here: tests/m1  20 checks + the two legibility rigs;"
 echo "               needs its setup.sh and Rosetta on Apple Silicon)"
 # 152 lines of test that nothing ran and nothing mentioned, so nobody knew
 # they were there (audit A6, 2026-09-06). They spend real mainnet sats, so

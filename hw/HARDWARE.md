@@ -29,8 +29,15 @@ and a camera on the carrier's CSI port. Parts list: ../ORDER.md.
   ili9486. **Corky v1's primary display is Ben's SeedSigner+ hat: 2.8" ST7789
   at 320×240 (A-13b/A-15)**; the 1.3" 240×240 remains the pocket build. The
   ili9341 driver stays vendored for Plus-class 2.4" boards.
+- **Measured on the board, 2026-09-06:** the Zero 2 W on Ben's desk answers
+  320×240, not the 240×240 the pocket build is described with above. Panel
+  and compute module are chosen separately, and the documents read as
+  though they were chosen together. Every screen is written for both sizes
+  and `tests/test_screen_fit.py` renders both, so nothing is broken by it;
+  what is wrong is the wording, and a tester reading it would flash the
+  wrong expectations.
 
-## Buttons (from `hardware/buttons.py`, BOARD numbering, 40-pin header)
+## Buttons (from SeedSigner's `hardware/buttons.py`, BOARD numbering, 40-pin header)
 
 | Control | Pin (BOARD) |
 |---|---|
@@ -132,7 +139,7 @@ it), where the legacy stack is gone. Corky uses **picamera2/libcamera**
 ## A finding worth stealing later: how SeedSigner does hot-swap microSD
 
 SeedSigner OS (their buildroot image) runs **entirely from RAM** after boot;
-`hardware/microsd.py` watches `/mnt/microsd`, so the boot card can be removed
+SeedSigner's `hardware/microsd.py` watches `/mnt/microsd`, so the boot card can be removed
 and reused for data. Corky v1 keeps the USB-stick channel (full Raspberry Pi
 OS cannot leave its boot card), but a RAM-resident Corky OS at M3+ would make
 the boot card itself the PSBT sled AND make statelessness structural: the

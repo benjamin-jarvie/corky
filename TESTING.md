@@ -18,9 +18,10 @@ contain a `B`, and every descriptor needs brackets, so neither typed mode
 could ever have worked. The screen rendered correctly, fit both panels, and
 passed every suite, because no test ever asked it to type an actual key.
 
-The paths that did NOT have this bug are the ones that already followed this
-rule: codex32 grid entry had `grid_keys` plus frozen vectors, and word entry
-had `WORDS_SCRIPT` built from real BIP39 words.
+The paths that did NOT have this bug are the ones that already followed
+this rule. Both were codex32 and BIP39 entry, and PLAN A-22 has since
+deleted both screens, so the example survives only as the reason for the
+rule and not as code you can go and read.
 
 So, for any surface that accepts input:
 
@@ -28,12 +29,15 @@ So, for any surface that accepts input:
    (`listdescriptors`, a derived xprv, a funded PSBT), rather than writing a
    plausible-looking literal. A literal encodes the author's assumptions,
    which are exactly what is under test.
-2. Compute the key sequence programmatically from the navigation rules
-   (`text_keys`, `grid_keys`, `word_keys` in `tests/e2e_session.py`).
+2. Compute the key sequence programmatically from the navigation rules.
+   `text_keys` in `tests/e2e_keys.py` is the live one; `keys_press`,
+   `key_menu_press`, `home_press` and `tools_press` beside it do the same
+   for the menus, which is rule 11's half of this.
 3. Assert the device reconstructs the input **exactly**, and where the input
    is key material, that it opens a key which signs a real transaction.
 
-Sessions T and T2 in `tests/e2e_session.py` are the reference shape.
+Session T in `tests/e2e_session.py` is the reference shape: a real xprv,
+typed on the real grid, opening a key that signs.
 
 ## Rule 2: the helper must not share the code's assumptions
 
@@ -59,9 +63,17 @@ button source.
 ## Rule 4: a metric that counts wrongly is worse than no metric
 
 `test_readme_claims` counted scripted device sessions with a pattern that
-matched only single-letter labels, so it ignored D3, H3/H4, R3 and T2 and
-undercounted by a third while reporting a confident number. Prefer counting
-a marker that cannot drift (`# ---- Session `) over inferring from prose.
+matched only single-letter labels, so it ignored the multi-character ones
+and undercounted by a third while reporting a confident number. Prefer
+counting a marker that cannot drift (`# ---- Session `) over inferring
+from prose.
+
+**It then failed the same way a second time.** The marker was made
+drift-proof and the SEARCH was not: it read `e2e_session.py` and no other
+file, so the eleven sessions in `e2e_keys.py` were invisible from the day
+that file was created. The README said 9. There were 21 (audit A6,
+2026-09-06). Counting the right thing in one of the two places it lives
+is still counting wrongly.
 
 Audit A5 found the same failure in the coverage instrument, twice, and the
 instrument is the thing you would otherwise trust to find the others:

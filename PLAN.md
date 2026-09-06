@@ -7,6 +7,8 @@
 - Shim disclosure: **explicit, not fine print.** The README leads with it (A-6 superseded).
 - Name: **Corky.** Tagline: *Core's keys, nothing kept.*
 - Shim built and passing all official vectors (`shim/test_shim.py`). Next gate: M0.
+  **Superseded by A-22: the shim and its tests are deleted. Keys arrive as
+  xprv or descriptor, so nothing in the tree turns words into a seed.**
 
 ## Amendments after review (Ben, 2026-08-17, second pass)
 
@@ -150,7 +152,8 @@
      zero-re-exposure integrity check is the standard's killer property
      and costs us one function.
 
-  Implementation rules mirror the shim: a `codex32.py` module,
+  Implementation rules would mirror the shim: a `codex32.py` module
+  (post-v1, not written; the name is the proposal, not a file),
   **stdlib-only, no EC math** (BCH checksum + GF(32) share arithmetic is
   table math), frozen once written, tested against BIP93's own vectors
   AND cross-checked against BlockstreamResearch/codex32's reference
@@ -473,6 +476,12 @@
   Core with a passphrase the user typed, written to a medium the user names
   (the USB stick or the boot card, asked every time), is allowed. The
   README states it plainly.
+
+  **Superseded by A-24 (2026-09-05), one day later.** The encrypted file
+  backup is deleted. The rule went back to being about the KEY rather than
+  the medium: the private key leaves this device on paper and no other
+  way. A-23's reasoning about which medium is safe is kept because it is
+  what A-24 answered, not because any of it is still in force.
 
   **Also decided in the same session, recorded in the map's tickets:** home
   becomes SeedSigner's Scan, Key, Tools, Settings, with generation under
