@@ -53,6 +53,17 @@ this device to a person who is not Ben, and why.
   The README's "two moments" was five to ten minutes, and its heap figure
   counted allocations as though they were live.
 
+- [A5 What has never run, on anything](tickets/A5-never-run.md): 86% of
+  `corky/` executes, across both architectures; the arm64 suites alone
+  report 84%. Exactly ONE statement is unreachable in any configuration,
+  and it is a deliberate guard. The instrument was wrong three ways
+  before it was right, once calling the first program the device runs
+  dead code while the suite ran it. Four gaps were not merely untested:
+  three of four script policies were unreachable on the address screen,
+  Check an address had no test that could work, the refusal for a PSBT
+  with no stated fee had never executed, and the legacy fee assertion
+  compared Core to Core so it could not fail.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -60,19 +71,15 @@ reader knows what is takeable without opening eleven files.
 
 **Takeable now, nothing blocking:**
 
-- [A1 Read the four modules nothing has read](tickets/A1-unread-modules.md): 617 lines that ship and that no review has opened.
-- [A2 Does the layer model actually hold, end to end](tickets/A2-layer-model-holds.md): "Layer 2 computes nothing on a key" is checked by reading, and reading
-  missed a key on the command line for several hours.
 - [A8 Every claim the documents make](tickets/A8-claims-versus-reality.md): the cheapest, and the one that stops wrong things being believed.
 - [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
+- [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md): unblocked by A1.
+- [A6 Do the tests measure what they claim](tickets/A6-tests-measure-what-they-claim.md): unblocked by A5.
 
 **Waiting:**
 
-- [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md), behind A1.
-- [A5 What has never run, on anything](tickets/A5-never-run.md), behind A1.
-- [A6 Do the tests measure what they claim](tickets/A6-tests-measure-what-they-claim.md), behind A5.
 - [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md), behind A8.
 - [A11 The verdict](tickets/A11-the-verdict.md), behind all of them. It is
   the destination.
