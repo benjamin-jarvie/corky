@@ -71,10 +71,16 @@ def main():
     else:
         bad(f"provision.sh would not find: {missing}")
 
-    # 2. The program itself, and the vendored code it imports.
+    # 2. The program itself, the vendored code it imports, and the three
+    #    scripts a tester runs ON the device. verify-install.sh is the one
+    #    that matters most and shipped in nothing until audit A7: it is how
+    #    anybody, including a tester who trusts neither of us, checks that
+    #    the card in their hand matches the repository they can read.
     required = ("corky/main.py", "corky/signer.py", "corky/screens.py",
                 "corky/qrchannel.py", "corky/filechannel.py",
                 "corky/hal.py", "corky/splash.py",
+                "image/leak-check.sh", "image/harden.sh",
+                "image/verify-install.sh", "image/PINS",
                 "hw/vendor/st7789.py", "hw/vendor/ur2/__init__.py",
                 "hw/vendor/fonts/fa-solid-subset.ttf", "LICENSE")
     absent = [r for r in required if r not in names]
@@ -113,6 +119,19 @@ def main():
         ok("no Python ships that the device does not run")
     else:
         bad(f"Python that never runs on the device: {stray}")
+
+    # 5. The pins a device can be checked against. The tarball hash can
+    #    only be used at install time, which audit A7 pointed out is the
+    #    one moment nobody watches; the binary hashes make an installed
+    #    device re-checkable for ever.
+    pins = (ROOT / "image" / "PINS").read_text()
+    for key in ("CORE_BIN_SHA256", "CLI_BIN_SHA256"):
+        m = re.search(rf'{key}="([0-9a-f]*)"', pins)
+        if m and len(m.group(1)) == 64:
+            ok(f"{key} is pinned, so an installed device can be re-checked")
+        else:
+            bad(f"{key} is missing or not a sha256 in image/PINS, so "
+                "verify-install.sh cannot check the binary on the board")
 
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")

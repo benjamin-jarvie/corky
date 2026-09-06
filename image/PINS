@@ -12,6 +12,14 @@ CORE_URL="https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-aarch64-lin
 #   achow101, fanquake, Sjors and hebasto each attest this same hash
 #   in their own noncodesigned.SHA256SUMS for 31.1.
 CORE_SHA256="dcf1873f2208ba4f962f3398d47e154c39c0084be8f4553e05c940d0ace3d004"
+# The two binaries INSIDE that tarball, so an installed device can be
+# re-checked without downloading 82MB again. Extracted from the tarball
+# above after it matched CORE_SHA256, on 2026-09-06. This is the hash
+# image/verify-install.sh compares against on the board; the tarball hash
+# can only be checked at install time, which audit A7 pointed out is the
+# one moment nobody is watching.
+CORE_BIN_SHA256="1b279e038691c10e30d9c99a071ff967439020c4352e8ea3b156fb6b03751f83"
+CLI_BIN_SHA256="815c0969dabe4b67d180f3e0c597c995ca03fd3a65ff2b2d1b1223109f6df589"
 CORKY_COMMIT="HEAD"                             # pin to a tag for release images
 PIP_PINS="qrcode==7.4.2 pyzbar==0.1.9"          # everything pip installs, pinned
 # The complete list of what the signer carries, with reasons, is the README

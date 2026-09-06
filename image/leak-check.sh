@@ -185,8 +185,13 @@ fi
 # Core, which reads no QR, had no way to be given anything.
 say ""
 say "-- provisioning, is the board current --"
+# All FIVE units, not four. corky-splash.service was missing from this
+# list, and it is the one that paints the first thing anybody sees; a
+# board without it boots to a dark panel for the length of a bitcoind
+# start and looks broken (audit A7, 2026-09-06).
 for f in /etc/systemd/system/corky.service \
          /etc/systemd/system/corky-bitcoind.service \
+         /etc/systemd/system/corky-splash.service \
          /etc/systemd/system/corky-usb@.service \
          /etc/udev/rules.d/99-corky-usb.rules; do
     if [ -f "$f" ]; then
