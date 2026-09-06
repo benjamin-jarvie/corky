@@ -283,6 +283,8 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
     pages = max(1, (len(outputs) + 1) // 2)
     title = ("REVIEW  TRANSACTION" if pages == 1
              else f"REVIEW  ·  OUTPUTS {page + 1}/{pages}")
+    # This is the screen you sign from, and it was the one scrollable
+    # screen with no bar on it (two-axis review, 2026-09-05).
     img, d = _frame(w, h, title)
     y = int(h * 0.20)
     for addr, amt in outputs[page * 2:page * 2 + 2]:
@@ -310,6 +312,8 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
     if unseen_pages:
         _fit(d, (w // 2, int(h * 0.80)), "see every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
+    if pages > 1:
+        scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
     _actions(d, w, h, ["REJECT", "SIGN"], actions_sel)
     return img
 
@@ -723,7 +727,7 @@ def qr_export(w, h, code, xfp, kind, path):
     return img
 
 
-def address_page(w, h, index, address, kind):
+def address_page(w, h, index, address, kind, total=None):
     """One receive address, in full, for comparison against a coordinator.
 
     Ben's rule: never truncate, group in fours, colour the first and last
@@ -760,9 +764,12 @@ def address_page(w, h, index, address, kind):
             x += d.textlength(group, font=font) + space
     _fit(d, (w // 2, int(h * 0.90)), "compare every group", int(h * 0.045),
          GREY, "mm", int(w * 0.6))
-    # Browsing goes on for as long as you press down, so this is the
-    # endless kind of bar: it moves, and it never arrives (D3).
-    scrollbar(d, w, int(h * 0.16), int(h * 0.62), index, None)
+    # Two kinds of bar, which is D3's whole point. Browsing receiving
+    # addresses has no end, so the thumb moves and never arrives. The
+    # three at the end of an export DO have an end, and drawing them the
+    # endless way told the user the list went on when it did not (found
+    # by the two-axis review, 2026-09-05).
+    scrollbar(d, w, int(h * 0.16), int(h * 0.62), index, total)
     return img
 
 

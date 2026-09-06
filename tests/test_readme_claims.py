@@ -43,8 +43,8 @@ README = (ROOT / "README.md").read_text()
 LAYER1 = []
 # signer.py moved from layer 3 to layer 2 on 2026-09-05, after the two-axis
 # review pointed out that it takes an xprv (open_session_xprv,
-# build_descriptors, master_xprv) and a passphrase (backup_encrypted,
-# restore_encrypted) as parameters. CONTEXT.md: "Layer 2 sees secrets and
+# build_descriptors, master_xprv, identity_of_key) as parameters. The
+# passphrase pair went with PLAN A-24. CONTEXT.md: "Layer 2 sees secrets and
 # carries them as strings. Layer 3 is opaque to secrets." It always carried
 # the xprv; the README said otherwise for longer than it should have.
 LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",

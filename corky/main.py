@@ -811,14 +811,14 @@ class Session:
             if key in ("a", "p"):
                 return True
 
-    def _export_text(self, _name, desc, _kind):
+    def _export_text(self, _name, desc, kind):
         """The same descriptor as text, for typing into a coordinator."""
         pages = screens.text_pages(desc)
         i = 0
         while True:
             self.display.show(screens.export_text(
                 self.w, self.h, pages[i], page=i, pages=len(pages),
-                title=screens.SCRIPT_LABELS[_kind].upper()))
+                title=screens.SCRIPT_LABELS[kind].upper()))
             key = self.buttons.read()
             if key == "c":
                 return False
@@ -871,7 +871,7 @@ class Session:
                 except RuntimeError as exc:
                     return self._show_core_error(exc)
             self.display.show(screens.address_page(
-                self.w, self.h, i, block[i - base], kind))
+                self.w, self.h, i, block[i - base], kind, total=limit))
             key = self.buttons.read()
             if key in ("b", "c"):
                 return

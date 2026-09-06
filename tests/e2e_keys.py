@@ -364,8 +364,11 @@ def main():
             "K5: the export destination was never asked"
         # The addresses come AFTER a successful export, because they are
         # what you compare against the coordinator that just read it.
+        # total=3 because the walk after an export is bounded, and the
+        # screen draws a different bar for a list with a known end (D3).
         for i, addr in enumerate(want_addrs):
-            assert _has(fr5, _render(scr.address_page, i, addr, "wpkh")), \
+            assert _has(fr5, _render(scr.address_page, i, addr, "wpkh",
+                                     total=3)), \
                 f"K5: address {i} was not shown after the export"
         written = list(stick5.glob("corky-*-watch.dat"))
         assert len(written) == 1, f"K5: watch-only file not written: {written}"
@@ -482,6 +485,66 @@ def main():
         signer.close_session(rpc)
         print("ok   K9: VERIFY types the backup back, names the wrong "
               "character, and Core confirms the key")
+
+        # ---- Session K10: a key survives being walked away from --------
+        # Map ticket N3, in Ben's words: keys "need to persist unless
+        # turned off essentially". tests/test_key_persistence.py proves
+        # nothing drops one on a clock, and walks the menus against a
+        # stub. What it could not do is the half the ticket actually asks
+        # for: that the key which comes back is "still able to sign".
+        #
+        # So: load a key, go somewhere else entirely, come back, and sign
+        # a real transaction that only that key owns. If anything expired
+        # it in between, the signature does not complete.
+        # watchB already holds A's public descriptors and mined the chain,
+        # so it can both fund an address of A's and take the change back.
+        signer.close_session(rpc)
+        name10 = signer.open_session_xprv(rpc, XPRV_A)
+        pubs10 = signer.public_descriptors(rpc, wallet=name10)
+        rpc.call("createwallet", "watch10", True, True, "", False, True)
+        rpc.call("importdescriptors",
+                 [{"desc": d, "active": True, "timestamp": "now",
+                   "range": [0, 200], "internal": "/1/*" in d}
+                  for d in pubs10], wallet="watch10")
+        # watchB is watch-only and cannot spend, so K10 mines its own
+        # coins into a wallet that holds keys.
+        rpc.call("createwallet", "miner10")
+        mine10 = rpc.call("getnewaddress", wallet="miner10")
+        rpc.call("generatetoaddress", 101, mine10, wallet="miner10")
+        fund10 = rpc.call("getnewaddress", wallet="watch10")
+        rpc.call("sendtoaddress", fund10, 1.0, wallet="miner10")
+        rpc.call("generatetoaddress", 1, mine10, wallet="miner10")
+        back10 = rpc.call("getnewaddress", wallet="miner10")
+        psbt10 = rpc.call("walletcreatefundedpsbt", [],
+                          [{back10: 0.4}], 0, {"fee_rate": 5}, True,
+                          wallet="watch10")["psbt"]
+        frames10 = work / "psbt10.txt"
+        frames10.write_text("\n".join(qrchannel.psbt_to_frames(psbt10)))
+        signer.close_session(rpc)
+
+        script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
+                  + "b" + "b"                     # key menu -> Keys -> home
+                  # walk away: Tools, the leak check, out again
+                  + "da" + "a" + "c" + "b"
+                  # and Settings, About, out again
+                  + "dra" + "da" + "a" + "b"
+                  # back to the key, through its whole menu, and out
+                  + "ra" + "a" + "b" + "b"
+                  # now sign, with the key that has been sitting there
+                  + "a" + "a" + "ra")
+        r = run_device(datadir, script, work / "framesK10",
+                       qr_key=key_a, qr_psbt=frames10)
+        assert r.returncode == 0, f"K10 failed:\n{r.stderr[-1500:]}"
+        last10 = _shots(work / "framesK10")[-1].read_bytes()
+        assert any(last10 == _render(scr.result, ok=True,
+                                     detail=f"shown as {n} QR frames",
+                                     actions_sel=1)
+                   for n in range(1, 90)), \
+            "K10: the key did not sign after being walked away from"
+        left10 = [w for w in rpc.call("listwallets") if w in signer.SLOTS]
+        assert not left10, f"K10: a key survived power off: {left10}"
+        print("ok   K10: a key walked away from and returned to still signs, "
+              "and is gone at power off")
         print("ALL PASS")
     finally:
         try:

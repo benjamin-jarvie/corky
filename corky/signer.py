@@ -220,8 +220,6 @@ def _import(rpc: "Rpc", descriptors: list[dict]) -> str:
     return name
 
 
-
-
 def open_session_xprv(rpc: "Rpc", xprv: str) -> str:
     """Input mode 2: a raw BIP32 xprv (typed or from a static QR).
     Pure Core from the first byte; Corky applies the BIP84/86 paths.
@@ -379,15 +377,6 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
         return out
     finally:
         _drop_wallet(rpc, scratch)
-
-
-
-
-
-
-
-
-
 
 
 def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:

@@ -182,7 +182,7 @@ def main():
             bad(f"a stray key survived startup: loaded {loaded_after}, "
                 f"files {hits(datadir, XPRV_A)}")
 
-        # 6b. A scratch wallet is Corky's too. backup_encrypted holds the
+        # 6b. A scratch wallet is Corky's too. write_watch_only holds the
         #     PRIVATE descriptors in `<slot>-backup` between createwallet
         #     and the finally that deletes it. A crash in that window used
         #     to leave a plaintext key that neither close_session nor the
