@@ -75,6 +75,17 @@ this device to a person who is not Ben, and why.
   adversarial counter could not fail by construction, and 152 statements
   of test ran nowhere and were named nowhere.
 
+- [A8 Every claim the documents make](tickets/A8-claims-versus-reality.md):
+  the security argument's evidence table cited `radio-check.sh`, which has
+  never existed. The first security claim, "no `os.urandom`, no `random`,
+  no `secrets`, enforced by a test", was enforced for one of the three.
+  Three hardcoded check counts were wrong at once (86 and 81 for a set
+  that runs 132; 28 for one that runs 20). The icon count contradicted
+  itself twenty-six lines apart. `CONTEXT.md` still defined the file
+  backup A-24 deleted. Every path and symbol the documents name is now
+  checked by the suite. **One thing needs Ben:** the board answers 320x240
+  on a Zero 2 W, which is neither documented build.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -82,15 +93,14 @@ reader knows what is takeable without opening eleven files.
 
 **Takeable now, nothing blocking:**
 
-- [A8 Every claim the documents make](tickets/A8-claims-versus-reality.md): the cheapest, and the one that stops wrong things being believed.
 - [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
 - [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md): unblocked by A1.
+- [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md): unblocked by A8.
 
 **Waiting:**
 
-- [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md), behind A8.
 - [A11 The verdict](tickets/A11-the-verdict.md), behind all of them. It is
   the destination.
 
