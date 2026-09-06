@@ -605,51 +605,54 @@ def _groups(text):
 ADDR_GROUPS_PER_ROW = 4
 
 
-#: The QR is rendered no taller than this, so every policy leaves a band
-#: above and below wide enough for a horizontal caption.
+#: The QR is rendered no taller than this, so the light card and the line
+#: of identity underneath both have room on a 240-pixel panel.
 #:
-#: Module scaling is integer, so sizes jump rather than slide. At this cap
-#: the three 57-module policies keep their full 212px code with a 14px
-#: band, and nested segwit, which is 61 modules, drops one step to 171px
-#: and gets a 34px band. The codes differ a little in size; what matters
-#: is that all four caption the same way, above and below, because the
-#: sideways caption nested segwit used to need is what Ben spotted on the
-#: board. Sparrow's own zxing reads every one of them.
-QR_MAX_PX = 212
-
-#: One caption size for every policy, so a bigger band does not mean
-#: bigger text and the four screens look like one screen.
-QR_CAPTION_H = 0.042
+#: Module scaling is integer, so this is a step rather than a slider. At
+#: 190 every policy lands one step down: the 57-module codes render 159px
+#: and nested segwit's 61 modules render 171px, leaving a card of about
+#: 180px and forty-odd pixels for the line. At 212 the codes are a quarter
+#: larger and there is no room for anything.
+#:
+#: The cost is real and worth stating: a smaller code on the panel means
+#: holding the phone closer. Sparrow's own zxing reads all four at this
+#: size, but a lens is not a decoder.
+QR_MAX_PX = 190
 
 
-def caption_qr(panel, qr_px, title, subtitle=""):
-    """Name a QR in the letterbox, never over the code.
 
-    `fit_to_panel` centres a square QR and leaves white around it. The
-    band above and below is OUTSIDE the quiet zone, so a caption there
-    costs the code nothing: the modules keep their size and the quiet zone
-    keeps its width.
+def qr_export(w, h, code, xfp, kind, path):
+    """The export QR on the device's own dark ground, with its identity
+    underneath (Ben, 2026-09-05).
 
-    `title` goes above, `subtitle` below. What a coordinator is being
-    given is the fingerprint, the script type and the derivation path, and
-    all three belong on the screen with the code (Ben, 2026-09-05).
+    The panel is INK like every other screen; the code sits on a light
+    card; the fingerprint, the script type and the derivation path run in
+    one line below it.
 
-    Nested segwit used to turn its caption sideways because its 61-module
-    code left only six pixels underneath. Capping every code at QR_MAX_PX
-    gives them all the same band, so the layout no longer changes with the
-    policy, which Ben noticed on the board.
+    **The light card is not decoration.** A QR needs a quiet zone of four
+    empty modules, and until this screen the panel was white, so the
+    letterbox WAS the quiet zone and it was effectively infinite. On a
+    dark ground that stops being true: `qrchannel` renders only two
+    modules of border, so the card has to make up the rest or the code
+    becomes harder to read rather than prettier.
+
+    `code` is the rendered QR, already scaled. It is not resized here,
+    because resizing a QR by anything but an integer factor turns square
+    modules into soft ones.
     """
-    band = (panel.height - qr_px) // 2
-    if band < 9:
-        return panel
-    d = ImageDraw.Draw(panel)
-    size = int(panel.height * QR_CAPTION_H)
-    _fit(d, (panel.width // 2, band // 2), title,
-         size, "black", "mm", int(panel.width * 0.94))
-    if subtitle:
-        _fit(d, (panel.width // 2, panel.height - band // 2), subtitle,
-             size, "black", "mm", int(panel.width * 0.94))
-    return panel
+    img, d = _frame(w, h, None)
+    # A QR wants four empty modules around it. qrchannel renders two, so
+    # the card supplies the rest and then some.
+    pad = max(10, int(code.width * 0.06))
+    card_w, card_h = code.width + 2 * pad, code.height + 2 * pad
+    top = max(2, (h - card_h - int(h * 0.11)) // 2)
+    x0 = (w - card_w) // 2
+    d.rectangle([x0, top, x0 + card_w, top + card_h], fill="white")
+    img.paste(code, (x0 + pad, top + pad))
+    _fit(d, (w // 2, top + card_h + int(h * 0.055)),
+         f"{xfp.upper()}  ·  {SCRIPT_LABELS[kind].upper()}  ·  {path}",
+         int(h * 0.045), CREAM, "mm", int(w * 0.94))
+    return img
 
 
 def address_page(w, h, index, address, kind):

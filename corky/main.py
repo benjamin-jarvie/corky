@@ -793,15 +793,11 @@ class Session:
         letterbox above and below, so the code itself is untouched.
         """
         xfp, path = signer.origin_of(desc)
-        # Sized against QR_MAX_PX rather than the panel, so there is always
-        # a band left for the caption. fit_to_panel then centres it.
+        # Sized against QR_MAX_PX, not the panel, so the light card and the
+        # line underneath both have room. screens.qr_export does the rest.
         code = qrchannel.text_to_image(
             desc, panel=(self.w, min(self.h, screens.QR_MAX_PX)))
-        panel = qrchannel.fit_to_panel(code, self.w, self.h)
-        factor = min(self.w // code.width, self.h // code.height)
-        framed = screens.caption_qr(
-            panel, code.height * factor,
-            f"{xfp.upper()}  ·  {screens.SCRIPT_LABELS[kind].upper()}", path)
+        framed = screens.qr_export(self.w, self.h, code, xfp, kind, path)
         while True:
             self.display.show(framed)
             key = self.buttons.read()

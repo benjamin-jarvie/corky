@@ -640,8 +640,13 @@ coordinators out of five. What is left are two real choices. Which policy,
 and whether it leaves as a QR, as text to type, or as a wallet file for
 Bitcoin Core, which reads no QR.
 
-The QR carries its fingerprint, its policy and its derivation path in the
-letterbox above and below, never over the code. Mainnet paths are
+The export screen is the device's own dark ground with the code on a light
+card, and the fingerprint, script type and derivation path in one line
+underneath. The card is not decoration: a QR needs four empty modules
+around it, and while the panel was white the letterbox supplied that for
+free. On a dark ground it does not, so the card makes up the difference.
+The code is a quarter smaller than it was to leave room, which means
+holding a phone slightly closer. Mainnet paths are
 `m/44h/0h/0h` legacy, `m/49h/0h/0h` nested segwit, `m/84h/0h/0h` native
 segwit and `m/86h/0h/0h` taproot, read out of Core's own descriptor rather
 than rebuilt from the script type. The three receive addresses at the end
@@ -723,12 +728,12 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1984 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1979 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1057) ·
-[`corky/screens.py`](corky/screens.py) (577) ·
+[`corky/main.py`](corky/main.py) (1053) ·
+[`corky/screens.py`](corky/screens.py) (576) ·
 [`corky/signer.py`](corky/signer.py) (276) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
@@ -743,7 +748,7 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,232 lines** (4,109 with blanks/comments).
+**Total functional code: 2,227 lines** (4,108 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 

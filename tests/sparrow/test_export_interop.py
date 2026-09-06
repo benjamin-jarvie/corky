@@ -41,25 +41,23 @@ def main():
             core_addrs = signer.receive_addresses(net.rpc, net.wallet, kind, 5)
 
             for panel_name, panel in PANELS:
-                img = qrchannel.text_to_image(desc, panel=panel)
+                img = qrchannel.text_to_image(
+                    desc, panel=(panel[0], min(panel[1], screens.QR_MAX_PX)))
                 r.record(f"{kind} QR fits the {panel_name} panel",
                          img.width <= panel[0] and img.height <= panel[1],
                          f"{img.width}x{img.height}")
                 png = work / f"{kind}-{panel[0]}.png"
-                # Caption the code the way the device does. The caption
-                # sits in the letterbox, outside the quiet zone, and this
-                # is the assertion that it stays there: nested segwit is
-                # 61 modules against the others' 57, so its caption turns
-                # sideways into the margin, and a caption that crept over
-                # the code would show up here as a refusal.
-                factor = min(panel[0] // img.width, panel[1] // img.height)
-                screens.caption_qr(qrchannel.fit_to_panel(img, *panel),
-                                   img.height * factor,
-                                   screens.SCRIPT_LABELS[kind].upper()
-                                   ).save(png)
+                # Render the screen the DEVICE draws, not a bare code: the
+                # panel is dark, the code sits on a light card, and the
+                # identity runs underneath. The card is what supplies the
+                # quiet zone once the ground is no longer white, so this is
+                # the check that it supplies enough of one.
+                xfp, path = signer.origin_of(desc)
+                screens.qr_export(panel[0], panel[1], img,
+                                  xfp, kind, path).save(png)
                 decoded = java("SparrowQr", "qrdecode", str(png))[0]
-                r.record(f"{kind}: Sparrow's zxing reads the captioned "
-                         f"{panel_name} QR",
+                r.record(f"{kind}: Sparrow's zxing reads the export screen "
+                         f"on the {panel_name} panel",
                          decoded == desc,
                          "byte-identical" if decoded == desc
                          else f"got {decoded[:60]!r}")
@@ -142,15 +140,14 @@ def main():
             desc = signer.export_descriptor(net.rpc, made, kind)
             core_addrs = signer.receive_addresses(net.rpc, made, kind, 3)
             for panel_name, panel in PANELS:
-                img = qrchannel.text_to_image(desc, panel=panel)
-                factor = min(panel[0] // img.width, panel[1] // img.height)
+                img = qrchannel.text_to_image(
+                    desc, panel=(panel[0], min(panel[1], screens.QR_MAX_PX)))
                 png = work / f"gen-{kind}-{panel[0]}.png"
-                screens.caption_qr(qrchannel.fit_to_panel(img, *panel),
-                                   img.height * factor,
-                                   screens.SCRIPT_LABELS[kind].upper()
-                                   ).save(png)
+                xfp, path = signer.origin_of(desc)
+                screens.qr_export(panel[0], panel[1], img,
+                                  xfp, kind, path).save(png)
                 decoded = java("SparrowQr", "qrdecode", str(png))[0]
-                r.record(f"{kind}: zxing reads the captioned {panel_name} QR "
+                r.record(f"{kind}: zxing reads the {panel_name} export screen "
                          "of a Core-generated key",
                          decoded == desc,
                          "byte-identical" if decoded == desc
