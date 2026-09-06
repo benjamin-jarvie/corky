@@ -5,7 +5,9 @@ which the e2e test never exercises. Run: python3 tests/test_filechannel.py
 """
 
 import base64
+import errno
 import os
+import stat
 import sys
 import tempfile
 import time
@@ -174,6 +176,38 @@ check("text psbt not double-encoded", base64.b64decode(got), payload)
 names = {p.name for p in filechannel.find_unsigned(tmp)}
 check("find_unsigned excludes signed", "a-signed.psbt" in names, False)
 check("find_unsigned includes unsigned", "a.psbt" in names, True)
+
+# A stick is FAT32 or exFAT, and neither promises that fsync on a
+# DIRECTORY succeeds. write_signed guards that call and carries on,
+# because the file's own data is already down; losing the directory
+# entry's flush is not losing the signature. Rule 7: the only thing that
+# needed the board here was one syscall, so fake that syscall. Faked as
+# the filesystem fails it, EINVAL, not as a convenient generic error.
+# (Audit A5, 2026-09-06: this branch had never executed.)
+real_fsync = os.fsync
+dir_fsyncs = []
+
+
+def refuse_dir_fsync(fd):
+    if stat.S_ISDIR(os.fstat(fd).st_mode):
+        dir_fsyncs.append(fd)
+        raise OSError(errno.EINVAL, "Invalid argument")
+    return real_fsync(fd)
+
+
+src = tmp / "tosign.psbt"
+src.write_bytes(b"psbt\xff\x09")
+payload = base64.b64encode(b"psbt\xffsigned").decode()
+os.fsync = refuse_dir_fsync
+try:
+    out = filechannel.write_signed(src, payload)
+finally:
+    os.fsync = real_fsync
+check("a filesystem that refuses directory fsync does not stop the write",
+      out.exists() and base64.b64encode(out.read_bytes()).decode() == payload,
+      True)
+check("and the directory fsync really was attempted and refused",
+      len(dir_fsyncs), 1)
 
 print()
 if FAILURES:

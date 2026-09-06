@@ -7,6 +7,7 @@ import random
 import shutil
 import subprocess
 import sys
+from decimal import Decimal
 import tempfile
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 sys.path.insert(0, str(ROOT / "tests"))
 import signer  # noqa: E402
+import main as corky_main  # noqa: E402
 
 XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
@@ -81,7 +83,106 @@ def main():
             ok("a key restored from its own paper backup presents all four "
                "policies and derives the same addresses")
         signer.close_key(rpc, back)
+
+        # 1b. Check an address must accept every address Corky can hand
+        #     out. _classify_qr decides that on shape alone, and its only
+        #     address case was one bech32 v0 literal, so the three other
+        #     policies were never put to it. A rejected address does not
+        #     say "wrong policy", it silently counts the code as stray and
+        #     keeps scanning, which reads as a dead camera.
+        #     (Devil's advocate on A5, 2026-09-06. Rule 1: Core's own
+        #     addresses, not shapes typed from memory.)
+        misread = {k: a[0] for k, a in gen_addrs.items()
+                   if corky_main._classify_qr(a[0]) != "address"}
+        if misread:
+            bad(f"the scan does not recognise these as addresses: {misread}")
+        else:
+            shapes = ", ".join(f"{k}:{a[0][:4]}" for k, a in
+                               sorted(gen_addrs.items()))
+            ok(f"every policy's address is recognised by the scan ({shapes})")
         gen_name = signer.generate_wallet(rpc)
+
+        # 1c. THE LEGACY INPUT PATH ON THE REVIEW SCREEN, which had never
+        #     executed at all until audit A5 measured it (2026-09-06).
+        #
+        #     A legacy input carries no witness_utxo, so describe_psbt has
+        #     to find the spent amount inside the whole previous
+        #     transaction. That branch feeds the input total on the screen
+        #     a user signs from, and it was unreachable until Corky started
+        #     offering legacy addresses. It is reachable now.
+        legacy_addr = signer.receive_addresses(rpc, gen_name, "pkh", 1)[0]
+        rpc.call("createwallet", "miner_legacy")
+        m_addr = rpc.call("getnewaddress", wallet="miner_legacy")
+        rpc.call("generatetoaddress", 101, m_addr, wallet="miner_legacy")
+        rpc.call("sendtoaddress", legacy_addr, 2.0, wallet="miner_legacy")
+        rpc.call("generatetoaddress", 1, m_addr, wallet="miner_legacy")
+        leg = rpc.call("walletcreatefundedpsbt", [],
+                       [{m_addr: 1.0}], 0, {"fee_rate": 5}, True,
+                       wallet=gen_name)["psbt"]
+        decoded = rpc.call("decodepsbt", leg)
+        uses_legacy = any("witness_utxo" not in i for i in decoded["inputs"])
+        if not uses_legacy:
+            bad("1c: Core built a witness PSBT, so the legacy branch is "
+                "still not exercised")
+        else:
+            review = signer.describe_psbt(rpc, leg)
+            total = review["input_total_btc"]
+            out_sum = sum(Decimal(str(o["amount_btc"]))
+                          for o in review["outputs"])
+            # The independent source of truth is the node's UTXO SET, not
+            # the PSBT. describe_psbt reads the amount out of the copy of
+            # the previous transaction that the coordinator embedded, so
+            # comparing it to decodepsbt's own "fee" compares Core to
+            # Core and cannot fail. gettxout answers from the chain
+            # instead, so a wrong vout index or a lying coordinator shows
+            # up here. (Devil's advocate on A5, 2026-09-06: the first
+            # version of this check was that tautology.)
+            chain_in = Decimal(0)
+            for txin in decoded["tx"]["vin"]:
+                utxo = rpc.call("gettxout", txin["txid"], txin["vout"])
+                chain_in += Decimal(str(utxo["value"]))
+            chain_fee = chain_in - out_sum
+            if total is None:
+                bad("1c: the review shows no input total for a legacy "
+                    "input, so the screen cannot state what is being spent")
+            elif total != chain_in:
+                bad(f"1c: the review says {total} BTC goes in, the chain "
+                    f"says {chain_in} BTC")
+            elif Decimal(str(review["fee_btc"])) != chain_fee:
+                bad(f"1c: the review's fee {review['fee_btc']} is not "
+                    f"chain inputs minus outputs, {chain_fee}")
+            else:
+                ok(f"1c: a legacy input's amount is read out of the previous "
+                   f"transaction and matches the chain: {total} in, "
+                   f"{out_sum} out, {chain_fee} fee")
+
+        # 1d. THE REFUSAL. describe_psbt reports no input total when any
+        #     input carries neither a witness_utxo nor the previous
+        #     transaction, and main.py turns that into "PSBT lacks input
+        #     data; fee unknown; refused". It is the one branch that stops
+        #     the device signing a transaction whose fee it cannot state,
+        #     and audit A5 measured it as never executed (2026-09-06).
+        #     createpsbt builds that shape: raw inputs, empty input maps.
+        funded = rpc.call("listunspent", 1, 9999999, [], True,
+                          wallet=gen_name)
+        if not funded:
+            bad("1d: no UTXO to build a bare PSBT from")
+        else:
+            u = funded[0]
+            bare = rpc.call("createpsbt", [{"txid": u["txid"],
+                                            "vout": u["vout"]}],
+                            [{m_addr: 0.5}])
+            bare_review = signer.describe_psbt(rpc, bare)
+            if bare_review["input_total_btc"] is not None:
+                bad(f"1d: a PSBT with no input data still claimed an input "
+                    f"total of {bare_review['input_total_btc']}")
+            elif bare_review["fee_btc"] is not None:
+                bad(f"1d: a PSBT with no input data still claimed a fee of "
+                    f"{bare_review['fee_btc']}")
+            else:
+                ok("1d: a PSBT that carries no input amounts reports no "
+                   "total and no fee, which is what makes the device "
+                   "refuse it")
 
         # Whatever it presents, nothing exported may carry a private key.
         leaked = [d for d in signer.export_descriptors(rpc, gen_name)

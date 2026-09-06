@@ -63,6 +63,28 @@ matched only single-letter labels, so it ignored D3, H3/H4, R3 and T2 and
 undercounted by a third while reporting a confident number. Prefer counting
 a marker that cannot drift (`# ---- Session `) over inferring from prose.
 
+Audit A5 found the same failure in the coverage instrument, twice, and the
+instrument is the thing you would otherwise trust to find the others:
+
+- **A subprocess is invisible by default.** Most of Corky runs as
+  `python3 corky/main.py --dev` under `subprocess.run`, and a plain
+  `coverage run` sees none of it. Without the `COVERAGE_PROCESS_START`
+  hook the figure is about twenty points low.
+- **A clean environment drops the hook.** `test_splash.py` builds its
+  child's env from scratch, on purpose, so that check 1 proves splash
+  needs almost nothing. That also dropped `COVERAGE_PROCESS_START`, so the
+  report called the first program the device runs dead code while the
+  suite was running it end to end.
+- **An architecture the suite cannot run is not an architecture without
+  code.** `libzbar` on the dev Mac is x86_64 only, so `pyzbar` will not
+  load under arm64 and the entire QR decode path looks unexecuted. It is
+  executed, by `tests/m1`, under Rosetta.
+
+`tools/coverage_run.sh` handles all three and prints one number, so it can
+be reproduced. `tools/coverage_piles.py` sorts what is left into A5's
+three piles and **exits non-zero when a line falls in no pile**, because a
+classification with a hole in it is an opinion.
+
 ## Rule 5: run the two-axis review, because the suite cannot find these
 
 The suite is written by whoever wrote the code, so it inherits their blind
@@ -210,6 +232,11 @@ supposed to call.
 
 `ISSUES.md` records I-1 to I-6 and the 2026-09-03 review as fixed, and D17/D18
 as open. The standing milestone work (M0 to M3) genuinely does need the board.
+
+Coverage across both architectures is 86% of statements in `corky/`; the
+arm64 suites alone report 84%. One statement is unreachable in any
+configuration, `main.py:113`, and it is a deliberate abstract-method
+guard. See `docs/wayfinder/beta-audit/tickets/A5-never-run.md`.
 
 `tests/sparrow` runs from `run_tests.sh` whenever its one-time `setup.sh`
 has built it, and the run says so when it has not (since 2026-09-05).

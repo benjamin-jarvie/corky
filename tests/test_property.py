@@ -148,6 +148,48 @@ class ArgvWatcher:
         return ""
 
 
+def prop_amounts_never_become_floats():
+    """A BTC amount reaches Core as a string, never a binary float.
+
+    `signer._json_decimal` is what makes that true, and audit A5 found it
+    had never executed: every test happened to pass amounts that were
+    already strings. It guards the review screen, which is where a user
+    decides whether to sign, and a float there is how 0.1 + 0.2 becomes
+    0.30000000000000004 on the one screen that must not lie.
+    """
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["input"] = cmd, kw.get("input")
+
+        class R:
+            returncode, stdout, stderr = 0, '"ok"', ""
+        return R()
+
+    real = signer.subprocess.run
+    signer.subprocess.run = fake_run
+    try:
+        rpc = signer.Rpc("/nonexistent", chain="regtest")
+        # The shape walletcreatefundedpsbt takes: a list of {address: amount}
+        rpc.call("walletcreatefundedpsbt", [],
+                 [{"bcrt1qexample": Decimal("0.1")},
+                  {"bcrt1qother": Decimal("21000000.00000001")}])
+        blob = " ".join(str(a) for a in seen["cmd"])
+        assert "0.1" in blob, f"the amount never reached Core: {blob[-120:]}"
+        assert "21000000.00000001" in blob, \
+            "a 21-million-BTC amount lost precision on the way to Core"
+        assert "0.10000000000000000555" not in blob and "e-" not in blob, \
+            f"an amount was rendered as a float: {blob[-120:]}"
+        # And a type it does not know must be refused, not silently coerced.
+        try:
+            rpc.call("anything", object())
+            raise AssertionError("_json_decimal accepted an unknown type")
+        except TypeError:
+            pass
+    finally:
+        signer.subprocess.run = real
+
+
 def prop_rpc_routes_keys_itself():
     """Rpc.call keeps key material off argv without being asked.
 
@@ -248,6 +290,7 @@ def main():
         ("fee Decimal exact", prop_fee_decimal_exact),
         ("no key material in argv", prop_no_key_in_argv),
         ("Rpc routes keys to stdin itself", prop_rpc_routes_keys_itself),
+        ("amounts never become floats", prop_amounts_never_become_floats),
     ]
     failed = 0
     for name, fn in checks:

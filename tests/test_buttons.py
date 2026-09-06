@@ -201,6 +201,44 @@ def main():
     else:
         ok("a contact that starts working again is admitted again")
 
+    # 7. read() blocks until something is pressed. It had never executed
+    #    (audit A5, 2026-09-06): every test drives pressed() directly, so
+    #    the loop the DEVICE actually sits in was never entered.
+    # Driven by READ COUNT, not by a timer. A first version raced: it
+    # cleared the pin 20ms after pressing it while read() polls every 20ms,
+    # so about one run in twelve missed the window and spun (devil's
+    # advocate on A5, 2026-09-06). Counting reads is deterministic, and it
+    # keeps the check in this process rather than a thread that can leak.
+    class Waiter(FakeGPIO):
+        """High until asked often enough, then C, then high again."""
+
+        def __init__(self):
+            super().__init__()
+            self.polls = 0
+
+        def input(self, pin):
+            self.polls += 1
+            if 30 <= self.polls < 40 and pin == PINS["c"]:
+                return LOW
+            return HIGH
+
+    waiter = Waiter()
+    sys.modules["RPi.GPIO"] = waiter
+    sys.modules["RPi"].GPIO = waiter
+    rb = hal.DeviceButtons()
+    rb._gpio = waiter
+    rb.STUCK_AFTER = 2.0
+    before = waiter.polls
+    got = rb.read()
+    if got != "c":
+        bad(f"read() returned {got!r}, expected 'c'")
+    elif waiter.polls - before < 30:
+        bad(f"read() returned after {waiter.polls - before} polls without "
+            "waiting for anything to be pressed")
+    else:
+        ok(f"read() waits through {waiter.polls - before} polls, then "
+           "returns the press")
+
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")
     sys.exit(1 if fails else 0)

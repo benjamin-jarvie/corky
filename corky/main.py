@@ -190,6 +190,7 @@ class DevQrSource:
     def __init__(self, key_path=None, psbt_path=None):
         self.key_path = key_path
         self.psbt_path = psbt_path
+        self._shown = 0
 
     @property
     def available(self):
@@ -205,10 +206,20 @@ class DevQrSource:
         file AND the frames from here put the key into the PSBT assembler
         as a junk frame, where the tick that skipped it also ate a button
         press (found 2026-09-05).
+
+        The key file may hold SEVERAL codes, one per line, for a session
+        that scans more than one thing: an xprv, then an address to check
+        against it. Each read moves on to the next line and the last line
+        repeats, which is a person holding up one code and then another.
+        A one-line file therefore behaves exactly as it always did.
         """
         if self.key_path:
-            yield Path(self.key_path).read_text()
-            return
+            codes = Path(self.key_path).read_text().split("\n")
+            codes = [c.strip() for c in codes if c.strip()]
+            code = codes[min(self._shown, len(codes) - 1)]
+            self._shown += 1        # BEFORE the yield: a caller that
+            yield code              # accepts the first code never
+            return                  # resumes this generator.
         if self.psbt_path:
             yield from Path(self.psbt_path).read_text().split()
             return

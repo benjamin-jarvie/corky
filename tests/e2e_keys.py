@@ -82,6 +82,34 @@ def text_keys(charset, want):
     return grid_presses(charset, want) + "p"
 
 
+def home_press(tile, start=0):
+    """Presses that pick a home tile, computed from the real 2x2 grid.
+
+    HOME_TILES is laid out two to a row, and state_home wraps both axes.
+    Counting these by hand is TESTING.md rule 11's defect in its other
+    form: the script agrees with the code and neither agrees with the
+    screen.
+    """
+    names = [label for label, _icon in scr.HOME_TILES]
+    target = names.index(tile)
+    row, col = divmod(target, 2)
+    start_row, start_col = divmod(start, 2)
+    return ("d" * ((row - start_row) % 2)
+            + "r" * ((col - start_col) % 2) + "a")
+
+
+def tools_press(action, start=0):
+    """Presses that pick an action on the TOOLS screen."""
+    names = [label for label, _note in scr.TOOLS_OPTIONS]
+    return "d" * (names.index(action) - start) + "a"
+
+
+def key_menu_press(action, start=0):
+    """Presses that pick an action on one key's menu."""
+    names = [label for label, _note in scr.KEY_MENU_OPTIONS]
+    return "d" * (names.index(action) - start) + "a"
+
+
 def keys_press(n_keys, action, start=0):
     """Presses that pick `action` on the KEYS screen, computed from the
     real menu rather than counted by hand.
@@ -545,6 +573,92 @@ def main():
         assert not left10, f"K10: a key survived power off: {left10}"
         print("ok   K10: a key walked away from and returned to still signs, "
               "and is gone at power off")
+
+        # ---- Session K11: Check an address, which had no test at all ----
+        # Audit A5 measured it: the whole Tools feature was uncovered, 27
+        # statements including the branch that says nobody owns it. It
+        # answers the one question a coordinator cannot answer for you,
+        # which is whether the address on that other screen belongs to a
+        # key in your hand, so getting it wrong is how someone pays a
+        # stranger.
+        signer.close_session(rpc)
+        name11 = signer.open_session_xprv(rpc, XPRV_A)
+        mine11 = signer.receive_addresses(rpc, name11, "wpkh", 1)[0]
+        not_mine11 = rpc.call("getnewaddress", wallet="watchB")
+        signer.close_session(rpc)
+
+        for label, addr, want in (
+                ("an address the key owns", mine11, "owned"),
+                ("an address it does not", not_mine11, "not owned")):
+            # Two codes, in the order the camera sees them: the key to
+            # load, then the address to check. One file with one code
+            # could not do this, so the first version of K11 scanned the
+            # ADDRESS as the key, loaded nothing, and never reached the
+            # verdict screen (devil's advocate on A5, 2026-09-06).
+            qr11 = work / f"addr-{want.replace(' ', '')}.txt"
+            qr11.write_text(f"{XPRV_A}\n{addr}\n")
+            script11 = ("ra" + keys_press(0, "Scan a key") + "a"  # load A
+                        + "b" + "b"                  # key menu -> Keys -> home
+                        + home_press("tools")
+                        + tools_press("Check an address")
+                        + "a"                        # dismiss the verdict
+                        + "b" + "draa")
+            r11 = run_device(datadir, script11, work / f"framesK11-{want}",
+                             qr_key=qr11)
+            assert r11.returncode == 0, \
+                f"K11 ({label}) failed:\n{r11.stderr[-900:]}"
+            fr11 = work / f"framesK11-{want}"
+            owned = _has(fr11, _render(
+                scr.verified, f"key {xfp_a.upper()}\nowns this address"))
+            refused = _has(fr11, _render(
+                scr.result, ok=False, label="FAILED",
+                detail="no loaded key owns that address"))
+            if want == "owned":
+                assert owned and not refused, \
+                    f"K11: {label} was not recognised as owned"
+            else:
+                assert refused and not owned, (
+                    f"K11: {label} was claimed as owned, which is how "
+                    "somebody pays a stranger")
+        signer.close_session(rpc)
+        print("ok   K11: Check an address says which key owns one, and "
+              "refuses one no key owns")
+
+        # ---- Session K12: walk every policy on the address screen ----
+        # Audit A5 measured _next_kind as never called by anything: the
+        # LEFT/RIGHT walk that reaches a legacy or nested address is the
+        # whole reason the chooser was taken off the front of this screen
+        # (Ben, 2026-09-05), and no test had ever pressed either key. A
+        # wrong step here shows the operator an address from a policy the
+        # screen does not name, which is how a receive goes to a script
+        # the coordinator is not watching.
+        name12 = signer.open_session_xprv(rpc, XPRV_A)
+        order12 = signer.available_kinds(rpc, name12)
+        first12 = {k: signer.receive_addresses(rpc, name12, k, 1)[0]
+                   for k in order12}
+        signer.close_session(rpc)
+        # RIGHT once per policy walks the whole ring and comes home; the
+        # final LEFT proves the walk goes both ways.
+        script12 = ("ra" + keys_press(0, "Scan a key") + "a"
+                    # loading a key lands on that key's own menu
+                    + key_menu_press("Receiving addresses")
+                    + "r" * len(order12)        # all the way round
+                    + "l"                       # and one step back
+                    + "b" + "b" + "b" + "draa")
+        r12 = run_device(datadir, script12, work / "framesK12", qr_key=key_a)
+        assert r12.returncode == 0, f"K12 failed:\n{r12.stderr[-900:]}"
+        # Every policy's own first address must have been painted, each
+        # under its own title. Rule 11: assert what the screen says, not
+        # the number of steps taken to get there.
+        missing12 = [k for k in order12
+                     if not _has(work / "framesK12",
+                                 _render(scr.address_page, 0, first12[k], k))]
+        assert not missing12, (
+            f"K12: LEFT/RIGHT never showed these policies: {missing12}; "
+            f"the walk covers {order12}")
+        signer.close_session(rpc)
+        print(f"ok   K12: LEFT/RIGHT walks all {len(order12)} policies on "
+              "the address screen and returns to the first")
         print("ALL PASS")
     finally:
         try:

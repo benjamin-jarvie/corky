@@ -157,6 +157,73 @@ _exp = qrchannel.frames_to_images([_bframe], box_size=4, border=2)[0].size
 assert _def == _exp, f"default render scale changed: {_def} != {_exp}"
 print(f"ok   frames_to_images defaults pin box_size=4/border=2 ({_def[0]}px)")
 
+# --- the two things a user does that had never executed ----------------
+# Audit A5, 2026-09-06: PsbtScan's skip and restart paths had never run.
+# Both are ordinary user actions. A stray QR wanders into view mid-scan,
+# and a user points the camera at a different transaction because they
+# changed their mind. Ticket 05 wrote the rules for both and nothing
+# checked them.
+
+_a = qrchannel.psbt_to_frames(
+    base64.b64encode(b"psbt\xff" + b"\x00" * 400).decode(),
+    max_fragment_len=40)
+_b = qrchannel.psbt_to_frames(
+    base64.b64encode(b"psbt\xff" + b"\x11" * 400).decode(),
+    max_fragment_len=40)
+
+_events = []
+_scan = qrchannel.PsbtScan(on_event=lambda kind, _d: _events.append(kind))
+# SEVERAL frames of the first transaction, so progress has somewhere to
+# fall from. Feeding one and comparing was worthless: both sequences are
+# the same length, so one frame of each gives the same percentage and the
+# comparison was true by coincidence. A mutation that deleted the reset
+# survived it (devil's advocate on A5, 2026-09-06).
+for _f in _a[:4]:
+    _scan.feed(_f)
+_progress_before = _scan.progress
+_scan.feed("ur:crypto-psbt/a-stray-code-that-is-not-a-frame-$$$")
+if _scan.skipped != 1:
+    failures.append(f"a stray code was not counted as skipped: "
+                    f"{_scan.skipped}")
+    print(f"FAIL stray code not counted, skipped={_scan.skipped}")
+elif "skipped" not in _events:
+    failures.append("a stray code was skipped silently, with no event")
+    print("FAIL stray code reported nothing to the screen")
+else:
+    print("ok   a stray code mid-scan is counted and reported, not fatal")
+
+_scan.feed(_b[0])                       # a DIFFERENT transaction
+if _progress_before <= 0:
+    failures.append("the first transaction never made progress, so the "
+                    "restart check has nothing to measure")
+    print("FAIL no progress on the first transaction; check is vacuous")
+elif "restart" not in _events:
+    failures.append("a second transaction did not restart the scan")
+    print("FAIL pointing the camera at another transaction did not restart")
+elif _scan.progress >= _progress_before:
+    failures.append(f"progress carried over a restart: "
+                    f"{_progress_before} -> {_scan.progress}")
+    print(f"FAIL progress {_progress_before:.2f} survived the restart "
+          f"({_scan.progress:.2f})")
+else:
+    print(f"ok   a different transaction restarts the scan: progress falls "
+          f"{_progress_before:.0%} -> {_scan.progress:.0%}, so two PSBTs "
+          "cannot be mixed")
+
+# And the assembled result must be the SECOND transaction, not a splice.
+for _f in _b[1:]:
+    if _scan.feed(_f):
+        break
+if _scan.psbt_b64 is None:
+    failures.append("the restarted scan never completed the new transaction")
+    print("FAIL the restarted scan did not finish")
+elif _scan.psbt_b64 != base64.b64encode(b"psbt\xff" + b"\x11" * 400).decode():
+    failures.append("the restarted scan assembled the wrong bytes")
+    print("FAIL the restarted scan spliced two transactions together")
+else:
+    print("ok   the restarted scan assembles the SECOND transaction whole")
+
+
 if failures:
     sys.exit(1)
 print("\nQR CHANNEL PASS: static, animated, lossy-camera and hostile-input cases")

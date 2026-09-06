@@ -27,6 +27,27 @@ SPLASH = ROOT / "corky" / "splash.py"
 fails = []
 
 
+def _child_env():
+    """The environment the service gives it, plus the coverage hook.
+
+    The env is built from scratch on purpose: the point of check 1 is that
+    splash.py needs almost nothing, and inheriting a developer's shell
+    would hide a missing dependency. But a scratch env also drops
+    COVERAGE_PROCESS_START, so tools/coverage_run.sh reported this whole
+    program as never executed while this very test was running it (audit
+    A5, 2026-09-06). Pass the two coverage variables through when they are
+    set, and nothing else.
+    """
+    import os
+    env = {"PYTHONPATH": str(ROOT / "corky"), "PATH": "/usr/bin:/bin",
+           "PYTHONDONTWRITEBYTECODE": "1"}
+    hook = os.environ.get("COVERAGE_PROCESS_START")
+    if hook:
+        env["COVERAGE_PROCESS_START"] = hook
+        env["PYTHONPATH"] = os.environ["PYTHONPATH"]
+    return env
+
+
 def ok(m):
     print("ok  ", m)
 
@@ -66,8 +87,7 @@ with tempfile.TemporaryDirectory() as tmp:
     out = subprocess.run(
         [sys.executable, str(SPLASH), "--dev", "--frames-dir", tmp],
         capture_output=True, text=True, timeout=60,
-        env={"PYTHONPATH": str(ROOT / "corky"), "PATH": "/usr/bin:/bin",
-             "PYTHONDONTWRITEBYTECODE": "1"})
+        env=_child_env())
     frames = sorted(Path(tmp).glob("frame-*.png"))
     if out.returncode != 0:
         bad(f"splash exited {out.returncode}: {out.stderr.strip()[:200]}")
