@@ -127,6 +127,14 @@ this device to a person who is not Ben, and why.
   panel can dismiss. **Needs Ben:** a stick pulled mid-write, a blank
   panel, a camera out of focus.
 
+- [A10 What the earlier maps left open](tickets/A10-carry-forward.md):
+  R6 re-measured on the board, three runs. The exchange-batch shape fails
+  at **74MB** against 100 required, worse than A-21's 97MB and R6's own
+  81MB; the ordinary-payment shape passes at 187MB. The README's Status
+  said only the passing half and the milestone table said PASSED. N1, N4
+  and N5 block nothing; ticket 23 is done by A7, A8 and A9. Six physical
+  things are left for Ben and none blocks another.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -134,12 +142,9 @@ reader knows what is takeable without opening eleven files.
 
 **Takeable now, nothing blocking:**
 
-- [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
+- [A11 The verdict](tickets/A11-the-verdict.md): every other ticket is
+  closed. It is the destination.
 
-**Waiting:**
-
-- [A11 The verdict](tickets/A11-the-verdict.md), behind all of them. It is
-  the destination.
 
 ## Not yet specified
 
