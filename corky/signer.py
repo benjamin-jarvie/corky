@@ -114,10 +114,19 @@ class Rpc:
         """Run one bitcoin-cli command.
 
         stdin=True sends the parameters through bitcoin-cli's -stdin instead
-        of argv, so key material never appears in a process listing. Callers
-        that pass an xprv or a private descriptor MUST set it (S4).
+        of argv, so key material never appears in a process listing.
 
-        Callers that pass a PSBT must set it too, for a second reason.
+        **Callers no longer have to remember.** This used to read "callers
+        that pass an xprv or a private descriptor MUST set it (S4)", which
+        put a correctness rule in the caller's head and enforced it
+        nowhere. On 2026-09-05 a caller forgot and a master private key
+        went into argv twice per paper check; a two-axis review found it,
+        not the suite. An invariant a module can check for itself does not
+        belong in its interface, so this one checks: any argument carrying
+        a private key goes through stdin whether it was asked for or not.
+        Passing stdin=True still works and is still right for a PSBT.
+
+        Callers that pass a PSBT should set it, for a second reason.
         Linux caps any SINGLE argument at MAX_ARG_STRLEN, 32 pages, which
         is 128KB, separately from the 2MB ARG_MAX total. A PSBT carries a
         whole previous transaction per input, so a many-input PSBT passes
@@ -129,6 +138,12 @@ class Rpc:
             cmd.append(f"-rpcwallet={wallet}")
         args = [p if isinstance(p, str)
                 else json.dumps(p, default=_json_decimal) for p in params]
+        # The module knows what key material looks like; the caller should
+        # not have to. An empty argument list stays on argv, because
+        # -stdin with nothing to read is a blank line bitcoin-cli has no
+        # use for.
+        if args and any(any(x in a for x in XPRV_PREFIXES) for a in args):
+            stdin = True
         feed = None
         if stdin:
             # bitcoin-cli -stdin reads the EXTRA ARGUMENTS from stdin, one

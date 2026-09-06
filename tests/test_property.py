@@ -148,6 +148,43 @@ class ArgvWatcher:
         return ""
 
 
+def prop_rpc_routes_keys_itself():
+    """Rpc.call keeps key material off argv without being asked.
+
+    The check below this one drives FAKES, so it asserts what CALLERS do.
+    This one drives the real Rpc and asserts what the MODULE does, which
+    is the difference between a rule written in a docstring and a rule
+    that holds. Only subprocess.run is replaced, so the command Corky
+    would have executed is the thing under test.
+    """
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["input"] = cmd, kw.get("input")
+
+        class R:
+            returncode, stdout, stderr = 0, '"ok"', ""
+        return R()
+
+    real = signer.subprocess.run
+    signer.subprocess.run = fake_run
+    try:
+        rpc = signer.Rpc("/nonexistent", chain="regtest")
+        # A caller that forgets. This is the 2026-09-05 defect exactly.
+        rpc.call("getdescriptorinfo", f"wpkh({KEY})")
+        assert not any(KEY in str(a) for a in seen["cmd"]), \
+            "Rpc.call let a private key onto argv"
+        assert KEY in (seen["input"] or ""), \
+            "Rpc.call dropped the key instead of routing it to stdin"
+        # And a call with nothing secret in it is left alone, so the
+        # protection costs nothing everywhere else.
+        rpc.call("getblockcount")
+        assert "-stdin" not in seen["cmd"], \
+            "Rpc.call used -stdin for a call with no key material"
+    finally:
+        signer.subprocess.run = real
+
+
 def prop_no_key_in_argv():
     """Every signer entry point that takes key material uses stdin."""
     for name, run in (
@@ -210,6 +247,7 @@ def main():
         ("read_psbt no-crash fuzz", prop_read_psbt_no_crash),
         ("fee Decimal exact", prop_fee_decimal_exact),
         ("no key material in argv", prop_no_key_in_argv),
+        ("Rpc routes keys to stdin itself", prop_rpc_routes_keys_itself),
     ]
     failed = 0
     for name, fn in checks:
