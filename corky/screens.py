@@ -44,7 +44,37 @@ def _iconfont(size):
 # Font Awesome Free Solid codepoints (see hw/vendor/fonts/NOTICE.md).
 ICON = {"load": "\uf019", "key": "\uf084", "tools": "\uf7d9",
         "gear": "\uf013", "power": "\uf011", "about": "\uf05a",
-        "qrcode": "\uf029"}
+        "signature": "\uf5b7"}
+
+
+#: Everything rounded is drawn this many times larger and scaled back
+#: down. A radius drawn straight at panel size aliases into stair-steps,
+#: which is what Ben saw on the export card's corners (2026-09-05). It is
+#: the same trick _status_circle already used for its ring.
+SS = 4
+
+
+def _round_rect(img, box, radius, fill):
+    """A FILLED rounded rectangle with smooth corners.
+
+    PIL draws a radius at whatever resolution you give it, and 8 pixels of
+    radius on a 320x240 panel is four or five steps you can count, which
+    is what Ben saw on the export card. Drawing into a 4x mask and
+    downsampling with LANCZOS spreads those steps along the edge.
+
+    Fills only, deliberately. The same treatment on a ONE-PIXEL outline
+    has no solid pixel to carry: every pixel of the line comes back
+    part-blended, so a crisp gold rule turns into a faint smear, which is
+    worse on a panel than the stair-steps were. Thin outlines stay on
+    PIL's own drawing, where a straight edge lands on whole pixels and
+    only the corners step.
+    """
+    x0, y0, x1, y1 = (int(v) for v in box)
+    w, h = max(1, x1 - x0), max(1, y1 - y0)
+    mask = Image.new("L", (w * SS, h * SS), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, w * SS - 1, h * SS - 1], radius=radius * SS, fill=255)
+    img.paste(fill, (x0, y0), mask.resize((w, h), Image.LANCZOS))
 
 
 def _icon(d, cx, cy, size, name, col):
@@ -161,7 +191,7 @@ def _frame(w, h, title=None):
 # Sign uses it for a transaction, Keys for a key, Tools to check an
 # address. Naming the first tile after the camera made it the place
 # everything happened, and then no word fitted it.
-HOME_TILES = [("sign", "qrcode"), ("keys", "key"),
+HOME_TILES = [("sign", "signature"), ("keys", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
 
@@ -192,14 +222,18 @@ def home(w, h, selected=0, xfp=None):
         x = mx + c * (bw + gap)
         y = my + r * (bh + gap)
         active = i == selected
-        d.rounded_rectangle([x, y, x + bw, y + bh], radius=6,
-                            outline=OCHRE if active else "#3A352E",
-                            width=2 if active else 1)
-        _icon(d, x + bw // 2, y + int(bh * 0.36), int(bh * 0.44), icon,
-              CREAM if active else GREY)
+        # The active tile is a gold block with black on it; the others are
+        # gold on the ground (Ben, 2026-09-05). Selection reads at a
+        # glance from across a desk, which an outline does not.
+        if active:
+            _round_rect(img, [x, y, x + bw, y + bh], TILE_RADIUS, fill=OCHRE)
+        else:
+            d.rounded_rectangle([x, y, x + bw, y + bh], radius=TILE_RADIUS,
+                                outline="#3A352E")
+        mark = INK if active else OCHRE
+        _icon(d, x + bw // 2, y + int(bh * 0.36), int(bh * 0.44), icon, mark)
         d.text((x + bw // 2, y + int(bh * 0.80)), label,
-               font=_font(int(h * 0.05)),
-               fill=CREAM if active else GREY, anchor="mm")
+               font=_font(int(h * 0.05)), fill=mark, anchor="mm")
     return img
 
 
@@ -454,8 +488,11 @@ def _menu(w, h, title, rows, selected, icons=None):
         # thing is innocent and what it is doing is the alarm (Ben,
         # 2026-09-05). Both columns are the same size: the right one was
         # smaller and unreadable on the panel.
-        colour = CREAM if active else GREY
-        note_colour = OCHRE if active else GREY
+        # The selected row's label is gold, like the selected tile and the
+        # export card's edge, so one colour means "this one" everywhere
+        # (Ben, 2026-09-05).
+        colour = OCHRE if active else GREY
+        note_colour = CREAM if active else GREY
         if tone == "red":
             colour = RED if not active else "#D9433B"
         elif tone == "leak":
@@ -628,6 +665,9 @@ QR_MAX_PX = 190
 CARD_RADIUS = 8
 STROKE = 2
 
+#: The home tiles' corner radius.
+TILE_RADIUS = 6
+
 
 
 def qr_export(w, h, code, xfp, kind, path):
@@ -659,11 +699,11 @@ def qr_export(w, h, code, xfp, kind, path):
     # The gold sits OUTSIDE the card: a larger rounded rectangle behind a
     # smaller white one, rather than an outline drawn on the card's own
     # edge, which would eat pixels the quiet zone is holding.
-    d.rounded_rectangle([x0 - STROKE, top - STROKE,
-                         x0 + card_w + STROKE, top + card_h + STROKE],
-                        radius=CARD_RADIUS + STROKE, fill=OCHRE)
-    d.rounded_rectangle([x0, top, x0 + card_w, top + card_h],
-                        radius=CARD_RADIUS, fill="white")
+    _round_rect(img, [x0 - STROKE, top - STROKE,
+                      x0 + card_w + STROKE, top + card_h + STROKE],
+                CARD_RADIUS + STROKE, fill=OCHRE)
+    _round_rect(img, [x0, top, x0 + card_w, top + card_h],
+                CARD_RADIUS, fill="white")
     img.paste(code, (x0 + pad, top + pad))
     # Centred between the outside of the stroke and the bottom of the
     # screen, which is what Ben asked for and what stops the line looking
