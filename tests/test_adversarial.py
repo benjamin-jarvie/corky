@@ -300,6 +300,76 @@ def attack_malformed(rpc):
                   qrchannel.FrameAssembler().feed,
                   "ur:crypto-psbt/" + "a" * (qrchannel.MAX_FRAME_CHARS + 1))
 
+    # The three above are what checked_frame REFUSES. Past that gate the
+    # vendored BC-UR decoder runs on attacker bytes, and the module
+    # promises it "raises QrChannelError, never anything else", which
+    # main.HANDLED takes literally: anything else ends the process.
+    #
+    # A first version of this check fed random letters and declared
+    # victory. A devil's advocate proved it measured nothing: random
+    # bytewords fail their CRC in the vendored decoder, so NOT ONE frame
+    # ever reached the accumulator, and the whole check passed with
+    # checked_frame deleted (2026-09-06). What follows uses frames with
+    # VALID checksums, built by our own encoder, so they get all the way
+    # in and the accumulator is really exercised.
+    good = qrchannel.psbt_to_frames(base64.b64encode(
+        b"psbt\xff" + b"\x00" * 900).decode(), max_fragment_len=40)
+    other = qrchannel.psbt_to_frames(base64.b64encode(
+        b"psbt\xff" + b"\x11" * 900).decode(), max_fragment_len=40)
+    if len(good) < 4 or len(other) < 4:
+        fail("attack3 qr accumulator: could not build a multi-part sequence")
+    else:
+        asm = qrchannel.FrameAssembler()
+        dec = asm._decoder.fountain_decoder
+        # Two different transactions interleaved, thousands of times. Both
+        # have valid CRCs, so both are accepted and stored.
+        for _ in range(400):
+            for a_frame, b_frame in zip(good, other, strict=False):
+                try:
+                    asm.feed(a_frame)
+                    asm.feed(b_frame)
+                except qrchannel.QrChannelError:
+                    pass
+        held = len(dec.simple_parts) + len(dec.mixed_parts)
+        if held > len(good) + len(other):
+            fail(f"attack3 qr accumulator: holds {held} parts after "
+                 f"{800 * len(good)} frames of two sequences")
+        else:
+            ok(f"attack3 qr accumulator: {800 * len(good)} valid frames "
+               f"from two transactions leave {held} parts held, not a "
+               "part per frame")
+
+    # And the frames that pass the gate but are structurally junk must be
+    # contained rather than crashing. This asserts containment only: the
+    # vendored decoder returns False for all of them, which is a property
+    # of ur2 and not of our guard, and saying so is the honest claim.
+    passes_the_gate = {
+        "empty body": "ur:crypto-psbt/",
+        "junk bytewords": "ur:crypto-psbt/zzzzzzzz",
+        "sequence with no data": "ur:crypto-psbt/1-3/",
+        "zero sequence": "ur:crypto-psbt/0-0/aaaa",
+        "colossal sequence": "ur:crypto-psbt/1-999999999/aaaaaaaaaaaa",
+        "only separators": "ur:crypto-psbt/-----",
+    }
+    uncontrolled, assembled = [], []
+    for label, frame in passes_the_gate.items():
+        a2 = qrchannel.FrameAssembler()
+        try:
+            a2.feed(frame)
+        except qrchannel.QrChannelError:
+            pass
+        except Exception as exc:      # noqa: BLE001
+            uncontrolled.append(f"{label}: {type(exc).__name__}: {exc}")
+        if a2.psbt_b64 is not None:
+            assembled.append(label)
+    if uncontrolled:
+        fail(f"attack3 qr past-the-gate: uncontrolled {uncontrolled}")
+    elif assembled:
+        fail(f"attack3 qr past-the-gate: assembled a PSBT from {assembled}")
+    else:
+        ok(f"attack3 qr past-the-gate: ur2 contains {len(passes_the_gate)} "
+           "structurally invalid frames rather than raising")
+
 
 # ======================================================================
 #  ATTACK 4 — UNOWNED INPUT

@@ -18,6 +18,7 @@ that needs real hardware.
 Run: python3 tests/test_channels.py
 """
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -123,6 +124,55 @@ else:
 
 import shutil  # noqa: E402
 shutil.rmtree(work, ignore_errors=True)
+
+# --- 5. the mount unit is what makes filechannel safe -------------------
+# filechannel.find_unsigned trusts a filename off a stick and calls
+# is_file(), which follows symlinks. That is only safe while removable
+# media is mounted as a filesystem with no symlinks. The two files never
+# mentioned each other until the A1 audit; this is the check that keeps
+# them in step.
+
+UNIT = ROOT / "image" / "corky-usb@.service"
+SYMLINKLESS = {"vfat", "exfat", "msdos"}
+
+unit = UNIT.read_text()
+# EVERY ExecStart, not just the first: a second, unqualified mount line
+# would have slipped past a check that read one (devil's advocate,
+# 2026-09-06).
+mounts = [ln for ln in unit.splitlines()
+          if ln.startswith("ExecStart=") and "/bin/mount" in ln]
+if len(mounts) != 1:
+    bad(f"{UNIT.name}: expected exactly one mount command, found "
+        f"{len(mounts)}. Each one needs its own -t restriction.")
+mount_line = mounts[0] if mounts else ""
+m = re.search(r"-t\s+([a-z0-9,]+)", mount_line)
+if not m:
+    bad(f"{UNIT.name}: no -t filesystem restriction on the mount at all, "
+        "so filechannel is trusting names on a filesystem that may have "
+        "symlinks")
+else:
+    kinds = set(m.group(1).split(","))
+    extra = kinds - SYMLINKLESS
+    if extra:
+        bad(f"{UNIT.name} now mounts {sorted(extra)}, which can carry "
+            "symlinks. filechannel.find_unsigned calls is_file() on names "
+            "off the stick and must stop trusting them.")
+    else:
+        ok(f"removable media is mounted {sorted(kinds)} only, none of which "
+           "has symlinks, which is what makes find_unsigned safe")
+
+# And the flags have to be OPTIONS, not merely characters somewhere on
+# the line: "nodev" appears inside "nodevice" and a substring test would
+# have accepted that.
+opts = re.search(r"-o\s+([a-z0-9=,]+)", mount_line)
+given = set(opts.group(1).split(",")) if opts else set()
+for flag in ("noexec", "nosuid", "nodev"):
+    if flag in given:
+        ok(f"the mount still passes {flag} as an option")
+    else:
+        bad(f"the mount no longer passes {flag} as an option: got "
+            f"{sorted(given) or 'no -o at all'}")
+
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

@@ -730,7 +730,7 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1999 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2014 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
@@ -738,23 +738,23 @@ during entry and backup, and performs no arithmetic on any of it.
 [`corky/screens.py`](corky/screens.py) (593) ·
 [`corky/signer.py`](corky/signer.py) (279) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
-[`corky/hal.py`](corky/hal.py) (61).
+[`corky/hal.py`](corky/hal.py) (76).
 
 `signer.py` sat in layer 3 until 2026-09-05, when a review pointed out that
 it takes an xprv as a parameter and always had. It carries
 them to Core and computes nothing with them, which is layer 2 by this
 README's own definition.
 
-**Layer 3 — never touches secrets at all. 248 lines.**
-[`corky/filechannel.py`](corky/filechannel.py) (59) and
+**Layer 3 — never touches secrets at all. 249 lines.**
+[`corky/filechannel.py`](corky/filechannel.py) (60) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,247 lines** (4,150 with blanks/comments).
+**Total functional code: 2,263 lines** (4,228 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,473 lines — none of it ships on the device.**
+**Test code: 4,705 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

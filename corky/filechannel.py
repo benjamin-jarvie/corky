@@ -25,7 +25,20 @@ class FileChannelError(Exception):
 
 
 def find_unsigned(mount: Path):
-    """All candidate PSBT files on the drive, ignoring already-signed ones."""
+    """All candidate PSBT files on the drive, ignoring already-signed ones.
+
+    **This is safe because of a decision made somewhere else.** `is_file()`
+    follows symlinks, and every name here comes off a stick somebody else
+    wrote, so on a filesystem with symlinks a file called `x.psbt` could
+    point at anything this process can read. It cannot, because
+    `image/corky-usb@.service` mounts removable media `-t vfat,exfat` and
+    neither format has symlinks at all.
+
+    That coupling had lived in two files that did not mention each other
+    until the A1 audit, 2026-09-06. `tests/test_channels.py` now fails if
+    the mount unit ever admits a filesystem that does, which is the point
+    at which this function would need to stop trusting a name.
+    """
     return sorted(
         p for p in mount.glob("*.psbt")
         if not p.name.endswith(SIGNED_SUFFIX) and p.is_file()
@@ -39,10 +52,22 @@ def read_psbt(path: Path) -> str:
     clean printable ASCII; a text export is base64. Either way the payload
     is not inspected here.
     """
-    size = path.stat().st_size
-    if size == 0 or size > MAX_PSBT_BYTES:
-        raise FileChannelError(f"{path.name}: {size} bytes, refusing")
-    raw = path.read_bytes()
+    # Bound the READ, not an earlier stat. The stick is shared with the
+    # coordinator, which is the whole reason wait_stable exists, so a file
+    # can grow between being measured and being read. It did: a 1KB file
+    # that grew during the gap was read at 6MB against this 4MB cap
+    # (devil's advocate on audit A1, 2026-09-06). Reading one byte past
+    # the cap and refusing on what actually arrived closes the window,
+    # because there is no longer a window.
+    with path.open("rb") as fh:
+        raw = fh.read(MAX_PSBT_BYTES + 1)
+    if not raw or len(raw) > MAX_PSBT_BYTES:
+        # An empty file's size is known exactly and saying it is more use
+        # to the reader than a word. An oversized one's is not: only
+        # MAX_PSBT_BYTES + 1 bytes were read, on purpose, so "over" is the
+        # honest word for it.
+        got = "0 bytes" if not raw else f"over {MAX_PSBT_BYTES} bytes"
+        raise FileChannelError(f"{path.name}: {got}, refusing")
     try:
         # Text export: strip ALL whitespace first — Sparrow/mail-style
         # exports wrap base64 at 64/76 columns and a stray newline must not

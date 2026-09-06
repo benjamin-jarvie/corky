@@ -10,6 +10,8 @@ where a direction contact was also closed became an up.
 Run: python3 tests/test_buttons.py (no hardware needed)
 """
 import sys
+import threading
+import time
 import types
 from pathlib import Path
 
@@ -110,6 +112,94 @@ def main():
         ok("one press gives one event, with nothing left over")
     else:
         bad(f"a held direction fired again: {first!r} then {second!r}")
+
+    # 6. A contact that never opens is ignored, not waited on.
+    #    The old wait had no bound, so a shorted or jammed button held the
+    #    loop for ever and the device looked crashed while every other
+    #    control still worked underneath (audit A1, 2026-09-06).
+    jam = FakeGPIO()
+    jam.state = {PINS["u"]: LOW}      # never released: release_after None
+    sys.modules["RPi.GPIO"] = jam
+    sys.modules["RPi"].GPIO = jam
+    b = hal.DeviceButtons()
+    b._gpio = jam
+    b.STUCK_AFTER = 0.05             # do not make the suite wait 3 seconds
+
+    t0 = time.monotonic()
+    first = b.pressed()
+    took = time.monotonic() - t0
+    if took > 1.0:
+        bad(f"a jammed contact held pressed() for {took:.1f}s")
+    elif first is not None:
+        bad(f"a jammed contact reported {first!r} as a press. It never "
+            "opened, so it was never a press.")
+    else:
+        ok(f"a jammed contact reports nothing, in {took * 1000:.0f}ms, "
+           "instead of hanging or firing a phantom press")
+
+    # And it stays quiet rather than firing every time it is polled.
+    if b.pressed() is not None:
+        bad("a jammed contact kept firing after it was seen to be stuck")
+    else:
+        ok("a jammed contact is ignored once it is known to be stuck")
+
+    # An INTERMITTENT contact is the common fault, and the first version of
+    # this fix fired a phantom press on every close (devil's advocate,
+    # 2026-09-06).
+    flapper = hal.DeviceButtons()
+    flapper._gpio = jam
+    flapper.STUCK_AFTER = 0.05
+    fired = []
+    for _ in range(3):
+        jam.state = {PINS["u"]: LOW}
+        fired.append(flapper.pressed())
+        jam.state = {}
+        flapper.pressed()             # the read that notices it went high
+    if any(f is not None for f in fired):
+        bad(f"an intermittent contact fired phantom presses: {fired}")
+    else:
+        ok("an intermittent contact fires no phantom presses")
+
+    # A healthy button, pressed and RELEASED normally, still works with a
+    # contact jammed beside it. Released, because a press that is never
+    # released is what "jammed" means.
+    jam.state = {PINS["u"]: LOW}
+    b.pressed()                       # re-learn the jam
+    jam.state = {PINS["u"]: LOW, PINS["a"]: LOW}
+    threading.Timer(0.02,
+                    lambda: jam.state.__setitem__(PINS["a"], HIGH)).start()
+    if b.pressed() != "a":
+        bad("a jammed contact blocked a healthy one")
+    else:
+        ok("other controls keep working with one contact jammed")
+
+    # A deliberate hold shorter than the deadline is still one press. This
+    # is the property the deadline could have eaten.
+    hold = hal.DeviceButtons()
+    hold._gpio = jam
+    hold.STUCK_AFTER = 0.30
+    jam.state = {PINS["u"]: LOW}      # learn the jam with ONLY u down, or
+    hold.pressed()                    # b gets marked stuck along with it
+    jam.state = {PINS["u"]: LOW, PINS["b"]: LOW}
+    threading.Timer(0.15,
+                    lambda: jam.state.__setitem__(PINS["b"], HIGH)).start()
+    if hold.pressed() != "b":
+        bad("a 150ms hold against a 300ms deadline was not reported")
+    else:
+        ok("a deliberate hold shorter than the deadline is still one press")
+
+    # A pin that recovers is admitted again.
+    jam.state = {}
+    b.pressed()                       # the read that notices it went high
+    jam.state = {PINS["u"]: LOW}
+    # The fake counts reads cumulatively, so its counter has to go back to
+    # zero or release_after is already past and every read returns HIGH.
+    jam.reads = 0
+    jam.release_after = 12
+    if b.pressed() != "u":
+        bad("a recovered contact was not admitted again")
+    else:
+        ok("a contact that starts working again is admitted again")
 
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")

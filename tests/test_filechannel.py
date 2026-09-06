@@ -5,6 +5,7 @@ which the e2e test never exercises. Run: python3 tests/test_filechannel.py
 """
 
 import base64
+import os
 import sys
 import tempfile
 import time
@@ -62,7 +63,8 @@ try:
     filechannel.read_psbt(empty)
     check("empty file refused by read_psbt", "no error", "FileChannelError")
 except filechannel.FileChannelError as exc:
-    check("empty file refused by name and size", "0 bytes" in str(exc) and empty.name in str(exc), True)
+    check("empty file refused by name and size",
+          "0 bytes" in str(exc) and empty.name in str(exc), True)
 
 # A file still being written must NOT be reported stable until writing
 # stops. Drive wait_stable with a scripted stat() so the timing is exact:
@@ -90,6 +92,41 @@ check("growing file not stable", filechannel.wait_stable(grow, checks=3, interva
 # Grows, then holds at 4000 for enough polls to satisfy checks=3 -> True.
 settle = _ScriptedPath([10, 20, 30, 4000, 4000, 4000, 4000])
 check("file stable once writing stops", filechannel.wait_stable(settle, checks=3, interval=0), True)
+
+# The cap is on what is READ, not on an earlier measurement. The stick is
+# shared with the coordinator, so a file can grow between being measured
+# and being read; a 1KB file that grew in that gap was read at 6MB against
+# the 4MB cap (devil's advocate on audit A1, 2026-09-06). There is no gap
+# now, and this is the check that there is not one.
+grower = tmp / "grow.psbt"
+grower.write_bytes(b"\x70\x73\x62\x74\xff" + b"\x00" * 512)
+_real_open = Path.open
+
+
+def _grow_on_open(self, *a, **k):
+    # os.open, not write_bytes: write_bytes goes through Path.open, which
+    # is the method being patched, and recurses for ever.
+    if self.name == "grow.psbt":
+        fd = os.open(grower, os.O_WRONLY | os.O_TRUNC)
+        try:
+            os.write(fd, b"\x70\x73\x62\x74\xff"
+                     + b"\x00" * (filechannel.MAX_PSBT_BYTES * 2))
+        finally:
+            os.close(fd)
+    return _real_open(self, *a, **k)
+
+
+Path.open = _grow_on_open
+try:
+    filechannel.read_psbt(grower)
+    check("a file that grows during the read is refused",
+          "accepted", "FileChannelError")
+except filechannel.FileChannelError as exc:
+    check("a file that grows during the read is refused",
+          "over" in str(exc) and grower.name in str(exc), True)
+finally:
+    Path.open = _real_open
+
 
 # A 1-byte file that holds still is stable: the guard is size > 0, not > 1.
 tiny = _ScriptedPath([1, 1, 1, 1])

@@ -36,6 +36,15 @@ this device to a person who is not Ben, and why.
 
 <!-- one line per closed ticket -->
 
+- [A1 Read the four modules nothing has read](tickets/A1-unread-modules.md):
+  three defects, two real bugs. A jammed button hung the device for ever; a
+  PSBT file grown between the stat and the read beat the 4MB cap at 6MB;
+  and the file channel's safety turned out to rest on a mount option in
+  another file that neither mentioned. A devil's advocate then demolished
+  three of my four first attempts, including a fix that fired phantom
+  keypresses and a test that measured a high-water mark. Splash had no
+  test and is the first thing the device runs.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
