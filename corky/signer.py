@@ -536,36 +536,45 @@ def master_xprv(rpc: "Rpc", wallet: str = WALLET) -> str:
     return masters.pop()
 
 
-def identity_of_key(rpc: "Rpc", key: str) -> str:
-    """What Core says a private key IS, as one string, without a wallet.
+def opens_wallet(rpc: "Rpc", wallet: str, key: str, count: int = 2) -> bool:
+    """Does this private key derive the addresses this wallet hands out?
 
-    `getdescriptorinfo` normalises `wpkh(<key>)` by replacing the private
-    key with its master public key, so the answer carries both halves of
-    the key's identity: the public key AND the chain code. Two keys give
-    the same answer only if they are the same key.
+    The question "does my paper open this wallet" asked the only way that
+    can answer it: Core derives receive addresses from the TYPED key, Core
+    reports the addresses the LOADED wallet gives, and Corky compares two
+    lists of strings Core returned (PLAN A-11).
 
-    This is stronger than the fingerprint the key menu shows. A fingerprint
-    is four bytes of a hash of the public key alone, so two keys with
-    different chain codes and the same fingerprint would derive completely
-    different addresses and still look equal. Core is the one parsing, and
-    Corky only compares the two strings Core returns (PLAN A-11).
+    Audit A6 (2026-09-06) found the check it replaces could not fail.
+    `_check_page` only accepts a page when it matches the backup character
+    for character, so by the time the flow asked Core to confirm, it was
+    asking whether a string equalled itself. The screen said "your paper
+    opens key X" on the strength of that. Deleting the whole comparison
+    left every suite green, which is how it was found.
 
-    The key goes through `-stdin`, never argv. Rpc.call's own rule: a
-    caller passing an xprv or a private descriptor MUST set it, or the key
-    lands in the process listing. This function shipped without it for a
-    few hours on 2026-09-05 and the two-axis review is what found it.
+    The derivation path is read out of the wallet's OWN descriptor rather
+    than rebuilt from the script type, so this follows the key wherever
+    Core actually put it, including regtest's coin type 1.
 
-    Nothing is created and nothing is written: `getdescriptorinfo` is
-    side-effect free, like `deriveaddresses`. Raises RuntimeError with the
-    key REDACTED if Core will not read it, which is what a mistyped
-    character produces: base58's own checksum fails long before anything
-    cryptographic happens.
+    Nothing is created and nothing is written: `getdescriptorinfo` and
+    `deriveaddresses` are both side-effect free. The key goes through
+    `-stdin`, never argv, which is Rpc.call's standing rule for anything
+    carrying an xprv. Core refuses a mistyped key at base58's own
+    checksum, long before anything cryptographic happens, and Rpc.call
+    redacts the key out of that error before it reaches a screen.
     """
-    try:
-        return rpc.call("getdescriptorinfo", f"wpkh({key})",
-                        stdin=True)["descriptor"]
-    except RuntimeError as exc:
-        raise RuntimeError(redact(str(exc))) from None
+    kind = available_kinds(rpc, wallet)[0]
+    shapes = {shape.split("(")[0]: shape for _purpose, shape in PURPOSE_FUNCS}
+    if kind not in shapes:
+        raise RuntimeError(f"no descriptor shape for {kind}")
+    _xfp, path = origin_of(export_descriptor(rpc, wallet, kind))
+    if not path:
+        raise RuntimeError("this wallet's descriptor carries no origin")
+    want = receive_addresses(rpc, wallet, kind, count)
+    raw = shapes[kind].format(key=f"{key}{path[1:]}/0/*")
+    checksum = rpc.call("getdescriptorinfo", raw, stdin=True)["checksum"]
+    got = rpc.call("deriveaddresses", f"{raw}#{checksum}",
+                   [0, count - 1], stdin=True)
+    return got == want
 
 
 def _drop_wallet(rpc: "Rpc", name: str) -> None:

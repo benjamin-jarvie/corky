@@ -232,8 +232,8 @@ def prop_no_key_in_argv():
     for name, run in (
             ("build_descriptors",
              lambda r: signer.build_descriptors(r, KEY)),
-            ("identity_of_key",
-             lambda r: signer.identity_of_key(r, KEY)),
+            ("opens_wallet",
+             lambda r: signer.opens_wallet(r, "w", KEY)),
             ("open_session_descriptors",
              lambda r: signer.open_session_descriptors(
                  r, [f"wpkh({KEY}/84h/1h/0h/0/*)"])),

@@ -130,17 +130,28 @@ if not broken:
 # Count the session markers themselves. The old rule matched only
 # `print("ok   X:` with a single-letter label, so it silently ignored
 # sessions named D3, H3/H4, R3 or T2 and undercounted by a third.
-sess = len(re.findall(r"^\s*# ---- Session ",
-                      (ROOT / "tests" / "e2e_session.py").read_text(), re.M))
+# Across EVERY suite that holds sessions, not one named file. The marker
+# was made drift-proof and the search was not: e2e_keys.py was added with
+# eleven more sessions and this counter never saw one of them, so the
+# README said 9 while the tree held 20 (audit A6, 2026-09-06). That is
+# the same defect as the label pattern, one level up.
+sess = sum(len(re.findall(r"^\s*# ---- Session ", p.read_text(), re.M))
+           for p in sorted((ROOT / "tests").glob("*.py")))
 c = claimed(r"([\d]+) scripted device sessions", "device sessions")
 if c is not None:
     ok(f"device sessions: {c} == {sess}") if c == sess else \
         bad(f"device sessions: README {c}, actual {sess}")
+# The attacks, counted from the one marker that cannot drift: their own
+# def line. The previous pattern looked for "# 1." or "ATTACK" headings
+# that no longer exist, matched exactly one thing, and reported the
+# mismatch as "informational", so it could never fail. A metric nobody
+# can fail is decoration (TESTING.md rule 4).
 adv = (ROOT / "tests" / "test_adversarial.py").read_text()
-n_attacks = len(re.findall(r"^# *\d+\.|^ATTACK", adv, re.M)) or adv.count("attack(")
-c = claimed(r"([\d]+) adversarial\s*\n?checks", "adversarial checks")
-if c is not None and n_attacks:
-    ok(f"adversarial: README {c} vs {n_attacks} labelled attacks (informational)")
+n_attacks = len(re.findall(r"^def attack_", adv, re.M))
+c = claimed(r"([\d]+) adversarial attack scenarios", "adversarial attacks")
+if c is not None:
+    ok(f"adversarial attacks: {c} == {n_attacks}") if c == n_attacks else \
+        bad(f"adversarial attacks: README {c}, actual {n_attacks}")
 if fails:
     print("\n" + "\n".join(fails))
     sys.exit(1)

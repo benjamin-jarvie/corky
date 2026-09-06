@@ -759,13 +759,13 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2022 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2029 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1059) ·
+[`corky/main.py`](corky/main.py) (1058) ·
 [`corky/screens.py`](corky/screens.py) (593) ·
-[`corky/signer.py`](corky/signer.py) (281) ·
+[`corky/signer.py`](corky/signer.py) (289) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (76).
 
@@ -779,18 +779,19 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,271 lines** (4,267 with blanks/comments).
+**Total functional code: 2,278 lines** (4,280 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,066 lines — none of it ships on the device.**
+**Test code: 5,106 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
-than device is deliberate: a 36-cell signing matrix, 15 adversarial
-checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,
-and 25%→81% on the state machine after mutation-driven test writing
-there exposed and fixed a real bug (typed codex32 entry could never
-type the ms1 separator; the flow was unusable until session G existed) —
-survivors individually triaged, and two real
+than device is deliberate: a 36-cell signing matrix, 6 adversarial attack scenarios,
+21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
+measured as executed across both architectures, with every uncovered line
+sorted into one of three piles and exactly one of them unreachable
+([A5](docs/wayfinder/beta-audit/tickets/A5-never-run.md)). Per-module
+mutation kill-rates run 74–100% on secret-touching modules, survivors
+individually triaged, and there are two real
 mainnet spends — ECDSA
 ([`19d1180b…`](https://mempool.space/tx/19d1180b816e00c1d272a25bda3caf1dc466b70c24ba128aee25e1a32b61cf41))
 and a Taproot Schnorr keyspend

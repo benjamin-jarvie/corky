@@ -1068,7 +1068,7 @@ def check_result(w, h, typed, wrong, label, page=0, pages=1):
     this moment, which it already does: this screen runs inside the paper
     backup, where the key is on the panel anyway. It opens no new window
     on the key. Core, separately, is what confirms the whole key matches
-    (signer.identity_of_key); this screen is the human half.
+    (signer.opens_wallet); this screen is the human half.
     """
     passed = not wrong
     img, d = _frame(w, h, f"{label}  ·  CHECK  {page + 1}/{pages}"

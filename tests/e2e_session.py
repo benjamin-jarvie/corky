@@ -21,26 +21,6 @@ import qrchannel  # noqa: E402
 XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
 
-BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-
-
-def grid_keys(payload):
-    """Button script that types payload on the 4x8 grid (cursor starts 0)."""
-    cur, out = 0, []
-    for ch in payload:
-        tgt = BECH32.index(ch)
-        d = (tgt - cur) % 32
-        out.append("d" * (d // 8) + "r" * (d % 8) + "a")
-        cur = tgt
-    return "".join(out)
-
-
-def _pub(rpc, desc):
-    """The watch-only form of a private descriptor, checksummed by Core."""
-    info = rpc.call("getdescriptorinfo", desc, stdin=True)
-    return info["descriptor"]
-
-
 def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
     cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
            f"--datadir={datadir}", "--chain=regtest", f"--script={script}",

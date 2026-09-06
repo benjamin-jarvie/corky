@@ -942,7 +942,7 @@ class Session:
         if outcome is None:
             return False
         if outcome == "check":
-            self._verify_backup(xprv, label, xfp)
+            self._verify_backup(xprv, label, xfp, name)
         return True
 
     def _discard(self, name, xfp):
@@ -1285,7 +1285,7 @@ class Session:
 
     # -- checking a written backup (Ben, 2026-09-05) ----------------------
 
-    def _verify_backup(self, text, label, xfp):
+    def _verify_backup(self, text, label, xfp, name):
         """Type the written backup back in, one page at a time, and find
         out whether the paper is right.
 
@@ -1308,21 +1308,25 @@ class Session:
             if got is None:
                 return False
             typed.append(got)
-        return self._confirm_typed_key("".join(typed), text, xfp)
+        return self._confirm_typed_key("".join(typed), name, xfp)
 
-    def _confirm_typed_key(self, typed, text, xfp):
+    def _confirm_typed_key(self, typed, name, xfp):
         """Core reads what was typed and says whether it is the same key.
 
-        The pages already matched character by character, so this cannot
-        disagree; it runs anyway because a comparison of our own two
-        strings proves our two strings are equal, and that is not the same
-        claim as "the paper opens this wallet". Core parses, Corky compares
-        what Core returns (PLAN A-11).
+        The pages already matched character by character, so a comparison
+        against Corky's own copy of the backup could only ever agree: it
+        would ask whether a string equals itself. Audit A6 (2026-09-06)
+        deleted that comparison and every suite stayed green, which is the
+        proof it was checking nothing.
+
+        So the question is put to the wallet instead. Core derives receive
+        addresses from what was typed, Core reports what the loaded wallet
+        hands out, and Corky compares the two lists Core returned (PLAN
+        A-11). That is the claim the screen makes.
         """
         stop = self._busy("Bitcoin Core is reading what you typed…")
         try:
-            same = (signer.identity_of_key(self.rpc, typed)
-                    == signer.identity_of_key(self.rpc, text))
+            same = signer.opens_wallet(self.rpc, name, typed)
         except RuntimeError as exc:
             stop()
             self._hold(str(exc)[:60])
@@ -1330,7 +1334,7 @@ class Session:
         finally:
             stop()
         if not same:
-            self._hold("Core does not read that as the same key")
+            self._hold("that key does not open this wallet")
             return False
         self.display.show(screens.verified(
             self.w, self.h,

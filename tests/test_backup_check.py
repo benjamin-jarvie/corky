@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import hal                              # noqa: E402
 import main as corky_main               # noqa: E402
 import screens                          # noqa: E402
+import signer                           # noqa: E402
 from e2e_keys import grid_presses, text_keys   # noqa: E402
 
 # A real regtest master private key, the one every other suite signs with.
@@ -289,6 +290,39 @@ elif not all(watcher.viewfinder_flags):
 else:
     ok(f"the key viewfinder: all {len(watcher.viewfinder_flags)} frames "
        "marked sensitive")
+
+# ---- Core's verdict reaches the screen ---------------------------------
+# The pages already matched character for character by the time this runs,
+# so the UI cannot produce a disagreement and no end-to-end session can
+# reach the refusal. The wiring is still worth pinning: a guard whose
+# false branch is unreachable through the UI is exactly the kind that
+# rots. Audit A6 (2026-09-06) deleted the whole comparison and every suite
+# stayed green.
+#
+# signer.opens_wallet has its own real check against a real node in
+# session K9. What is under test HERE is only that its answer changes what
+# the panel says.
+real_opens = signer.opens_wallet
+for verdict, want_text, why in (
+        (True, "your paper opens\nkey 73C5DA0A", "agrees"),
+        (False, None, "refuses")):
+    sess = session("a")
+    signer.opens_wallet = lambda *a, _v=verdict, **k: _v
+    try:
+        got = sess._confirm_typed_key(KEY, "corky-73c5da0a", "73c5da0a")
+    except hal.ScriptExhausted:
+        got = "ran out of presses"
+    finally:
+        signer.opens_wallet = real_opens
+    if got is not (verdict is True):
+        bad(f"Core {why}, but _confirm_typed_key returned {got!r}")
+    elif verdict and not drew(sess, screens.verified(320, 240, want_text)):
+        bad("Core agreed and the panel never said the paper opens the key")
+    elif not verdict and not drew(sess, screens.result(
+            320, 240, ok=False, detail="that key does not open this wallet")):
+        bad("Core refused and the panel did not say so")
+    else:
+        ok(f"Core {why} and the panel says so")
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

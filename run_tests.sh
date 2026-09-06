@@ -46,10 +46,14 @@ done
 if [ -x "tests/sparrow/.build/jdk-25.0.4.1+1/Contents/Home/bin/java" ]; then
   for t in tests/sparrow/test_sparrow_interop.py tests/sparrow/test_qr_airgap.py \
            tests/sparrow/test_export_interop.py tests/sparrow/test_recovery.py; do
-    if (cd tests/sparrow && $PY "$(basename "$t")" >/dev/null 2>&1); then
+    SLOG="$LOGDIR/$(basename "$t").log"
+    if (cd tests/sparrow && $PY "$(basename "$t")" >"$SLOG" 2>&1); then
       echo "PASS $t"
     else
-      echo "FAIL $t"; FAILED=1
+      echo "FAIL $t"
+      sed 's/^/      | /' "$SLOG" | tail -12
+      echo "      | full output: $SLOG"
+      FAILED=1
     fi
   done
 else
@@ -59,6 +63,13 @@ else
 fi
 echo "(not run here: tests/m1  28 checks + the two legibility rigs;"
 echo "               needs its setup.sh and Rosetta on Apple Silicon)"
+# 152 lines of test that nothing ran and nothing mentioned, so nobody knew
+# they were there (audit A6, 2026-09-06). They spend real mainnet sats, so
+# they cannot join a suite; saying so is the whole fix.
+echo "(real money:   tests/m4lite_mainnet.py, tests/m4lite_taproot.py"
+echo "               a funded burner UTXO on MAINNET. Needs CORKY_BURNER_XPRV"
+echo "               or an xprv file as argv[1]. Last run 2026-08-19:"
+echo "               tx 19d1180b, block 963255.)"
 # The on-device rigs need the board, the hat and the camera, and a human to
 # press buttons and aim a lens. Nothing here can stand in for them.
 echo "(on the board: tests/hw_buttons.py  8 controls, prompts on the LCD"

@@ -24,11 +24,16 @@ cat > "$HOOK/sitecustomize.py" <<'PY'
 import coverage
 coverage.process_startup()
 PY
+# SOURCE=tests measures the suites themselves, which is how audit A6
+# finds an assertion that never executes: a check behind a guard that is
+# never true is an uncovered line in the test file, and nothing else
+# reports it.
+SRC=${SOURCE:-corky}
 cat > "$HOOK/.coveragerc" <<PY
 [run]
 branch = True
 parallel = True
-source = $ROOT/corky
+source = $ROOT/$SRC
 data_file = $ROOT/.coverage
 PY
 rm -f "$ROOT"/.coverage "$ROOT"/.coverage.*

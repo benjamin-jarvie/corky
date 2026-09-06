@@ -498,14 +498,19 @@ def main():
         assert _has(fr9, _render(scr.verified,
                                  f"your paper opens\nkey {xfp_a.upper()}")), \
             "K9: Core never confirmed the typed key opens this wallet"
-        # And Core really is the one deciding: the same call on a different
-        # key must not agree, or the check above proves nothing.
+        # And the check can actually FAIL, or the assertion above proves
+        # nothing. Audit A6 found the old comparison could not: the pages
+        # had already matched character for character, so Core was asked
+        # whether a string equalled itself. It now asks whether the typed
+        # key derives the addresses this wallet hands out.
+        name9 = signer.open_session_xprv(rpc, XPRV_A)
         other = signer.master_xprv(rpc, wallet=signer.generate_wallet(rpc))
-        assert (signer.identity_of_key(rpc, XPRV_A)
-                != signer.identity_of_key(rpc, other)), \
-            "K9: Core reads two different keys as the same key"
+        assert signer.opens_wallet(rpc, name9, XPRV_A), \
+            "K9: the wallet's own key was judged not to open it"
+        assert not signer.opens_wallet(rpc, name9, other), \
+            "K9: a different key was judged to open this wallet"
         try:
-            signer.identity_of_key(rpc, page1_bad + pages9[0][:1])
+            signer.opens_wallet(rpc, name9, page1_bad + pages9[0][:1])
             raise AssertionError("K9: Core accepted a mistyped key")
         except RuntimeError as exc:
             assert XPRV_A[:20] not in str(exc) and typo not in str(exc)[:8], \
@@ -659,6 +664,42 @@ def main():
         signer.close_session(rpc)
         print(f"ok   K12: LEFT/RIGHT walks all {len(order12)} policies on "
               "the address screen and returns to the first")
+
+        # ---- Session K13: two media, and the file goes where you said ----
+        # `run_device` has taken a `card` argument since it was written and
+        # no session had ever passed one, so the chooser had only ever been
+        # asked with a single row (audit A6, 2026-09-06). One row is the
+        # case where the answer cannot be wrong. The screen "is what tells
+        # you where the file went, and that is the decision" (ticket 04),
+        # and nothing had checked that the file agrees with the screen.
+        signer.close_session(rpc)
+        stick13 = work / "stick13"; stick13.mkdir()
+        card13 = work / "card13"; card13.mkdir()
+        script13 = ("ra" + keys_press(0, "Scan a key") + "a"
+                    + key_menu_press("Export public key")
+                    + "a"                        # SCRIPT TYPE -> native segwit
+                    + "dda"                      # EXPORT AS -> Wallet file
+                    + "da"                       # CHANNEL -> the second row
+                    + "a"                        # dismiss
+                    + "a" * 3                    # the three addresses
+                    + "b" + "b" + "b" + "draa")
+        r13 = run_device(datadir, script13, work / "framesK13",
+                         qr_key=key_a, stick=stick13, card=card13)
+        assert r13.returncode == 0, f"K13 failed:\n{r13.stderr[-900:]}"
+        # The chooser must have OFFERED both, named as the code names them.
+        assert _has(work / "framesK13",
+                    _render(scr.choose_channel, ["stick", "card"], 1)), \
+            "K13: the chooser did not offer both media with the card second"
+        on_card = list(card13.glob("*.dat"))
+        on_stick = list(stick13.glob("*.dat"))
+        assert on_card and not on_stick, (
+            f"K13: the card row was chosen, but the file landed on "
+            f"{'both' if on_card and on_stick else 'the stick'}: "
+            f"card={[p.name for p in on_card]} "
+            f"stick={[p.name for p in on_stick]}")
+        signer.close_session(rpc)
+        print(f"ok   K13: with a stick AND a card, the file lands on the one "
+              f"chosen ({on_card[0].name} on the card)")
         print("ALL PASS")
     finally:
         try:
