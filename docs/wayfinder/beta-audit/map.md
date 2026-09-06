@@ -118,6 +118,15 @@ this device to a person who is not Ben, and why.
   byte. **Needs Ben: running `harden.sh`,** which is one way and removes
   SSH.
 
+- [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md):
+  a node that was SLOW rather than dead froze the device for ever.
+  `Rpc.call` had no timeout at all, and `SIGSTOP` on a live node left the
+  call blocked past 45 seconds with nothing that would ever end it: a
+  frozen panel, no way out, no shell. Bounded now at 120s, measured
+  against the board's own 4.4s worst case, and it becomes an error the
+  panel can dismiss. **Needs Ben:** a stick pulled mid-write, a blank
+  panel, a camera out of focus.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -125,7 +134,6 @@ reader knows what is takeable without opening eleven files.
 
 **Takeable now, nothing blocking:**
 
-- [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
 
 **Waiting:**
