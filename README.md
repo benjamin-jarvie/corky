@@ -759,13 +759,13 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2036 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2043 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
 [`corky/main.py`](corky/main.py) (1058) ·
 [`corky/screens.py`](corky/screens.py) (593) ·
-[`corky/signer.py`](corky/signer.py) (296) ·
+[`corky/signer.py`](corky/signer.py) (303) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (76).
 
@@ -779,11 +779,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,294 lines** (4,322 with blanks/comments).
+**Total functional code: 2,301 lines** (4,367 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,300 lines — none of it ships on the device.**
+**Test code: 5,304 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 7 adversarial attack scenarios,
 21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
@@ -912,20 +912,29 @@ apart.
 on the board on 2026-09-06, at 250 inputs both times, with Corky's own
 services stopped so the gate is not competing with them:
 
-| 250 inputs, funded as | PSBT | headroom | against 100MB |
-|---|---|---|---|
-| ordinary payments (2 outputs per funding tx) | 92KB | **187MB** | PASS |
-| exchange batches (100 outputs per funding tx) | 980KB | **74MB** | **FAIL** |
+| inputs | funded as | PSBT | headroom | against 100MB |
+|---|---|---|---|---|
+| 250 | ordinary payments (2 outputs per funding tx) | 92KB | **187MB** | PASS |
+| 150 | exchange batches (100 outputs per funding tx) | | **121MB** | PASS |
+| 175 | exchange batches | | **114MB** | PASS |
+| 200 | exchange batches | | **78MB** | **FAIL** |
+| 250 | exchange batches | 980KB | **72MB** | **FAIL** |
 
 Every input carries the whole transaction that paid it, so the funding
 shape sets the size per input: 378 bytes against 2,778. PLAN A-21 measured
-the same split on 2026-09-03 and got 226MB and 97MB; both figures are
-lower today, and the failing one is further below the line, not nearer it.
+226MB and 97MB for the two 250-input shapes on 2026-09-03; both are lower
+today.
 
-A consolidation of 250 exchange-batch outputs can take this board out of
-memory. An ordinary payment is nowhere near it. This is the pocket
-build's ceiling and PLAN A-15 already ruled that M0's 512MB question
-gates the pocket build and not v1, which is the CM4 with 2GB.
+**The ceiling is Bitcoin Core's, not Corky's.** At 250 batch inputs
+bitcoind peaks at 128MB and Corky's own process at 45MB. Cutting Corky
+from 56MB to 45MB, by not reading previous transactions it never used,
+moved the headroom by 2MB: the low-water mark tracks bitcoind. So the
+honest limit is an input count, **about 175 batch-funded inputs**, and
+not something more code will fix.
+
+An ordinary payment is nowhere near any of this. PLAN A-15 already ruled
+that M0's 512MB question gates the pocket build and not v1, which is the
+CM4 with 2GB.
 **M1 passed except the optics**, then the camera itself was wired and reads
 a real Sparrow frame on the board.
 
@@ -943,7 +952,7 @@ phone wallets. `docs/wayfinder/e2e-before-testers/` charts it.
 
 | Gate | Deliverable | Pass condition |
 |---|---|---|
-| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | **SHAPE-DEPENDENT**, re-measured 2026-09-06: 187MB headroom at 250 ordinary inputs (PASS), 74MB at 250 exchange-batch inputs (FAIL, needs 100MB) |
+| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | **SHAPE-DEPENDENT**, re-measured 2026-09-06: 250 ordinary inputs PASS at 187MB; exchange batches pass to 175 inputs (114MB) and fail from 200 (78MB). The ceiling is bitcoind's 128MB, not Corky's 45MB |
 | M1 | QR round trip vs Sparrow watch-only, testnet | fee/outputs match Sparrow; signed PSBT broadcasts |
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |

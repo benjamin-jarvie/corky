@@ -132,7 +132,8 @@ class Rpc:
         sub = self.net_dir / "wallets"
         return sub if sub.is_dir() else self.net_dir
 
-    def call(self, method: str, *params, wallet: "str | None" = None, stdin: bool = False):
+    def call(self, method: str, *params, wallet: "str | None" = None,
+             stdin: bool = False, drop: "frozenset[str] | tuple" = ()):
         """Run one bitcoin-cli command.
 
         stdin=True sends the parameters through bitcoin-cli's -stdin instead
@@ -198,8 +199,25 @@ class Rpc:
         text = out.stdout.strip()
         try:
             # parse_float=Decimal: BTC amounts must never pass through binary
-            # floats — the review screen is the device's security boundary.
-            return json.loads(text, parse_float=Decimal)
+            # floats. The review screen is the device's security boundary.
+            #
+            # `drop` names fields to throw away AS the answer is parsed,
+            # never afterwards, because the cost being avoided is building
+            # them at all. decodepsbt on the 250-input batch case answers
+            # with 10.8MB of JSON that becomes a 21.1MB object tree, and
+            # 20.7MB of that is previous transactions the caller never
+            # reads (measured 2026-09-06). Dropping by NAME and not by
+            # path is deliberate: a field this build has never heard of is
+            # kept, so a new one cannot go missing quietly.
+            hook = None
+            if drop:
+                dropped = frozenset(drop)
+
+                def hook(pairs):
+                    return {k: v for k, v in pairs if k not in dropped}
+
+            return json.loads(text, parse_float=Decimal,
+                              object_pairs_hook=hook)
         except json.JSONDecodeError:
             return text
 
@@ -432,47 +450,73 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
         _drop_wallet(rpc, scratch)
 
 
+#: What decodepsbt says that the review screen never reads.
+#:
+#: `non_witness_utxo` is the whole previous transaction for every input,
+#: and at 250 batch-funded inputs that is 25,000 output objects nobody
+#: looks at: 10.8MB of JSON becoming a 21.1MB tree, where 20.7MB is this.
+#: The rest are signing and derivation material Core needs and the screen
+#: does not.
+_REVIEW_DROPS = frozenset((
+    "non_witness_utxo", "witness_utxo", "bip32_derivs",
+    "taproot_bip32_derivs", "redeem_script", "witness_script",
+    "final_scriptSig", "final_scriptwitness", "scriptSig", "txinwitness",
+    "partial_signatures", "asm", "hex", "desc",
+))
+
+#: The same idea for `owners`, which reads the fingerprints and nothing
+#: else. It must NOT drop the two bip32 lists that carry them.
+_OWNER_DROPS = frozenset((
+    "non_witness_utxo", "witness_utxo", "redeem_script", "witness_script",
+    "final_scriptSig", "final_scriptwitness", "scriptSig", "txinwitness",
+    "partial_signatures", "asm", "hex", "desc", "tx",
+))
+
+
 def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
     """Everything the review screen shows. All numbers are Core's.
 
     The fee is computed by Core from coordinator-supplied input amounts;
     an air-gapped signer cannot verify those amounts against the chain.
     The screen must say so.
+
+    **The total going in is Core's fee plus the outputs, not a sum Corky
+    makes.** Corky used to add up every input's own amount, which meant
+    reading the whole previous transaction for every legacy input. Those
+    previous transactions are 20.7MB of the 21.1MB this call used to
+    build at the 250-input batch case, and they exist in the answer only
+    to be added up, which Core has already done. `fee` IS that sum minus
+    the outputs.
+
+    It costs nothing in trust. Core computed the fee from exactly the
+    amounts Corky was summing, so the two were never independent; this
+    only stops pretending they were. What checks it is
+    `tests/test_export.py` 1c, which compares the total against the
+    node's own UTXO set with `gettxout`, and that is a genuinely separate
+    source.
+
+    A fee of None means Core could not value every input, which is what
+    `input_total_btc` of None used to mean and what makes the device
+    refuse the transaction. One condition now instead of two that could
+    disagree.
     """
-    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True)
+    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True,
+                       drop=_REVIEW_DROPS)
     analysis = rpc.call("analyzepsbt", psbt_b64, stdin=True)
     outputs = [
         {"address": vout["scriptPubKey"].get("address", "(non-standard)"),
          "amount_btc": vout["value"]}
         for vout in decoded["tx"]["vout"]
     ]
-    # Total input value, from the coordinator-supplied UTXO data that Core
-    # parsed out of the PSBT (A-5: show fee AND total input sum).
-    input_total = Decimal(0)
-    complete_inputs = True
-    for i, txin in enumerate(decoded["inputs"]):
-        amount = None
-        witness = txin.get("witness_utxo")
-        if witness is not None:
-            amount = witness.get("amount")
-        else:
-            # Legacy input: non_witness_utxo is the whole previous tx as
-            # decoded by Core; the spent output's value sits at the vout
-            # index named by this input in the unsigned tx.
-            prev = txin.get("non_witness_utxo")
-            if prev is not None:
-                vout_n = decoded["tx"]["vin"][i]["vout"]
-                outs = prev.get("vout", [])
-                if vout_n < len(outs):
-                    amount = outs[vout_n].get("value")
-        if amount is None:
-            complete_inputs = False
-        else:
-            input_total += Decimal(str(amount))
+    fee = decoded.get("fee")
+    input_total = None
+    if fee is not None:
+        input_total = Decimal(str(fee)) + sum(
+            Decimal(str(o["amount_btc"])) for o in outputs)
     return {
         "outputs": outputs,
-        "fee_btc": decoded.get("fee"),          # None if inputs incomplete
-        "input_total_btc": input_total if complete_inputs else None,
+        "fee_btc": fee,                         # None if inputs incomplete
+        "input_total_btc": input_total,
         "input_count": len(decoded["inputs"]),
         "next_role": analysis.get("next"),
         "fee_note": "fee computed from coordinator-supplied input amounts",
@@ -487,7 +531,8 @@ def owners(rpc: "Rpc", psbt_b64: str) -> set[str]:
     fingerprint of the key that owns it. That is how a transaction names
     its key (ticket 03); Corky matches, Core decides.
     """
-    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True)
+    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True,
+                       drop=_OWNER_DROPS)
     found = set()
     for txin in decoded["inputs"]:
         for field in ("bip32_derivs", "taproot_bip32_derivs"):

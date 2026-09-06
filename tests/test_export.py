@@ -102,14 +102,14 @@ def main():
             ok(f"every policy's address is recognised by the scan ({shapes})")
         gen_name = signer.generate_wallet(rpc)
 
-        # 1c. THE LEGACY INPUT PATH ON THE REVIEW SCREEN, which had never
-        #     executed at all until audit A5 measured it (2026-09-06).
+        # 1c. A LEGACY INPUT, whose amount lives only inside the whole
+        #     previous transaction, so Core has to read that to value it.
         #
-        #     A legacy input carries no witness_utxo, so describe_psbt has
-        #     to find the spent amount inside the whole previous
-        #     transaction. That branch feeds the input total on the screen
-        #     a user signs from, and it was unreachable until Corky started
-        #     offering legacy addresses. It is reachable now.
+        #     describe_psbt no longer reads it: those previous transactions
+        #     were 20.7MB of a 21.1MB tree at 250 batch inputs, and the
+        #     total going in is now Core's own fee plus the outputs. This
+        #     check is what says the two agree, and it asks the CHAIN
+        #     rather than Core, so it is a genuinely separate source.
         legacy_addr = signer.receive_addresses(rpc, gen_name, "pkh", 1)[0]
         rpc.call("createwallet", "miner_legacy")
         m_addr = rpc.call("getnewaddress", wallet="miner_legacy")
@@ -122,21 +122,20 @@ def main():
         decoded = rpc.call("decodepsbt", leg)
         uses_legacy = any("witness_utxo" not in i for i in decoded["inputs"])
         if not uses_legacy:
-            bad("1c: Core built a witness PSBT, so the legacy branch is "
-                "still not exercised")
+            bad("1c: Core built a witness PSBT, so this is not the legacy "
+                "case it claims to be")
         else:
             review = signer.describe_psbt(rpc, leg)
             total = review["input_total_btc"]
             out_sum = sum(Decimal(str(o["amount_btc"]))
                           for o in review["outputs"])
             # The independent source of truth is the node's UTXO SET, not
-            # the PSBT. describe_psbt reads the amount out of the copy of
-            # the previous transaction that the coordinator embedded, so
-            # comparing it to decodepsbt's own "fee" compares Core to
-            # Core and cannot fail. gettxout answers from the chain
-            # instead, so a wrong vout index or a lying coordinator shows
-            # up here. (Devil's advocate on A5, 2026-09-06: the first
-            # version of this check was that tautology.)
+            # the PSBT. The review's total is derived from Core's fee, so
+            # comparing it to that fee would compare Core to Core and
+            # could not fail. gettxout answers from the chain instead, so
+            # a coordinator that lies about an input amount shows up
+            # here. (Devil's advocate on A5, 2026-09-06: the first version
+            # of this check was exactly that tautology.)
             chain_in = Decimal(0)
             for txin in decoded["tx"]["vin"]:
                 utxo = rpc.call("gettxout", txin["txid"], txin["vout"])
@@ -152,8 +151,8 @@ def main():
                 bad(f"1c: the review's fee {review['fee_btc']} is not "
                     f"chain inputs minus outputs, {chain_fee}")
             else:
-                ok(f"1c: a legacy input's amount is read out of the previous "
-                   f"transaction and matches the chain: {total} in, "
+                ok(f"1c: a legacy input's total agrees with the chain, "
+                   f"without reading the previous transaction: {total} in, "
                    f"{out_sum} out, {chain_fee} fee")
 
         # 1d. THE REFUSAL. describe_psbt reports no input total when any

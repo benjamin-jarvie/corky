@@ -101,13 +101,22 @@ class FakeRpc:
         self._decoded = decoded
         self._analysis = analysis
 
-    def call(self, method, *params, wallet=None, stdin=False):
+    def call(self, method, *params, wallet=None, stdin=False, drop=()):
         # stdin is not optional for a PSBT-carrying call: on Linux a PSBT
         # is too long to pass as one argv entry (I-10). The double asserts
         # it rather than accepting it, so a regression fails here on the
         # dev machine, where the real execve limit cannot be reached.
         if method in ("decodepsbt", "analyzepsbt", "walletprocesspsbt"):
             assert stdin, f"{method} must pass the PSBT through stdin"
+        # Same shape of rule, same reason. decodepsbt's answer holds the
+        # whole previous transaction for every input, and building all of
+        # them cost 20.7MB of a 21.1MB tree at 250 batch-funded inputs.
+        # That only matters on a 512MB board, so it cannot be felt here
+        # and has to be asserted here instead (TESTING.md rule 9).
+        if method == "decodepsbt":
+            assert "non_witness_utxo" in drop, (
+                "decodepsbt must drop non_witness_utxo: it is 20.7MB of "
+                "previous transactions the review screen never reads")
         _no_key_in_argv(method, params, stdin)
         if method == "decodepsbt":
             return self._decoded
@@ -133,7 +142,7 @@ class ArgvWatcher:
     def __init__(self):
         self.methods = []
 
-    def call(self, method, *params, wallet=None, stdin=False):
+    def call(self, method, *params, wallet=None, stdin=False, drop=()):
         self.methods.append(method)
         _no_key_in_argv(method, params, stdin)
         if method == "getdescriptorinfo":

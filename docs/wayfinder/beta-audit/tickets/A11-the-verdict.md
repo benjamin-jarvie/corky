@@ -43,12 +43,13 @@ The no-go is about the **package**, not the program. Three things.
 
 ### The three findings that decide it
 
-**1. A 250-input consolidation can take the board out of memory.**
-Re-measured today, three runs. Ordinary payments: 187MB of headroom,
-pass. Exchange-batch withdrawals: **74MB against a 100MB requirement**,
-fail. A-21 measured 97MB for that shape and R6 measured 81MB; it is
-getting worse, not better. A tester consolidating an exchange withdrawal
-is not an exotic act, and the failure mode is the device dying mid-sign.
+**1. A large consolidation can take the board out of memory.**
+Measured today: ordinary payments pass at 250 inputs with 187MB of
+headroom; exchange-batch withdrawals pass to 175 inputs and **fail from
+200**, at 78MB against a 100MB requirement. A tester consolidating an
+exchange withdrawal is not an exotic act, and the failure mode is the
+device dying mid-sign. The ceiling is bitcoind's, so the answer is a
+stated limit and a refusal, not more code (see item 4).
 
 **2. Nobody has proven a coordinator's camera can read this panel.**
 Sparrow's *library* is proven, thoroughly. A lens is not a library.
@@ -76,11 +77,27 @@ Four things, each finishable, none depending on another:
    their own card against the repository without trusting either of us.
 3. **Point a phone and Sparrow's laptop at the panel.** T1, T2, T3, 18,
    22. Half a day with the board on the desk.
-4. **Decide what to do about the batch shape.** Either fix it, or state
-   an input limit in the tester instructions and have the device refuse
-   past it. A-21 already names the fix that would help most:
-   `describe_psbt` parses the whole `decodepsbt` document, including
-   25,000 output objects it never reads.
+4. **State an input limit.** This was written as "fix it or state a
+   limit", and the fix has since been tried and measured, so the choice
+   is gone. A-21's suggestion was right about the waste and wrong about
+   the effect: `describe_psbt` did parse 25,000 output objects it never
+   read, and not parsing them cut Corky's process from **56MB to 45MB**
+   and moved the headroom by **2MB**. The low-water mark tracks
+   bitcoind, which peaks at 128MB, and that is Core's memory and not
+   ours.
+
+   So the limit is a number, measured on the board on 2026-09-06:
+
+   | batch-funded inputs | headroom | |
+   |---|---|---|
+   | 150 | 121MB | PASS |
+   | 175 | 114MB | PASS |
+   | 200 | 78MB | FAIL |
+   | 250 | 72MB | FAIL |
+
+   **About 175.** Ordinary payments are unaffected and pass at 250 with
+   187MB. The device should refuse past the limit rather than dying
+   mid-sign, and the tester instructions should say so.
 
 Items 1, 2 and 3 are hours. Item 4 is a decision first.
 
@@ -96,8 +113,9 @@ light, and a coordinator that is not a test harness.
 - **The paper backup is the only backup.** 111 characters, by hand. There
   is no file, no encryption, no second copy. Lose the paper and the coins
   are gone. PLAN A-24, and it is deliberate.
-- **Do not consolidate.** Ordinary payments only, until finding 1 is
-  settled.
+- **Do not consolidate more than about 150 inputs.** Ordinary payments of
+  any size are fine. The board runs out of memory somewhere between 175
+  and 200 exchange-batch inputs, and nothing yet refuses on your behalf.
 - **This card is a dev image** unless `harden.sh` has been run on it: SSH
   and both radios are live.
 - **Only Bitcoin Core and Sparrow can open the paper backup.** BlueWallet,
