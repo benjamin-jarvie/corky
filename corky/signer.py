@@ -92,6 +92,15 @@ Key = namedtuple("Key", "name xfp")
 #: address nor the balance. Measured on the board: four pairs is a 44kB
 #: wallet against 20kB for two, and the node's RSS does not move. 24kB per
 #: key against 512MB of RAM is not a reason to hide half a wallet.
+#: How long any one bitcoin-cli call may take before the device gives up.
+#:
+#: Measured on the Zero 2 W, 2026-09-06, with the M0 gate: opening a key
+#: (importdescriptors, eight descriptors) takes **4.4s**, and building,
+#: reviewing and signing a 60-input PSBT takes **1.5s**. This cap is 27x
+#: the slowest of those, so it cannot fire on a healthy node doing real
+#: work; it exists only to turn "frozen for ever" into a message.
+RPC_TIMEOUT = 120.0
+
 PURPOSE_FUNCS = ((44, "pkh({key})"),
                  (49, "sh(wpkh({key}))"),
                  (84, "wpkh({key})"),
@@ -167,7 +176,23 @@ class Rpc:
             feed = "\n".join(args) + "\n"
         else:
             cmd += [method, *args]
-        out = subprocess.run(cmd, capture_output=True, text=True, input=feed)
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 input=feed, timeout=RPC_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            # A node that is SLOW rather than dead is the case the suites
+            # never had: absent bitcoind fails fast, but one that holds the
+            # socket and never answers used to block here for ever. There
+            # was no timeout at all, so the panel froze on a busy screen
+            # with no way out and no shell to fix it from (audit A4,
+            # 2026-09-06, measured with SIGSTOP on a live node).
+            #
+            # RuntimeError, because that is what Session.HANDLED catches
+            # and what every other Core failure raises. The panel gets an
+            # error it can dismiss instead of nothing, for ever.
+            raise RuntimeError(
+                f"{method}: Bitcoin Core did not answer in "
+                f"{RPC_TIMEOUT:.0f}s") from None
         if out.returncode != 0:
             raise RuntimeError(f"{method}: {redact(out.stderr.strip())}")
         text = out.stdout.strip()

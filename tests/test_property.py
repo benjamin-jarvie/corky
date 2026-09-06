@@ -12,6 +12,8 @@ and the one number it computes:
      uncaught exception on garbage, only their controlled errors.
   2. Fee and amount Decimal arithmetic in describe_psbt is exact.
 """
+import shutil
+import time
 import sys
 import tempfile
 from decimal import Decimal
@@ -283,6 +285,50 @@ def prop_fee_decimal_exact(inputs, out_frac):
     assert result["fee_btc"] == sats_to_btc(fee_sats)
 
 
+def prop_a_slow_node_does_not_freeze_the_device():
+    """A node that never answers must become an error, not a hang.
+
+    Absent bitcoind fails fast, so every suite covered that and none
+    covered the middle case: a node holding its socket and answering
+    nothing. `subprocess.run` had NO timeout, so the call blocked for
+    ever and the panel stayed on a busy screen with no way out and no
+    shell to fix it from. Measured with SIGSTOP on a live node (audit A4,
+    2026-09-06); it was still blocked after 45 seconds.
+
+    Faked here with a `bitcoin-cli` that sleeps, because the property
+    under test is the timeout and not the node. RuntimeError is the
+    required type: it is what `Session.HANDLED` catches, so the panel
+    shows a message it can dismiss.
+    """
+    import subprocess as sp
+    import tempfile
+    sleeper = Path(tempfile.mkdtemp()) / "bitcoin-cli"
+    sleeper.write_text("#!/bin/sh\nsleep 60\n")
+    sleeper.chmod(0o755)
+    rpc = signer.Rpc("/nonexistent", chain="regtest", cli=str(sleeper))
+    was = signer.RPC_TIMEOUT
+    signer.RPC_TIMEOUT = 1.0
+    t0 = time.monotonic()
+    try:
+        rpc.call("getblockchaininfo")
+        raise AssertionError("a node that never answers returned normally")
+    except RuntimeError as exc:
+        took = time.monotonic() - t0
+        assert "did not answer" in str(exc), f"wrong message: {exc}"
+        assert took < 10, f"gave up after {took:.0f}s, not about 1s"
+    except sp.TimeoutExpired:
+        raise AssertionError(
+            "TimeoutExpired reaches the caller. Session.HANDLED does not "
+            "catch it, so this ends the process instead of painting an "
+            "error") from None
+    finally:
+        signer.RPC_TIMEOUT = was
+        shutil.rmtree(sleeper.parent, ignore_errors=True)
+    # And the cap has to stay far above real work, or it breaks the
+    # working case: the slowest call measured on the board is 4.4s.
+    assert was >= 60, f"RPC_TIMEOUT is {was}s, too close to real work"
+
+
 def main():
     checks = [
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
@@ -291,6 +337,8 @@ def main():
         ("no key material in argv", prop_no_key_in_argv),
         ("Rpc routes keys to stdin itself", prop_rpc_routes_keys_itself),
         ("amounts never become floats", prop_amounts_never_become_floats),
+        ("a slow node does not freeze the device",
+         prop_a_slow_node_does_not_freeze_the_device),
     ]
     failed = 0
     for name, fn in checks:
