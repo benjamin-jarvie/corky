@@ -1,0 +1,76 @@
+# Map: the audit that decides whether Corky ships a beta
+
+Label: `wayfinder:map`. Tickets are in `tickets/`, one file each.
+
+## Destination
+
+**An evidenced go or no-go on a private beta.** Not a list of findings: a
+decision, with every finding weighed as blocking or not blocking, and the
+evidence for each written down where a tester can check it.
+
+The map is done when someone can read one page and know whether to hand
+this device to a person who is not Ben, and why.
+
+## Notes
+
+- Ben's call on scope, 2026-09-06: **everything, and the board is on.**
+  Hardware items are in, not deferred to another map.
+- Ben's call on cleanup: **delete what is superseded, git keeps it.** Two
+  false claims reached him in one evening from stale documents, the `lab`
+  branch and "cards and dice by default". A document nobody has checked
+  is worse than no document.
+- This repo carries execution IN the map, as every previous one has.
+  Decisions and the code that follows both land here.
+- Skills: `/mp-code-review` before the gate, `/mp-tdd` for anything built,
+  `/mp-codebase-design` for anything restructured. `TESTING.md` rules 1 to
+  11 bind every test. `CONTEXT.md` fixes the vocabulary.
+- **Rule 5 is the house rule of this map.** Verify every finding against
+  the source before acting on it. Five reviewer claims have failed
+  verification in this project so far. A finding that has not been
+  reproduced is a rumour.
+- The board is `corky-zero`, and `corky-ip` in `~/.ssh/config` when mDNS
+  is not resolving. Sync with the rsync in the previous map before
+  touching it.
+
+## Decisions so far
+
+<!-- one line per closed ticket -->
+
+## The frontier, and what waits behind it
+
+Open tickets are not listed as decisions; this is the shape of them, so a
+reader knows what is takeable without opening eleven files.
+
+**Takeable now, nothing blocking:**
+
+- [A1 Read the four modules nothing has read](tickets/A1-unread-modules.md): 617 lines that ship and that no review has opened.
+- [A2 Does the layer model actually hold, end to end](tickets/A2-layer-model-holds.md): "Layer 2 computes nothing on a key" is checked by reading, and reading
+  missed a key on the command line for several hours.
+- [A8 Every claim the documents make](tickets/A8-claims-versus-reality.md): the cheapest, and the one that stops wrong things being believed.
+- [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
+- [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
+- [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
+
+**Waiting:**
+
+- [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md), behind A1.
+- [A5 What has never run, on anything](tickets/A5-never-run.md), behind A1.
+- [A6 Do the tests measure what they claim](tickets/A6-tests-measure-what-they-claim.md), behind A5.
+- [A9 Delete what is superseded](tickets/A9-delete-what-is-superseded.md), behind A8.
+- [A11 The verdict](tickets/A11-the-verdict.md), behind all of them. It is
+  the destination.
+
+## Not yet specified
+
+- What the beta actually is: how many testers, what they are asked to do,
+  what they are told not to do, and how they report. It cannot be written
+  until the go/no-go questions below have answers.
+- Whether anything in the release image needs a second pair of eyes that
+  is not Ben's and not mine.
+- What happens to the four earlier maps once this one closes.
+
+## Out of scope
+
+- Multisig, message signing and dice entropy. PLAN freezes them out of v1.
+- The `butlers-playground` fork's own state, beyond the sync that map N4
+  already tracks.
