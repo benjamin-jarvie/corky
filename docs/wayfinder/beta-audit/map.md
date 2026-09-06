@@ -64,6 +64,17 @@ this device to a person who is not Ben, and why.
   with no stated fee had never executed, and the legacy fee assertion
   compared Core to Core so it could not fail.
 
+- [A6 Do the tests measure what they claim](tickets/A6-tests-measure-what-they-claim.md):
+  five guarantees were deleted one at a time and the whole suite run
+  against each. Four were caught. The fifth was the paper backup check,
+  which could not fail: the pages had already matched character for
+  character, so Core was asked whether a string equalled itself, and the
+  screen said "your paper opens key X" on that. It now asks whether the
+  typed key derives the addresses the wallet hands out. Also: the session
+  counter read one of two files and said 9 where there are 21, the
+  adversarial counter could not fail by construction, and 152 statements
+  of test ran nowhere and were named nowhere.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -76,7 +87,6 @@ reader knows what is takeable without opening eleven files.
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
 - [A3 What a hostile QR, file or card can make the device do](tickets/A3-hostile-input.md): unblocked by A1.
-- [A6 Do the tests measure what they claim](tickets/A6-tests-measure-what-they-claim.md): unblocked by A5.
 
 **Waiting:**
 
