@@ -173,14 +173,31 @@ def _status_circle(img, d, w, h, label, colour):
     _fit(d, (cx, cy), label, int(h * 0.075), colour, "mm", int(r * 1.6))
 
 
+# Menu geometry, defined here because _frame centres the title in the
+# space above the first row and every list screen lays out from it.
+MENU_TOP = 0.16          # top edge of the first row's box, on every menu
+MENU_BOTTOM = 0.95       # bottom edge the last row may not pass
+MENU_PITCH = 0.135       # one row's height, fixed, so two rows sit together
+MENU_ROWS = 6            # rows on screen at once; a longer list scrolls
+
+
 def _frame(w, h, title=None):
+    """The ground every screen is drawn on, and its title.
+
+    The title is gold and there is no rule under it (Ben, 2026-09-05). The
+    divider was doing the job the empty space now does, and doing it with
+    a line meant the title sat squashed against the top of the panel.
+
+    It is centred in the space ABOVE the first menu row, so the same
+    heading lands in the same place whether the screen below it is a menu,
+    a page of a key, or an address. One number decides it, MENU_TOP, which
+    is the same number the rows are laid out from.
+    """
     img = Image.new("RGB", (w, h), INK)
     d = ImageDraw.Draw(img)
     if title:
-        _fit(d, (w // 2, int(h * 0.06)), title, int(h * 0.07), GREY, "mm",
-             int(w * 0.92))
-        d.line([(int(w * 0.06), int(h * 0.11)), (int(w * 0.94), int(h * 0.11))],
-               fill=GREY, width=1)
+        _fit(d, (w // 2, int(h * MENU_TOP / 2)), title, int(h * 0.07),
+             OCHRE, "mm", int(w * 0.92))
     return img, d
 
 
@@ -420,10 +437,6 @@ def scanning(w, h, frame, message, progress=0.0):
 # highlight drew straight through the title and the line under it. Two
 # menus had their own geometry as well and started at 0.34 and 0.36, so
 # every menu began at a different height.
-MENU_TOP = 0.16          # top edge of the first row's box, on every menu
-MENU_BOTTOM = 0.95       # bottom edge the last row may not pass
-MENU_PITCH = 0.135       # one row's height, fixed, so two rows sit together
-MENU_ROWS = 6            # rows on screen at once; a longer list scrolls
 
 
 def scrollbar(d, w, top, track_h, position, total, visible=1):

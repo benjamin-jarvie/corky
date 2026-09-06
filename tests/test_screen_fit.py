@@ -119,20 +119,34 @@ MENUS = {
 
 
 def _ochre_rows(img):
-    """Every row of pixels that carries the highlight colour."""
+    """Rows carrying the selection box's top or bottom edge.
+
+    It used to be any row carrying the colour, which stopped working when
+    the title turned gold too (Ben, 2026-09-05). Looking at both edges of
+    the row was not enough either: a long title fitted to 92% of a 240px
+    panel spans the same x range the box does.
+
+    What separates them is that the box's edge is a SOLID horizontal run
+    and text is not, however wide the text gets. So a row counts when its
+    longest unbroken run of gold covers more than 60% of the width.
+    """
     want = tuple(int(screens.OCHRE[i:i + 2], 16) for i in (1, 3, 5))
     px = img.load()
     rows = set()
     for y in range(img.height):
-        for x in range(0, img.width, 3):
-            if px[x, y] == want:
-                rows.add(y)
-                break
+        run = best = 0
+        for x in range(img.width):
+            run = run + 1 if px[x, y] == want else 0
+            best = max(best, run)
+        if best > img.width * 0.6:
+            rows.add(y)
     return rows
 
 
 for w, h in [(320, 240), (240, 240)]:
-    divider = int(h * 0.11)
+    # The divider is gone; what the first row must clear is the title,
+    # which sits centred in the space above MENU_TOP.
+    title_bottom = int(h * screens.MENU_TOP / 2) + int(h * 0.035)
     tops = {}
     for name, render in MENUS.items():
         rows = _ochre_rows(render(w, h))
@@ -141,12 +155,12 @@ for w, h in [(320, 240), (240, 240)]:
             continue
         top = min(rows)
         tops[name] = top
-        if top <= divider:
-            bad(f"{w}x{h} {name}: the highlight reaches y={top}, "
-                f"through the divider at y={divider}")
+        if top <= title_bottom:
+            bad(f"{w}x{h} {name}: the selection box reaches y={top}, "
+                f"through the title, which ends near y={title_bottom}")
     if len(set(tops.values())) == 1:
         ok(f"{w}x{h}: all {len(tops)} menus start their first row at "
-           f"y={next(iter(tops.values()))}, below the divider at {divider}")
+           f"y={next(iter(tops.values()))}, clear of the title")
     else:
         bad(f"{w}x{h}: menus start at different heights: {tops}")
 
