@@ -774,18 +774,18 @@ it takes an xprv as a parameter and always had. It carries
 them to Core and computes nothing with them, which is layer 2 by this
 README's own definition.
 
-**Layer 3 — never touches secrets at all. 249 lines.**
-[`corky/filechannel.py`](corky/filechannel.py) (60) and
+**Layer 3 — never touches secrets at all. 258 lines.**
+[`corky/filechannel.py`](corky/filechannel.py) (69) and
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,278 lines** (4,280 with blanks/comments).
+**Total functional code: 2,287 lines** (4,297 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,185 lines — none of it ships on the device.**
+**Test code: 5,260 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
-than device is deliberate: a 36-cell signing matrix, 6 adversarial attack scenarios,
+than device is deliberate: a 36-cell signing matrix, 7 adversarial attack scenarios,
 21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
 measured as executed across both architectures, with every uncovered line
 sorted into one of three piles and exactly one of them unreachable

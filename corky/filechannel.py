@@ -120,7 +120,24 @@ def write_signed(source: Path, signed_psbt_b64: str) -> Path:
     raw = base64.b64decode(signed_psbt_b64)
     fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, raw)
+        # os.write is ONE write(2) and write(2) is allowed to be short. A
+        # stick with 100 bytes left takes 100 bytes, returns 100, and
+        # raises nothing; the next call is the one that reports ENOSPC.
+        # The old code ignored the count, so a full or failing stick left
+        # a truncated signature behind a screen that said the file was
+        # written (audit A3, 2026-09-06). A half-written PSBT is not a
+        # PSBT, and the user has already pulled the stick by the time
+        # anyone finds out.
+        done = 0
+        while done < len(raw):
+            n = os.write(fd, raw[done:])
+            if n <= 0:
+                break
+            done += n
+        if done != len(raw):
+            raise FileChannelError(
+                f"{out.name}: wrote {done} of {len(raw)} bytes, "
+                "the medium is full or failing")
         os.fsync(fd)
     finally:
         os.close(fd)

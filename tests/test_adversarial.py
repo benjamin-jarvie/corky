@@ -372,6 +372,120 @@ def attack_malformed(rpc):
 
 
 # ======================================================================
+#  ATTACK 7 — THE ENVELOPE, NOT THE PAYLOAD
+# ======================================================================
+#
+#  PLAN A-11 says Corky treats key material as opaque bytes and Core is
+#  the only parser. That is a claim about the PAYLOAD. The ENVELOPE is
+#  parsed by us: filenames, file types, sizes, the write itself. Audit A3
+#  (2026-09-06) asked what a hostile envelope makes the device do, and
+#  found one thing that was not a refusal.
+#
+#  Nothing here needs bitcoind.
+
+def attack_hostile_envelope():
+    import base64
+    import stat as statmod
+    tmp = Path(tempfile.mkdtemp(prefix="corky-env-"))
+    outside = Path(tempfile.mkdtemp(prefix="corky-out-"))
+    try:
+        # -- What find_unsigned will pick up off a stick somebody else
+        #    wrote. A FIFO is the dangerous one: opening one for reading
+        #    BLOCKS until a writer appears, which on a device with no
+        #    shell is a hang with no way out. is_file() is what stops it,
+        #    and nothing said so.
+        (tmp / "dir.psbt").mkdir()
+        os.mkfifo(tmp / "fifo.psbt")
+        (tmp / "dangling.psbt").symlink_to(tmp / "nothing-here")
+        (tmp / "already-signed.psbt").write_bytes(b"psbt\xff")
+        (tmp / "real.psbt").write_bytes(b"psbt\xff\x01")
+        picked = {p.name for p in filechannel.find_unsigned(tmp)}
+        for name, why in (("dir.psbt", "a directory"),
+                          ("fifo.psbt", "a FIFO, which would block for ever"),
+                          ("dangling.psbt", "a symlink to nothing")):
+            if name in picked:
+                fail(f"attack7: find_unsigned offered {why}")
+            else:
+                ok(f"attack7: {why} is not offered as a PSBT")
+        if "real.psbt" not in picked:
+            fail("attack7: find_unsigned missed the real file, so the "
+                 "checks above prove only that it finds nothing")
+        else:
+            ok("attack7: the real file is still found")
+
+        # -- Every hostile shape must raise something HANDLED catches, so
+        #    the panel holds an error instead of the process ending.
+        HANDLED = (filechannel.FileChannelError, OSError)
+        for label, path in (("a directory", tmp / "dir.psbt"),
+                            ("a vanished file", tmp / "never.psbt"),
+                            ("a symlink to nothing", tmp / "dangling.psbt")):
+            expect_raises(f"attack7 read {label}", HANDLED,
+                          filechannel.read_psbt, path)
+
+        # -- THE WRITE. os.write is one write(2), and write(2) may be
+        #    SHORT. A stick with 100 bytes left takes 100, returns 100 and
+        #    raises nothing. write_signed ignored the count, so a full or
+        #    failing medium left a truncated signature behind a screen
+        #    that said the file was written, and the user pulls the stick
+        #    before anyone finds out. A half-written PSBT is not a PSBT.
+        src = tmp / "real.psbt"
+        payload = base64.b64encode(b"psbt\xff" + b"S" * 4000).decode()
+        want = len(base64.b64decode(payload))
+        real_write = os.write
+
+        def stalls_when_full(fd, data):
+            return real_write(fd, data[:100]) if len(data) > want - 200 else 0
+
+        os.write = stalls_when_full
+        try:
+            out = filechannel.write_signed(src, payload)
+        except filechannel.FileChannelError as exc:
+            ok(f"attack7 write: a full medium is refused ({str(exc)[:44]})")
+        except Exception as exc:                       # noqa: BLE001
+            fail(f"attack7 write: uncontrolled {type(exc).__name__}: {exc}")
+        else:
+            fail(f"attack7 write: said it wrote {out.name}, and put "
+                 f"{out.stat().st_size} of {want} bytes on the medium")
+        finally:
+            os.write = real_write
+
+        # A medium that is merely SLOW, taking the bytes 100 at a time,
+        # must still complete. A guard that refuses those is a guard that
+        # breaks the working case.
+        os.write = lambda fd, data: real_write(fd, data[:100])
+        try:
+            out = filechannel.write_signed(src, payload)
+            size = out.stat().st_size
+            ok(f"attack7 write: a slow medium still completes ({size} bytes)") \
+                if size == want else \
+                fail(f"attack7 write: slow medium wrote {size} of {want}")
+        finally:
+            os.write = real_write
+
+        # -- A read-only medium, which is what a stick with its lock tab
+        #    on looks like. Refuse, do not crash.
+        ro = Path(tempfile.mkdtemp(prefix="corky-ro-"))
+        (ro / "a.psbt").write_bytes(b"psbt\xff")
+        os.chmod(ro, statmod.S_IRUSR | statmod.S_IXUSR)
+        try:
+            expect_raises("attack7 write to a read-only medium", OSError,
+                          filechannel.write_signed, ro / "a.psbt", payload)
+        finally:
+            os.chmod(ro, 0o700)
+            shutil.rmtree(ro, ignore_errors=True)
+
+        # -- Nothing above may write outside the channel it was given.
+        strays = list(outside.iterdir())
+        if strays:
+            fail(f"attack7: wrote outside the channel: {strays}")
+        else:
+            ok("attack7: no hostile shape wrote outside its own directory")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(outside, ignore_errors=True)
+
+
+# ======================================================================
 #  ATTACK 4 — UNOWNED INPUT
 # ======================================================================
 #
@@ -487,6 +601,7 @@ def main():
                 time.sleep(0.5)
 
         # No-bitcoind tests first (fast, independent of the daemon).
+        attack_hostile_envelope()
 
         setup_regtest(rpc)
         attack_false_fee(rpc)
