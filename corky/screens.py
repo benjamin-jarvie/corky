@@ -19,7 +19,12 @@ INK = "#1A1714"
 CREAM = "#F5EFE0"
 RED = "#9E2B25"
 GREY = "#B8B2A6"
-OCHRE = "#C8912F"
+# The one gold. Ben set it to #FBDC7B on 2026-09-05: "which will be the
+# universal color where we currently have gold". It was #C8912F, which
+# read as brown beside the cream on a lit panel. Every gold on the device
+# comes from here, and tests/test_screen_fit.py reads this constant rather
+# than a copy of the hex, so changing it changes everything at once.
+OCHRE = "#FBDC7B"
 
 
 @lru_cache(maxsize=None)
@@ -619,6 +624,10 @@ ADDR_GROUPS_PER_ROW = 4
 #: size, but a lens is not a decoder.
 QR_MAX_PX = 190
 
+#: The card's corner radius and the width of the gold stroke around it.
+CARD_RADIUS = 8
+STROKE = 2
+
 
 
 def qr_export(w, h, code, xfp, kind, path):
@@ -645,11 +654,22 @@ def qr_export(w, h, code, xfp, kind, path):
     # the card supplies the rest and then some.
     pad = max(10, int(code.width * 0.06))
     card_w, card_h = code.width + 2 * pad, code.height + 2 * pad
-    top = max(2, (h - card_h - int(h * 0.11)) // 2)
+    top = max(STROKE, (h - card_h - int(h * 0.11)) // 2)
     x0 = (w - card_w) // 2
-    d.rectangle([x0, top, x0 + card_w, top + card_h], fill="white")
+    # The gold sits OUTSIDE the card: a larger rounded rectangle behind a
+    # smaller white one, rather than an outline drawn on the card's own
+    # edge, which would eat pixels the quiet zone is holding.
+    d.rounded_rectangle([x0 - STROKE, top - STROKE,
+                         x0 + card_w + STROKE, top + card_h + STROKE],
+                        radius=CARD_RADIUS + STROKE, fill=OCHRE)
+    d.rounded_rectangle([x0, top, x0 + card_w, top + card_h],
+                        radius=CARD_RADIUS, fill="white")
     img.paste(code, (x0 + pad, top + pad))
-    _fit(d, (w // 2, top + card_h + int(h * 0.055)),
+    # Centred between the outside of the stroke and the bottom of the
+    # screen, which is what Ben asked for and what stops the line looking
+    # tacked onto the card.
+    below = top + card_h + STROKE
+    _fit(d, (w // 2, (below + h) // 2),
          f"{xfp.upper()}  ·  {SCRIPT_LABELS[kind].upper()}  ·  {path}",
          int(h * 0.045), CREAM, "mm", int(w * 0.94))
     return img
