@@ -106,6 +106,18 @@ this device to a person who is not Ben, and why.
   medium. Verified on the board that `/boot/firmware` is a real vfat
   mount and `/mnt/usb` with no stick is correctly not offered.
 
+- [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md):
+  the board was running TWO things the repository had already fixed.
+  `corky.service` had no `--card-dir`, so the card channel did not exist
+  on the device; `bitcoin.conf` still had `debuglogfile=0`, which Core
+  reads as a filename, and a file called `0` holding 5,736 bytes of
+  Core's log was in the ramdisk. `image/verify-install.sh` now compares
+  the device with the repository and the board passes it. Core was
+  verified rather than assumed: the pinned tarball was downloaded, matched
+  its GPG-attested hash, and its binaries match the board's byte for
+  byte. **Needs Ben: running `harden.sh`,** which is one way and removes
+  SSH.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
@@ -114,7 +126,6 @@ reader knows what is takeable without opening eleven files.
 **Takeable now, nothing blocking:**
 
 - [A4 What the device does when hardware misbehaves](tickets/A4-hardware-misbehaves.md): needs the board, which is on.
-- [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md): the card is what a tester gets, and nothing has audited it.
 - [A10 What the earlier maps left open](tickets/A10-carry-forward.md): needs the board and Ben's phone.
 
 **Waiting:**
