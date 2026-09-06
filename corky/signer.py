@@ -287,6 +287,19 @@ def export_descriptors(rpc: "Rpc", wallet: str = WALLET) -> list[str]:
             if any(d.startswith(p) for p in EXPORT_KINDS.values())]
 
 
+def origin_of(descriptor: str) -> "tuple[str, str]":
+    """The master fingerprint and derivation path Core wrote into a
+    descriptor, as `("73c5da0a", "m/84h/0h/0h")`.
+
+    Read out of Core's own string rather than rebuilt from the script
+    type, so the panel shows the path this key actually uses instead of
+    the one BIP44 says it should. Returns empty strings if Core wrote no
+    origin, which a bare descriptor can lack.
+    """
+    m = re.search(r"\[([0-9a-fA-F]{8})((?:/\d+[h']?)+)\]", descriptor)
+    return (m.group(1).lower(), "m" + m.group(2)) if m else ("", "")
+
+
 def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
     """The script policies THIS key actually has, in EXPORT_ORDER.
 

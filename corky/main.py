@@ -732,14 +732,20 @@ class Session:
         return None if i is None else channels[i][1]
 
     def _export(self, name):
-        """Choose the script type, then show the key (map D2).
+        """Script type, then how it leaves, then the key, then the
+        addresses to check it against (map D2, revised by Ben on the board
+        2026-09-05).
 
-        SeedSigner's shape, minus the two questions we proved unnecessary.
+        SeedSigner's shape, minus the two questions we proved were noise.
         It asks signature type, script type and coordinator before the QR.
-        Single-sig makes the first meaningless, and R3 proved the third
-        produced an identical QR for four coordinators out of five. The
-        script type is the one real question and Ben put it first: "if
-        exporting, you should have chosen this first."
+        Single-sig makes the first meaningless, and the coordinator chooser
+        made an identical QR four times out of five (R3).
+
+        Ben's own earlier objection was to choosing a destination "before
+        getting the key", and this does not contradict it: that chooser
+        asked a question with the same answer nearly every time, and this
+        one picks between photons, your fingers and a file, which are
+        genuinely different things.
         """
         order = signer.available_kinds(self.rpc, name)
         selected = 0
@@ -749,58 +755,79 @@ class Session:
                 len(order), start=selected)
             if selected is None:
                 return
-            self._export_qr(name, order[selected])
+            # A completed export leaves the flow. It used to drop back on
+            # the script type, which read as "that did not work" after an
+            # export that had worked (Ben, on the board).
+            if self._export_one(name, order[selected]):
+                return
 
-    def _export_qr(self, name, kind):
-        """The QR for one policy, and what else you can do with it.
+    def _export_one(self, name, kind):
+        """One policy, out by one route, then the addresses to compare.
 
-        B returns to the script type, which is where you came from. A opens
-        EXPORT OPTIONS. Nothing happens on the way out: the Bitcoin Core
-        wallet file used to appear as you left, and receiving addresses
-        used to open by themselves, which is what made this flow feel like
-        four screens deep with no map (map D2).
+        Returns True when the export finished, which ends the flow, and
+        False when the user backed out of it, which returns them to the
+        script type they came from.
         """
         desc = signer.export_descriptor(self.rpc, name, kind)
-        code = qrchannel.text_to_image(desc, panel=(self.w, self.h))
+        choice = self._pick(
+            lambda sel: screens.export_options(self.w, self.h, sel),
+            len(screens.EXPORT_OPTIONS))
+        if choice is None:
+            return False
+        shown = [self._export_qr, self._export_text,
+                 self._export_file][choice](name, desc, kind)
+        if not shown:
+            return False
+        # The addresses are the check on the export: they are what you
+        # compare against the coordinator that just read it. They belong
+        # here, AFTER a successful export, rather than opening by
+        # themselves at the end of one (Ben, both times).
+        self._page_addresses(name, kind, limit=3)
+        return True
+
+    def _export_qr(self, _name, desc, kind):
+        """The code, with the fingerprint, the policy and the path on it.
+
+        All three identify what a coordinator is being handed, and Ben
+        asked for all three on the screen with the code. They sit in the
+        letterbox above and below, so the code itself is untouched.
+        """
+        xfp, path = signer.origin_of(desc)
+        # Sized against QR_MAX_PX rather than the panel, so there is always
+        # a band left for the caption. fit_to_panel then centres it.
+        code = qrchannel.text_to_image(
+            desc, panel=(self.w, min(self.h, screens.QR_MAX_PX)))
         panel = qrchannel.fit_to_panel(code, self.w, self.h)
         factor = min(self.w // code.width, self.h // code.height)
-        framed = screens.caption_qr(panel, code.height * factor,
-                                    screens.SCRIPT_LABELS[kind].upper())
+        framed = screens.caption_qr(
+            panel, code.height * factor,
+            f"{xfp.upper()}  ·  {screens.SCRIPT_LABELS[kind].upper()}", path)
         while True:
             self.display.show(framed)
             key = self.buttons.read()
             if key in ("b", "c"):
-                return
-            if key not in ("a", "p"):
-                continue
-            choice = self._pick(
-                lambda sel: screens.export_options(self.w, self.h, sel),
-                len(screens.EXPORT_OPTIONS))
-            if choice == 0:
-                self._export_text(desc, kind)
-            elif choice == 1:
-                self._export_file(name)
-            elif choice == 2:
-                return
+                return False
+            if key in ("a", "p"):
+                return True
 
-    def _export_text(self, desc, kind):
+    def _export_text(self, _name, desc, _kind):
         """The same descriptor as text, for typing into a coordinator."""
         pages = screens.text_pages(desc)
         i = 0
         while True:
             self.display.show(screens.export_text(
                 self.w, self.h, pages[i], page=i, pages=len(pages),
-                title=screens.SCRIPT_LABELS[kind].upper()))
+                title=screens.SCRIPT_LABELS[_kind].upper()))
             key = self.buttons.read()
             if key == "c":
-                return
+                return False
             if key in ("b", "u"):
                 if i == 0:
-                    return
+                    return False
                 i -= 1
             elif key in ("a", "p", "d"):
                 if i + 1 == len(pages):
-                    return
+                    return True
                 i += 1
 
     #: How many addresses one deriveaddresses call fetches. Paging past the
@@ -862,18 +889,24 @@ class Session:
                     return
                 i += 1
 
-    def _export_file(self, name):
+    def _export_file(self, name, _desc=None, _kind=None):
         """Bitcoin Core has no QR reader. Core's own backupwallet writes a
-        watch-only wallet its GUI restores with File, Restore Wallet."""
+        watch-only wallet its GUI restores with File, Restore Wallet.
+
+        Takes the same three arguments as the other two export routes so
+        they can share one dispatch, and returns True when a file was
+        written.
+        """
         dest = self._choose_channel()
         if dest is None:
-            return
+            return False
         stop = self._busy("writing the watch-only wallet…")
         try:
             out = signer.write_watch_only(self.rpc, name, dest)
         finally:
             stop()
         self._hold(f"{out.name} written", ok=True)
+        return True
 
 
 

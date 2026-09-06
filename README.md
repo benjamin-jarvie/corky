@@ -632,14 +632,20 @@ master private key on paper, and nothing else. Backup key goes straight to
 the pages; there is no chooser in front of it and no passphrase, because
 there is no file to encrypt (PLAN A-24).
 
-**Export asks the script type first, then shows the key.** SeedSigner's
-shape, minus the two questions that turned out to be noise: signature type
-is meaningless in a single-sig device, and the coordinator chooser
-produced an identical QR for four coordinators out of five. So it is
-script type, then the QR captioned with the policy it carries, and
-EXPORT OPTIONS on the QR for the text form and Bitcoin Core's wallet file.
-Receiving addresses is a row on the key's own menu and no longer opens by
-itself at the end of an export.
+**Export: script type, then how it leaves, then the key, then the
+addresses to check it against.** SeedSigner's shape minus the two
+questions that were noise: signature type is meaningless in a single-sig
+device, and the coordinator chooser produced an identical QR for four
+coordinators out of five. What is left are two real choices. Which policy,
+and whether it leaves as a QR, as text to type, or as a wallet file for
+Bitcoin Core, which reads no QR.
+
+The QR carries its fingerprint, its policy and its derivation path in the
+letterbox above and below, never over the code. Mainnet paths are
+`m/44h/0h/0h` legacy, `m/49h/0h/0h` nested segwit, `m/84h/0h/0h` native
+segwit and `m/86h/0h/0h` taproot, read out of Core's own descriptor rather
+than rebuilt from the script type. The three receive addresses at the end
+are what you compare against the coordinator that just read it.
 
 **Every screen that scrolls says so.** One scrollbar, one shape, on the
 right edge of every screen with content past its edge. A list with a known
@@ -717,13 +723,13 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1982 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1984 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1049) ·
-[`corky/screens.py`](corky/screens.py) (586) ·
-[`corky/signer.py`](corky/signer.py) (273) ·
+[`corky/main.py`](corky/main.py) (1057) ·
+[`corky/screens.py`](corky/screens.py) (577) ·
+[`corky/signer.py`](corky/signer.py) (276) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
 
@@ -737,11 +743,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,230 lines** (4,065 with blanks/comments).
+**Total functional code: 2,232 lines** (4,109 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,267 lines — none of it ships on the device.**
+**Test code: 4,253 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

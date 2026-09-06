@@ -321,23 +321,20 @@ def main():
         name5 = signer.open_session_xprv(rpc, XPRV_A)
         desc = signer.export_descriptor(rpc, name5, "wpkh")
         want_addrs = signer.receive_addresses(rpc, name5, "wpkh", 3)
-        desc_pages = len(scr.text_pages(desc))
         signer.close_session(rpc)
         stick5 = work / "stick5"; stick5.mkdir()
-        # Export asks the script type FIRST now, then shows the QR, and the
-        # extras are chosen from EXPORT OPTIONS rather than met on the way
-        # out (map D2). Native segwit is the first row.
+        # Script type, then HOW it leaves, then the key, then the addresses
+        # to compare it against (map D2, revised on the board 2026-09-05).
+        # This session takes the file route, because that is the one that
+        # writes something a check can find. A completed export leaves the
+        # flow rather than dropping back on the script type.
         script = ("ra" + "da" + "a"                   # Keys -> Scan a key -> warning
                   + "a"                               # Export public key
                   + "a"                               # SCRIPT TYPE -> Native segwit
-                  + "a"                               # the QR -> EXPORT OPTIONS
-                  + "a"                               # Show as text
-                  + "a" * desc_pages                  # page through and leave
-                  + "a"                               # the QR -> EXPORT OPTIONS
-                  + "da"                              # Wallet file for Core
+                  + "dda"                             # EXPORT AS -> Wallet file
                   + "a" + "a"                         # channel -> dismiss
-                  + "b"                               # QR -> SCRIPT TYPE
-                  + "b" + "b" + "b" + "draa")
+                  + "a" * 3                           # the three addresses
+                  + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK5",
                        qr_key=key_a, stick=stick5)
         assert r.returncode == 0, (f"K5 failed rc={r.returncode}\n"
@@ -348,31 +345,25 @@ def main():
         # that look identical can be told apart (map ticket T0). The
         # caption is part of the shipped frame, so it is part of the
         # golden one.
-        code = qrchannel.text_to_image(desc, panel=(320, 240))
-        factor = min(320 // code.width, 240 // code.height)
-        golden_qr = scr.caption_qr(
-            qrchannel.fit_to_panel(code, 320, 240), code.height * factor,
-            scr.SCRIPT_LABELS["wpkh"].upper())
-        buf = io.BytesIO(); golden_qr.save(buf, format="PNG")
-        assert _has(fr5, buf.getvalue()), \
-            "K5: the panel never showed the captioned export QR"
+        # The QR is not shown in this session, which takes the file route.
+        # What the panel drew for it is proved against Sparrow's own zxing
+        # in tests/sparrow/test_export_interop.py, which is the decoder
+        # that matters (TESTING.md rule 8).
+        xfp5, path5 = signer.origin_of(desc)
+        assert xfp5 == xfp_a and path5.startswith("m/84h/"), \
+            f"K5: Core wrote an unexpected origin: {xfp5} {path5}"
         # Every key presents all four since D6, and the wallet this session
         # used is already closed, so the list is EXPORT_ORDER rather than a
         # live lookup.
         assert _has(fr5, _render(scr.script_menu, signer.EXPORT_ORDER, 0)), \
             "K5: the script type was not asked before the QR"
-        assert _has(fr5, _render(scr.export_text, scr.text_pages(desc)[0],
-                                 page=0, pages=desc_pages,
-                                 title=scr.SCRIPT_LABELS["wpkh"].upper())), \
-            "K5: the descriptor as grouped text, titled with its policy"
         assert _has(fr5, _render(scr.export_options, 0)), \
-            "K5: the export options were never offered"
-        # Receiving addresses left this flow: it is a row on the key's own
-        # menu, and arriving there by pressing DONE on a descriptor is what
-        # lost Ben on the board (map D2).
+            "K5: the export destination was never asked"
+        # The addresses come AFTER a successful export, because they are
+        # what you compare against the coordinator that just read it.
         for i, addr in enumerate(want_addrs):
-            assert not _has(fr5, _render(scr.address_page, i, addr, "wpkh")), \
-                f"K5: address {i} appeared in the export flow, which it left"
+            assert _has(fr5, _render(scr.address_page, i, addr, "wpkh")), \
+                f"K5: address {i} was not shown after the export"
         written = list(stick5.glob("corky-*-watch.dat"))
         assert len(written) == 1, f"K5: watch-only file not written: {written}"
         assert _has(fr5, _render(scr.result, ok=True, label="DONE",
@@ -383,8 +374,8 @@ def main():
             "K5: writing a wallet file still draws SIGNED"
         assert xfp_a in written[0].name, \
             f"K5: the file is not named by fingerprint: {written[0].name}"
-        print(f"ok   K5: export -> script type, QR, text, wallet file "
-              f"{written[0].name} for a Core laptop")
+        print(f"ok   K5: export -> script type, destination, "
+              f"{written[0].name}, then the addresses to compare")
 
         # ---- Session K7: a bad file on the stick must not kill the app ----
         # ISSUES D18. corky.service has Restart=on-failure, so an exception

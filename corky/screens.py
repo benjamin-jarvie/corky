@@ -492,32 +492,23 @@ def script_menu(w, h, kinds, selected=0):
     `kinds` is what this key HAS, which is all four for a key Core made or
     a key imported since D6.
     """
-    rows = [(SCRIPT_LABELS[k], SCRIPT_NOTES[k], "normal") for k in kinds]
+    rows = [(SCRIPT_LABELS[k], "", "normal") for k in kinds]
     return _menu(w, h, "SCRIPT  TYPE", rows, selected)
 
-
-#: What each policy is for, in a few words, so the choice is informed
-#: without a screen of prose. Addresses shown are mainnet.
-SCRIPT_NOTES = {
-    "wpkh": "bc1q · usual",
-    "tr": "bc1p · newest",
-    "sh": "3… · older",
-    "pkh": "1… · oldest",
-}
-
-# Offered ON the QR, so the extras are chosen rather than met on the way
-# out. Receiving addresses is deliberately NOT here: it is a row on the
-# key's own menu, and arriving there by pressing DONE on a descriptor is
-# what lost Ben on the board (map D2).
+# HOW the key leaves, asked after the script type and before anything is
+# shown (Ben, 2026-09-05: "choose usb or QR to export after choosing
+# type"). This is not the coordinator chooser that was cut: that one asked
+# a question with the same answer four times out of five, and this one
+# picks between photons, your fingers, and a file.
 EXPORT_OPTIONS = [
-    ("Show as text", "to type by hand"),
-    ("Wallet file for Core", "Core reads no QR"),
-    ("Done", ""),
+    ("QR code", ""),
+    ("Text to type", ""),
+    ("Wallet file", "for Bitcoin Core"),
 ]
 
 
 def export_options(w, h, selected=0):
-    return _menu(w, h, "EXPORT",
+    return _menu(w, h, "EXPORT  AS",
                  [(label, note, "normal") for label, note in EXPORT_OPTIONS],
                  selected)
 
@@ -614,43 +605,50 @@ def _groups(text):
 ADDR_GROUPS_PER_ROW = 4
 
 
-def caption_qr(panel, qr_px, text):
-    """Name a QR in the letterbox band, never over the code.
+#: The QR is rendered no taller than this, so every policy leaves a band
+#: above and below wide enough for a horizontal caption.
+#:
+#: Module scaling is integer, so sizes jump rather than slide. At this cap
+#: the three 57-module policies keep their full 212px code with a 14px
+#: band, and nested segwit, which is 61 modules, drops one step to 171px
+#: and gets a 34px band. The codes differ a little in size; what matters
+#: is that all four caption the same way, above and below, because the
+#: sideways caption nested segwit used to need is what Ben spotted on the
+#: board. Sparrow's own zxing reads every one of them.
+QR_MAX_PX = 212
 
-    `fit_to_panel` centres a square QR on the panel and leaves white
-    around it. The band above and below is OUTSIDE the quiet zone, so a
-    caption there costs the code nothing: the modules keep their size and
-    the quiet zone keeps its width.
+#: One caption size for every policy, so a bigger band does not mean
+#: bigger text and the four screens look like one screen.
+QR_CAPTION_H = 0.042
 
-    Reserving space instead would shrink the QR. A descriptor is 57 to 61
-    modules and renders at about 3.7 pixels per module today, which
-    Sparrow's own zxing reads for all four policies (measured
-    2026-09-05). Taking 20 pixels of height would drop it to 3.0, and 4.0
-    is already where zxing starts refusing frames (TESTING.md rule 8).
 
-    `qr_px` is the QR's height in pixels after scaling. When the band
-    under the code is too thin, the caption turns on its side and uses the
-    margin beside it instead: the nested segwit descriptor is 61 modules
-    against the others' 57, which leaves 6 pixels below and 46 beside on
-    the 320x240 hat. That is the policy hardest to recognise by eye, so
-    leaving it unlabelled was not an option. If neither fits, nothing is
-    drawn rather than something drawn over the code.
+def caption_qr(panel, qr_px, title, subtitle=""):
+    """Name a QR in the letterbox, never over the code.
+
+    `fit_to_panel` centres a square QR and leaves white around it. The
+    band above and below is OUTSIDE the quiet zone, so a caption there
+    costs the code nothing: the modules keep their size and the quiet zone
+    keeps its width.
+
+    `title` goes above, `subtitle` below. What a coordinator is being
+    given is the fingerprint, the script type and the derivation path, and
+    all three belong on the screen with the code (Ben, 2026-09-05).
+
+    Nested segwit used to turn its caption sideways because its 61-module
+    code left only six pixels underneath. Capping every code at QR_MAX_PX
+    gives them all the same band, so the layout no longer changes with the
+    policy, which Ben noticed on the board.
     """
     band = (panel.height - qr_px) // 2
-    if band >= 9:
-        d = ImageDraw.Draw(panel)
-        size = min(int(band * 0.85), int(panel.height * 0.05))
-        _fit(d, (panel.width // 2, panel.height - band // 2), text,
-             size, "black", "mm", int(panel.width * 0.9))
+    if band < 9:
         return panel
-    side = (panel.width - qr_px) // 2
-    if side < 12:
-        return panel
-    strip = Image.new("RGB", (panel.height, side), "white")
-    _fit(ImageDraw.Draw(strip), (panel.height // 2, side // 2), text,
-         min(int(side * 0.6), int(panel.height * 0.05)), "black", "mm",
-         int(panel.height * 0.9))
-    panel.paste(strip.rotate(90, expand=True), (0, 0))
+    d = ImageDraw.Draw(panel)
+    size = int(panel.height * QR_CAPTION_H)
+    _fit(d, (panel.width // 2, band // 2), title,
+         size, "black", "mm", int(panel.width * 0.94))
+    if subtitle:
+        _fit(d, (panel.width // 2, panel.height - band // 2), subtitle,
+             size, "black", "mm", int(panel.width * 0.94))
     return panel
 
 
