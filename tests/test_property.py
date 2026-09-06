@@ -68,6 +68,31 @@ def sats_to_btc(sats: int) -> Decimal:
     return (Decimal(sats) / Decimal(10**8)).quantize(Decimal("0.00000001"))
 
 
+def _no_key_in_argv(method, params, stdin):
+    """A private key may never travel as a command-line argument.
+
+    Rpc.call's own rule: "Callers that pass an xprv or a private
+    descriptor MUST set it (S4)", because argv is visible in a process
+    listing. The rule was documented and every caller obeyed it, and then
+    `signer.identity_of_key` shipped without it on 2026-09-05, carrying
+    the master private key twice per paper check. The two-axis review
+    found it; nothing in this suite did, because the only stdin assertion
+    here named three PSBT methods.
+
+    So the check is on the ARGUMENT rather than the method name. Any call
+    is refused if a parameter contains a private-key prefix and stdin is
+    off, whatever the method is called, including one that does not exist
+    yet.
+    """
+    if stdin:
+        return
+    for p in params:
+        if isinstance(p, str) and any(x in p for x in signer.XPRV_PREFIXES):
+            raise AssertionError(
+                f"{method} put key material in argv, where a process "
+                f"listing shows it. Pass stdin=True (Rpc.call, S4).")
+
+
 class FakeRpc:
     """Returns canned decodepsbt/analyzepsbt; exercises the Decimal path."""
     def __init__(self, decoded, analysis):
@@ -81,11 +106,69 @@ class FakeRpc:
         # dev machine, where the real execve limit cannot be reached.
         if method in ("decodepsbt", "analyzepsbt", "walletprocesspsbt"):
             assert stdin, f"{method} must pass the PSBT through stdin"
+        _no_key_in_argv(method, params, stdin)
         if method == "decodepsbt":
             return self._decoded
         if method == "analyzepsbt":
             return self._analysis
         raise AssertionError(method)
+
+
+# --- every signer entry point that takes key material ------------------
+# The generic guard above only fires for calls that actually happen, and
+# the property tests never touch the key paths. So walk them explicitly:
+# hand each one a real private key and assert it never reached argv.
+
+KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
+       "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
+
+
+class ArgvWatcher:
+    """Answers enough for the key paths, and refuses key material in argv."""
+
+    chain = "regtest"
+
+    def __init__(self):
+        self.methods = []
+
+    def call(self, method, *params, wallet=None, stdin=False):
+        self.methods.append(method)
+        _no_key_in_argv(method, params, stdin)
+        if method == "getdescriptorinfo":
+            return {"checksum": "aaaaaaaa",
+                    "descriptor": "wpkh(tpubDEADBEEF)#aaaaaaaa"}
+        if method == "importdescriptors":
+            return [{"success": True}]
+        if method == "listwallets":
+            return []
+        if method == "listwalletdir":
+            return {"wallets": []}
+        if method == "listdescriptors":
+            return {"descriptors": []}
+        return ""
+
+
+def prop_no_key_in_argv():
+    """Every signer entry point that takes key material uses stdin."""
+    for name, run in (
+            ("build_descriptors",
+             lambda r: signer.build_descriptors(r, KEY)),
+            ("identity_of_key",
+             lambda r: signer.identity_of_key(r, KEY)),
+            ("open_session_descriptors",
+             lambda r: signer.open_session_descriptors(
+                 r, [f"wpkh({KEY}/84h/1h/0h/0/*)"])),
+    ):
+        try:
+            run(ArgvWatcher())
+        except AssertionError:
+            raise
+        except Exception as exc:                   # noqa: BLE001
+            # A fake this thin cannot satisfy every path. What matters is
+            # that no key reached argv before it gave up, and _no_key_in_argv
+            # raises AssertionError, which is re-raised above.
+            if "argv" in str(exc):
+                raise AssertionError(f"{name}: {exc}") from None
 
 
 @given(inputs=st.lists(st.integers(1, 21_000_000 * 10**8), min_size=1, max_size=8),
@@ -126,6 +209,7 @@ def main():
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
         ("read_psbt no-crash fuzz", prop_read_psbt_no_crash),
         ("fee Decimal exact", prop_fee_decimal_exact),
+        ("no key material in argv", prop_no_key_in_argv),
     ]
     failed = 0
     for name, fn in checks:

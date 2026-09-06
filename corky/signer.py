@@ -303,16 +303,14 @@ def origin_of(descriptor: str) -> "tuple[str, str]":
 def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
     """The script policies THIS key actually has, in EXPORT_ORDER.
 
-    A key does not always have four. `createwallet` makes all four, but a
-    key that arrived by scan or by typing gets only what
-    `build_descriptors` built for it, which is BIP84 and BIP86. So the
-    same key generated here and restored here from its own paper backup
-    presents a different set, and the panel must offer what is there
-    rather than what Core would have made.
+    Every key Corky opens has all four now: `createwallet` makes them and
+    `build_descriptors` builds them, so a key restored from its own paper
+    backup presents what the key that made it presented (map ticket D6).
 
-    Map ticket D1 decides whether that asymmetry stays. Until it does,
-    exporting a policy a wallet has not got is an error the user should
-    never be able to reach.
+    The function stays because a wallet is not obliged to hold four. One
+    imported as a bare descriptor holds exactly what that descriptor
+    described, and exporting a policy a wallet has not got should be
+    something the panel cannot offer rather than an error the user reaches.
     """
     have = export_descriptors(rpc, wallet=wallet)
     return tuple(k for k in EXPORT_ORDER
@@ -535,6 +533,11 @@ def identity_of_key(rpc: "Rpc", key: str) -> str:
     different addresses and still look equal. Core is the one parsing, and
     Corky only compares the two strings Core returns (PLAN A-11).
 
+    The key goes through `-stdin`, never argv. Rpc.call's own rule: a
+    caller passing an xprv or a private descriptor MUST set it, or the key
+    lands in the process listing. This function shipped without it for a
+    few hours on 2026-09-05 and the two-axis review is what found it.
+
     Nothing is created and nothing is written: `getdescriptorinfo` is
     side-effect free, like `deriveaddresses`. Raises RuntimeError with the
     key REDACTED if Core will not read it, which is what a mistyped
@@ -542,7 +545,8 @@ def identity_of_key(rpc: "Rpc", key: str) -> str:
     cryptographic happens.
     """
     try:
-        return rpc.call("getdescriptorinfo", f"wpkh({key})")["descriptor"]
+        return rpc.call("getdescriptorinfo", f"wpkh({key})",
+                        stdin=True)["descriptor"]
     except RuntimeError as exc:
         raise RuntimeError(redact(str(exc))) from None
 

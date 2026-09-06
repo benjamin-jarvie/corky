@@ -557,13 +557,13 @@ That is the mitigation, not a cure, for a small project's maintenance risk.
 
 ## v1 scope (frozen)
 
-Single-sig BIP84 (native segwit) and BIP86 (taproot). **Up to five keys at
+Single-sig, all four of Core's script policies. **Up to five keys at
 once**, one Core wallet each, named on screen by fingerprint; a transaction
 is matched to its key by the fingerprints Core reads off its inputs. Key
-entry in four forms: **Core generates one**, a **key or descriptor QR**
-read by the camera, a raw **xprv typed on the grid**, which is the way
-back from a paper backup, and **restore from a Core wallet backup** on a
-stick or the boot card. None of
+entry in three forms: **Core generates one**, a **key or descriptor QR**
+read by the camera, and a raw **private key typed on the grid**, which is
+the way back from a paper backup. Restoring from a Core wallet backup file
+went with the encrypted backup itself (PLAN A-24). None of
 them is transformed by anything of ours at all: pure Core from the first
 byte. (Descriptor mode is the answer to
 Maxwell's BIP39 critique: the backup carries its own derivation path, script
@@ -624,8 +624,9 @@ Details and file references:
 **Export and backup.** Export public key writes what a coordinator needs:
 a plain-text QR of Core's own output descriptor, the same string in
 four-character groups for typing, and the first three receive addresses in
-full for comparison. Sparrow, BlueWallet, Green and Bull Bitcoin all read
-that descriptor as written; Bitcoin Core has no QR reader, so it gets a
+full for comparison. Sparrow, BlueWallet and Green read that descriptor
+as written for every policy, and Bull Bitcoin for three of the four: it
+has no taproot anywhere in its source (map R3); Bitcoin Core has no QR reader, so it gets a
 watch-only wallet file its own GUI restores. Receiving addresses browses
 further, ten at a time, receive branch only. Backup key offers two: the
 master private key on paper, and nothing else. Backup key goes straight to
@@ -729,13 +730,13 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 1994 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 1995 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
 [`corky/main.py`](corky/main.py) (1053) ·
 [`corky/screens.py`](corky/screens.py) (591) ·
-[`corky/signer.py`](corky/signer.py) (276) ·
+[`corky/signer.py`](corky/signer.py) (277) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (61).
 
@@ -749,11 +750,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,242 lines** (4,181 with blanks/comments).
+**Total functional code: 2,243 lines** (4,139 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,255 lines — none of it ships on the device.**
+**Test code: 4,317 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

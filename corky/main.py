@@ -10,7 +10,7 @@ everything happened, and then no word fitted it.
           -> REVIEW -> sign -> RESULT, which offers SIGN ANOTHER or
              POWER OFF. Back returns to HOME, keys still loaded (D7).
     KEYS  -> the loaded keys by fingerprint, then New key, Scan a key,
-             Type xprv, Restore from file (A-22: only forms Core reads)
+             Type private key (A-22: only forms Core reads)
           -> one key: export public key, receiving addresses, backup
              key, discard key
     TOOLS -> the device, not your keys: check for leaks, check an address
@@ -29,9 +29,9 @@ Dev mode:
         --script "<keys>" [--stick-dir DIR] [--qr-psbt FILE]
         [--qr-key FILE] [--frames-dir DIR]
 Keys (PLAN A-15c, eight controls): u/d/l/r = d-pad, p = centre press,
-a = select/KEY1, b = back or delete/KEY2, c = abort/KEY3. The passphrase
-is asked for on screen, never passed as an argument, so it cannot appear
-in a process listing.
+a = select/KEY1, b = back or delete/KEY2, c = abort/KEY3. Key material
+reaches Bitcoin Core through `bitcoin-cli -stdin`, never as an argument,
+so it cannot appear in a process listing (signer.Rpc.call, S4).
 """
 
 import argparse
@@ -48,7 +48,6 @@ import screens
 import filechannel
 import qrchannel
 import hal
-
 
 
 MAX_KEY_PAYLOAD = 4096          # a descriptor set is a few hundred chars
@@ -266,11 +265,18 @@ def _grid_move(key, pages, page, cur):
     L or R, and ALSO when U or D would leave the top or bottom row, which
     is the cheap way across and lands on the same column.
 
-    That second rule is worth 710 presses. Base58 is 58 characters over
-    two pages of 32, and turning a page with R alone means walking to the
-    end of the strip first: checking a 111-character key cost 1,412
-    presses, 807 of them spent turning pages. It costs 702 now
-    (tests/test_ui_cost.py measures both, TESTING.md rule 6).
+    **That second rule is worth 62 presses, and the first version of this
+    docstring claimed 710.** The claim came from comparing the shortest
+    route under the new rules against the OLD TEST HELPER's route, which
+    walked to the end of the strip on every page turn because it was
+    written that way. Comparing like with like, by searching for the
+    shortest route under each rule set, typing the whole key costs 646
+    presses under the old rules and 584 under the new.
+
+    So most of the saving was never the code's: it came from replacing a
+    helper that wrote a route down with one that searches for it. Rule 6
+    exists for exactly this, and it caught me
+    (tests/test_ui_cost.py measures the current cost).
 
     Returns the new (page, cur). An unrelated key gives them back unchanged.
     """
@@ -295,7 +301,6 @@ def _grid_move(key, pages, page, cur):
             return page + 1, 0
         return page, min(n - 1, cur + 1)
     return page, cur
-
 
 
 class Session:
@@ -697,10 +702,10 @@ class Session:
         (Ben, on the board, 2026-09-05, found as a watch-only file sitting
         in /mnt/usb with no stick attached).
 
-        That is worse than a wrong word for the ENCRYPTED KEY BACKUP,
-        which takes this same chooser. PLAN A-23 permits a key on the card
-        only when the user asks for the card. Believing they had chosen a
-        removable stick is not asking.
+        Only public data takes this chooser now: the watch-only wallet
+        file Bitcoin Core needs because it reads no QR, and PSBTs. The
+        encrypted key backup went with PLAN A-24, so the worst a wrong
+        destination costs is a public file in the wrong place.
 
         In dev there is nothing mounted anywhere, so a directory is the
         channel; the mount rule is the device's, and
@@ -905,11 +910,6 @@ class Session:
         return True
 
 
-
-
-
-
-
     def _backup_paper(self, name, xfp):
         """Backup key. Core's master private key, in four-character groups
         over as many pages as it needs, and there is no other kind.
@@ -1008,10 +1008,6 @@ class Session:
             self.key = signer.open_session_descriptors(
                 self.rpc, payload.splitlines())
         return True
-
-
-
-
 
 
     def _text_entry(self, title, charset, secret=False):  # noqa: C901 - one keypad state machine; splitting it would hide the rules
@@ -1419,7 +1415,6 @@ class Session:
                 return typed, caret
             elif key == "c":
                 focus = "text"
-
 
 
     # -- PSBT load: stick first, then QR frames ---------------------------

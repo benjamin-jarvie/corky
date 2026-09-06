@@ -47,6 +47,14 @@ class NullRpc:
     wallet_dir = Path("/nonexistent")
 
     def call(self, method, *params, **kw):
+        # Enough shape for the menus to render. A key presenting all four
+        # policies is what every key presents since map ticket D6.
+        if method == "listdescriptors":
+            return {"descriptors": [
+                {"desc": f"{fn}([73c5da0a/{n}h/0h/0h]xpub6/0/*)#aaaaaaaa",
+                 "active": True, "internal": False}
+                for fn, n in (("wpkh", 84), ("tr", 86),
+                              ("sh(wpkh", 49), ("pkh", 44))]}
         return ""
 
 
@@ -113,8 +121,8 @@ pin("KEY", screens.KEY_MENU_OPTIONS, run_key_menu, {
 for i, (label, _note) in enumerate(screens.KEYS_ACTIONS):
     s = session("")
     got = []
-    recorder(s, ("_tool_generate", "_key_by_scan", "_key_xprv_typed",
-                 "_key_from_file"), got)
+    recorder(s, ("_tool_generate", "_key_by_scan",
+                 "_key_xprv_typed"), got)
     s._load_key(i)
     want = {"New key": "_tool_generate",
             "Scan a key": "_key_by_scan",
@@ -125,7 +133,30 @@ for i, (label, _note) in enumerate(screens.KEYS_ACTIONS):
         bad(f"KEYS: '{label}' runs {got}, not {want}")
 
 
-# --- 4. tools ------------------------------------------------------------
+# --- 4. how a key leaves: three routes, dispatched by index -------------
+# `_export_one` picks with `[qr, text, file][choice]`, which is the exact
+# shape TESTING.md rule 11 was written about: a list of labels in screens
+# and a positional dispatch in main, with nothing joining them.
+
+def run_export(sess):
+    ran = []
+    recorder(sess, ("_export_qr", "_export_text", "_export_file"), ran)
+    # A finished export goes on to the addresses, which is D2's decision
+    # and not this suite's business: what is under test is WHICH route ran.
+    sess._page_addresses = lambda *a, **k: None
+    sess._export_one("corky", "wpkh")
+    return ran[0] if ran else "nothing"
+
+
+corky_main.signer.export_descriptor = lambda *a, **k: "wpkh(tpubX)#aaaaaaaa"
+pin("EXPORT AS", screens.EXPORT_OPTIONS, run_export, {
+    "QR code": "_export_qr",
+    "Text to type": "_export_text",
+    "Wallet file": "_export_file",
+})
+
+
+# --- 5. tools ------------------------------------------------------------
 
 def run_tools(sess):
     ran = []

@@ -338,10 +338,6 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
     return img
 
 
-
-
-
-
 def busy(w, h, message="working…", phase=0):
     """The wait frame: the brand mark, turning while Core works. phase
     advances the rotation; the dev harness renders phase 0 only, the
@@ -682,7 +678,6 @@ STROKE = 2
 TILE_RADIUS = 6
 
 
-
 def qr_export(w, h, code, xfp, kind, path):
     """The export QR on the device's own dark ground, with its identity
     underneath (Ben, 2026-09-05).
@@ -791,20 +786,6 @@ def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
     return img
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # CONTEXT.md calls these channels: how bytes cross the air gap. QR is the
 # third; only the two file channels can carry a file.
 FILE_CHANNELS = {"stick": ("USB stick", "/mnt/usb"),
@@ -818,8 +799,6 @@ def choose_channel(w, h, channels, selected=0):
                   for c in channels], selected)
 
 
-
-
 def confirm_discard(w, h, xfp, selected=0):
     """Discard asks first. BACK is pre-selected; DISCARD must be chosen."""
     img, d = _frame(w, h, "DISCARD  KEY")
@@ -831,8 +810,6 @@ def confirm_discard(w, h, xfp, selected=0):
                int(h * 0.05), GREY, "mm", int(w * 0.92))
     _actions(d, w, h, ["BACK", "DISCARD"], selected)
     return img
-
-
 
 
 def choose_key(w, h, keys, owners, selected=0):
@@ -879,7 +856,6 @@ CELLS_PER_PAGE = 32          # 8 columns x 4 rows, above the action bar
 BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
           "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l
 DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
-
 
 
 # A passphrase alphabet went with the file backup: the only thing this
@@ -948,8 +924,9 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
     """Text on a paged 8x4 grid: passphrases (S2), typed keys and
     descriptors (S3), and typing a written backup back in to check it.
 
-    `secret=True` masks the echo, since a passphrase is shoulder-surfable
-    and does not checksum. `cursor` indexes the CURRENT page of the grid.
+    `secret=True` masks the echo. It was written for the backup
+    passphrase, which went with PLAN A-24; a typed key uses it too,
+    because a key on a panel is shoulder-surfable in the same way. `cursor` indexes the CURRENT page of the grid.
     The action bar is selectable, so CANCEL really cancels.
 
     `caret` is the position being EDITED inside `text`. None means the
@@ -993,18 +970,6 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
     return img
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 GROUPS_PER_ROW = 3          # 4-char groups across one line
 ROWS_PER_PAGE = 4           # rows between the title and the footer note
 CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
@@ -1021,12 +986,6 @@ def text_pages(text):
     """
     return [text[i:i + CHARS_PER_PAGE]
             for i in range(0, max(len(text), 1), CHARS_PER_PAGE)]
-
-
-
-
-
-
 
 
 def splash(w, h):

@@ -254,7 +254,6 @@ def main():
         assert _has(fr, _render(scr.home, 0)), "K3: home without a key"
         assert _has(fr, _render(scr.key_menu, xfp_a, 0)), \
             "K3: scanning an xprv did not land on that key's menu"
-        assert _has(fr, _render(scr.key_menu, xfp_a, 0)), "K3: A's key menu"
         assert _has(fr, _render(scr.key_menu, xfp_a, 2)), "K3: Backup key highlighted"
         assert _has(fr, _render(scr.key_menu, xfp_a, 2)), \
             "K3: Backup key was never the selected row"
@@ -280,11 +279,15 @@ def main():
             "K3: the leak check never ran"
         assert _has(fr, _render(scr.key_menu, xfp_a, 1)), \
             "K3: Receiving addresses highlighted"
-        want = signer.receive_addresses(rpc, "corky", "wpkh", 1)[0] \
-            if "corky" in rpc.call("listwallets") else None
-        if want:
-            assert _has(fr, _render(scr.address_page, 0, want, "wpkh")), \
-                "K3: Receiving addresses showed the first address at once"
+        # The address itself cannot be asserted here: this session ends
+        # with the key discarded, so by the time these checks run there is
+        # no wallet to ask what its first address was. The version of this
+        # that tried was guarded by `if "corky" in listwallets`, which is
+        # never true two lines above an assertion that no slot is loaded,
+        # so it never ran at all (two-axis review, 2026-09-05). What CAN
+        # be said is that the screen was reached with no chooser first.
+        assert _has(fr, _render(scr.key_menu, xfp_a, 1)), \
+            "K3: Receiving addresses was never the selected row"
         assert _has(fr, _render(scr.home, 2)), "K3: Tools tile highlighted"
         left = [w for w in rpc.call("listwallets") if w in signer.SLOTS]
         assert not left, f"K3: a key survived the session: {left}"
