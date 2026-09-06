@@ -783,7 +783,7 @@ bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,260 lines — none of it ships on the device.**
+**Test code: 5,270 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 7 adversarial attack scenarios,
 21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
