@@ -908,8 +908,24 @@ apart.
 
 ## Status
 
-**M0 passed on the Pi Zero 2 W** (PLAN A-21): 226MB of headroom signing 250
-ordinary inputs, once a GPU split the device never uses was cut to 32MB.
+**M0 depends on the transaction's SHAPE, and one shape fails.** Re-measured
+on the board on 2026-09-06, at 250 inputs both times, with Corky's own
+services stopped so the gate is not competing with them:
+
+| 250 inputs, funded as | PSBT | headroom | against 100MB |
+|---|---|---|---|
+| ordinary payments (2 outputs per funding tx) | 92KB | **187MB** | PASS |
+| exchange batches (100 outputs per funding tx) | 980KB | **74MB** | **FAIL** |
+
+Every input carries the whole transaction that paid it, so the funding
+shape sets the size per input: 378 bytes against 2,778. PLAN A-21 measured
+the same split on 2026-09-03 and got 226MB and 97MB; both figures are
+lower today, and the failing one is further below the line, not nearer it.
+
+A consolidation of 250 exchange-batch outputs can take this board out of
+memory. An ordinary payment is nowhere near it. This is the pocket
+build's ceiling and PLAN A-15 already ruled that M0's 512MB question
+gates the pocket build and not v1, which is the CM4 with 2GB.
 **M1 passed except the optics**, then the camera itself was wired and reads
 a real Sparrow frame on the board.
 
@@ -927,7 +943,7 @@ phone wallets. `docs/wayfinder/e2e-before-testers/` charts it.
 
 | Gate | Deliverable | Pass condition |
 |---|---|---|
-| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | **PASSED 2026-09-03**: 226MB headroom at 250 ordinary inputs (PLAN A-21) |
+| M0 | bitcoind wallet-only on the Zero 2 W (pocket build; sizes the M3 RAM image) | **SHAPE-DEPENDENT**, re-measured 2026-09-06: 187MB headroom at 250 ordinary inputs (PASS), 74MB at 250 exchange-batch inputs (FAIL, needs 100MB) |
 | M1 | QR round trip vs Sparrow watch-only, testnet | fee/outputs match Sparrow; signed PSBT broadcasts |
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |
