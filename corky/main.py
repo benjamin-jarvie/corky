@@ -1096,14 +1096,23 @@ class Session:
         # The Scan tile is the opposite case and classifies first, because
         # a general-purpose lens meets stray codes all day (ticket 05).
         return self._guard_key_payload(
-            self._scan_until("hold the key QR in view", lambda _p: "key")[1])
+            self._scan_until("hold the key QR in view", lambda _p: "key",
+                             sensitive=True)[1])
 
-    def _scan_until(self, message, classify):
+    def _scan_until(self, message, classify, sensitive=False):
         """Read codes until `classify` accepts one. Returns (kind, payload).
 
         `classify` returns a kind, or None for a code this scan does not
         want, which is counted and skipped. Every stopping rule lives here
         and nowhere else, which is ticket 04's contract.
+
+        `sensitive` marks the VIEWFINDER, not the payload. A scan looking
+        for a key points a camera at a key, and the frame it paints is a
+        photograph of one. hal.DevDisplay writes every frame it is given
+        to a PNG unless it is told not to, so scanning a key wrote a
+        picture of that key onto a developer's disk, and nothing noticed
+        until audit A2 (2026-09-06). The address scan is not marked,
+        because an address is public.
         """
         deadline = self.clock() + qrchannel.NO_PROGRESS_TIMEOUT
         stream = self.qr.strings()
@@ -1130,7 +1139,7 @@ class Session:
                 caption = f"{message} ({skipped} skipped)"
             self.display.show(screens.scanning(
                 self.w, self.h, getattr(self.qr, "last_image", None),
-                caption, 0.0))
+                caption, 0.0), sensitive=sensitive)
             if self.buttons.pressed() in ("b", "c"):
                 raise qrchannel.ScanAborted("cancelled")
             if self.clock() > deadline:
@@ -1544,6 +1553,12 @@ class Session:
                 scan = qrchannel.PsbtScan(on_event=on_event)
                 qr_frames = None
             shown = notice["text"]
+            # Not marked sensitive, deliberately. A PSBT is a transaction,
+            # not a key, and the dev PNGs of this viewfinder are how a
+            # camera problem gets debugged. The residual risk is a
+            # developer pointing THIS scanner at a key QR by mistake, on a
+            # dev machine, which is a smaller thing than losing the only
+            # view into the scan loop (audit A2, 2026-09-06).
             self.display.show(screens.scanning(
                 self.w, self.h, getattr(self.qr, "last_image", None), shown,
                 scan.progress))

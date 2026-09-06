@@ -252,6 +252,38 @@ def main():
             bad("redact() damaged a public key, which the screen needs")
         else:
             ok("redact() leaves public keys alone")
+
+        # 8c. A WIF carries no word-shaped prefix, so the pattern above
+        #     misses it entirely. Corky never asks for one, but a person
+        #     typing a key on a five-way pad can mistype or paste one, and
+        #     Core echoes what it refused: "key 'cVjzvdHG…' is not valid"
+        #     reached the panel and the journal in full (audit A2).
+        wifs = {
+            "testnet compressed":
+                "cVjzvdHGfQDtBEq7oGDMLgFvpEGnMPfsdSDrQqPXCV3fJPYaEjNC",
+            "mainnet compressed":
+                "L1aW4aubDFB7yfras2S1mN3bqg9nwySY8nkoLmJebSLD5BWv3ENZ",
+            "mainnet uncompressed":
+                "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ",
+        }
+        leaked = [n for n, w in wifs.items()
+                  if w in signer.redact(f"key '{w}' is not valid")]
+        if leaked:
+            bad(f"redact() let a WIF through: {leaked}")
+        else:
+            ok(f"redact() removes a WIF too, in all {len(wifs)} forms")
+
+        # And it must still not eat things that merely look long. An
+        # address, a checksum and an xpub all have to survive.
+        keep = ("bcrt1q6rz28mcfaxtmd6v789l9rrlrusdprr9pz3cppk",
+                "0y7pp6l9",
+                "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3Xy"
+                "uvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V")
+        eaten = [k[:16] for k in keep if k not in signer.redact(k)]
+        if eaten:
+            bad(f"redact() ate public data: {eaten}")
+        else:
+            ok("redact() leaves addresses, checksums and xpubs alone")
     finally:
         try:
             rpc.call("stop")

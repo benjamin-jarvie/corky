@@ -35,8 +35,21 @@ from pathlib import Path
 #: cannot disagree about what a private key looks like.
 XPRV_PREFIXES = ("xprv", "tprv", "yprv", "zprv", "vprv", "uprv")
 
-_SECRET_RE = re.compile(r"\b(?:%s)[1-9A-HJ-NP-Za-km-z]{20,}"
-                        % "|".join(XPRV_PREFIXES))
+#: A WIF private key, which carries no word-shaped prefix at all: one
+#: character for network and compression, then 50 or 51 base58 characters.
+#: 5 and 9 are the uncompressed forms, K, L and c the compressed ones.
+#:
+#: Corky never asks for a WIF, but a person typing a key on a five-way pad
+#: can paste or mistype one, and Core echoes what it refused: "key
+#: 'cVjzvdHG…' is not valid" reached the panel and the journal in full
+#: until audit A2 (2026-09-06). Redaction is defence in depth, so it
+#: covers key forms this device does not accept as well as the ones it
+#: does.
+_WIF_RE = r"\b[59KLc][1-9A-HJ-NP-Za-km-z]{50,51}\b"
+
+_SECRET_RE = re.compile(
+    r"\b(?:%s)[1-9A-HJ-NP-Za-km-z]{20,}|%s"
+    % ("|".join(XPRV_PREFIXES), _WIF_RE))
 
 
 def redact(text: str) -> str:

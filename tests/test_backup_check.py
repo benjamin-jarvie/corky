@@ -170,6 +170,126 @@ if typed is not None:
 else:
     ok("B with nothing typed leaves, like B everywhere else")
 
+# --- 7. every screen that can show a key is marked sensitive ------------
+# hal.DevDisplay blanks a frame shown with sensitive=True, which is what
+# stops key material landing as a PNG on a developer's disk. That property
+# rests on call sites in main.py, and until audit A2 only one was covered,
+# incidentally: session K3 counts blank frames and would have noticed the
+# backup pages going unmarked.
+#
+# The first version of this check was VACUOUS for two of its four cases. A
+# script of twenty presses never leaves the entry screen, so the verdict
+# was never painted and the same 21 entry frames were counted twice; a
+# devil's advocate dropped a flag and watched it still pass (2026-09-06).
+# Each case below now drives the screen it names, with the arguments the
+# real caller uses, and says how many frames it saw so a vacuous run shows
+# up as a suspiciously small number.
+
+class FlagWatcher:
+    """Records the sensitive flag for every frame, and what was painted."""
+
+    width, height = 320, 240
+
+    def __init__(self):
+        self.flags = []
+        self.kinds = []
+
+    def show(self, image, sensitive=False):
+        self.flags.append(sensitive)
+        self.kinds.append(image.size)
+
+
+def flags_for(what, script, run, want_at_least=1):
+    w = FlagWatcher()
+    sess = corky_main.Session(w, hal.DevButtons(script), None,
+                              animate=False, on_device=False)
+    try:
+        run(sess)
+    except hal.ScriptExhausted:
+        pass
+    if len(w.flags) < want_at_least:
+        bad(f"{what}: painted {len(w.flags)} frames, expected at least "
+            f"{want_at_least}. The check did not reach the screen it names.")
+    elif not all(w.flags):
+        bad(f"{what}: {w.flags.count(False)} of {len(w.flags)} frames were "
+            "NOT marked sensitive, so DevDisplay wrote key material to disk")
+    else:
+        ok(f"{what}: all {len(w.flags)} frames marked sensitive")
+
+
+# The real caller passes no secret=, so neither does this.
+flags_for("typing a key on the grid", "a" * 30,
+          lambda s: s._text_entry("MASTER  PRIVATE  KEY", "xprv"), 20)
+
+flags_for("the paper backup pages", "aaa",
+          lambda s: s._show_backup(KEY, LABEL), 3)
+
+# A full page typed, then committed, so the VERDICT is reached. Without
+# this the script never leaves the entry screen, which is the bug above.
+_to_verdict = text_keys("xprv", PAGES[0]) + "a"
+flags_for("the check entry and its verdict", _to_verdict,
+          lambda s: s._check_page(LABEL, 0, 3, PAGES[0]),
+          len(_to_verdict) - 5)
+
+
+# The camera viewfinder is a screen that can show a key too, because a key
+# scan points a lens at one. It was NOT marked until audit A2.
+#
+# Only the VIEWFINDER frames are checked, not every frame the flow paints.
+# The warning screen and the "importing into Core" screen carry no key and
+# are correctly unmarked; demanding otherwise was this check's first
+# mistake. screens.scanning is tagged so its frames can be told apart.
+
+class OneFrameQr:
+    last_image = "a photograph of a key QR"
+
+    def strings(self):
+        yield None
+        yield "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy"
+
+
+class ViewfinderWatcher:
+    width, height = 320, 240
+
+    def __init__(self):
+        self.viewfinder_flags = []
+
+    def show(self, image, sensitive=False):
+        if getattr(image, "_is_viewfinder", False):
+            self.viewfinder_flags.append(sensitive)
+
+
+watcher = ViewfinderWatcher()
+sess = corky_main.Session(watcher, hal.DevButtons("a" * 6), None,
+                          animate=False, on_device=False)
+sess.qr = OneFrameQr()
+real_scanning = screens.scanning
+
+
+def _tagged_scanning(w, h, *a, **k):
+    img = real_scanning(w, h, None, "x", 0.0)
+    img._is_viewfinder = True
+    return img
+
+
+screens.scanning = _tagged_scanning
+try:
+    sess._keymaterial("key")          # the REAL caller, not _scan_until
+except Exception:                                  # noqa: BLE001
+    pass
+finally:
+    screens.scanning = real_scanning
+
+if not watcher.viewfinder_flags:
+    bad("the key viewfinder: painted nothing, so this proves nothing")
+elif not all(watcher.viewfinder_flags):
+    bad(f"the key viewfinder: {watcher.viewfinder_flags.count(False)} of "
+        f"{len(watcher.viewfinder_flags)} frames unmarked. Scanning a key "
+        "writes a photograph of it to disk.")
+else:
+    ok(f"the key viewfinder: all {len(watcher.viewfinder_flags)} frames "
+       "marked sensitive")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)

@@ -85,14 +85,36 @@ key, derives every child, holds it, and signs with it. Corky derives
 nothing, hashes nothing, and signs nothing. `tests/test_integrity.py`
 fails if any shipped module so much as imports a cryptographic library.
 
-**Corky sees your key at two moments, and no others:**
+**Corky sees your key at two moments, and one of them is not a moment:**
 
 1. **On the way in.** What you type on the grid, or what the camera reads,
    is a string in Python until it reaches Core through `bitcoin-cli
-   -stdin`. Never the command line, so it is never in a process listing.
+   -stdin`. Never the command line, so it is never in a process listing,
+   and the module enforces that rather than asking callers to remember it.
 2. **On the way to paper, and only if you ask.** The paper backup asks
    Core for the master key and renders it as pixels. This is the one time
    a key is pulled **out** of Core for a reason that is not cryptographic.
+
+**And if you ask for either, it lasts as long as you take.** This page
+said "two moments" while the key stayed live in a Python frame for the
+whole of both: the write-down, and the check after it. A full check is 594
+presses, which at one or two a second is **five to ten minutes**. That is
+arithmetic from a press count, not a stopwatch, and it is not a moment.
+
+**What that leaves behind, corrected.** An earlier version of this
+paragraph said typing a key in leaves 111 strings holding 6,216 characters
+of key prefixes. That counted allocations as though they were all live at
+once. Instrumenting the entry screen shows about **ten distinct string
+objects alive across the whole of it**: CPython frees each previous one on
+rebind and reuses the address. The honest claim is that 111 allocations
+happen over time, one or two are live at any moment, and **the freed bytes
+are never zeroed**, which is the part that matters and which no Python
+program can fix.
+
+The check is still worth having. If your only backup is 111 handwritten
+characters, being sure of them matters more than the minutes they are in
+RAM on a device with no network, whose memory is gone at power off. But
+the cost is real and it belongs here rather than in a footnote.
 
 It was three moments until 2026-09-05. The third was a backup passphrase
 on its way to Core's `encryptwallet`, and it went when the encrypted file
@@ -423,11 +445,18 @@ knows Python will ask.
 **Python strings cannot be overwritten.** They are immutable, so the
 runtime is free to copy them and there is no way to zero one when you are
 done. `_text_entry` builds a typed key one character at a time, and each
-character makes a new string. Typing the 111-character master key leaves
-**111 separate objects holding 6,216 characters of key prefixes** in the
-heap, the longest of them 110 of the 111 characters, and not one of them
-can be wiped. Nothing in CPython can fix that, and any signer written in
-Python has the same property whether or not its authors mention it.
+character makes a new string, so typing the 111-character master key
+performs **111 allocations**, the longest holding 110 of the 111
+characters.
+
+This used to say those 111 objects were all in the heap at once. They are
+not: instrumenting the screen shows about **ten distinct string objects
+alive across the whole entry**, because CPython frees each previous one on
+rebind and often reuses the address. The correction matters less than it
+sounds, because **the freed bytes are not zeroed**. The key's prefixes are
+still in memory that has merely been marked reusable, and nothing in
+CPython can fix that. Any signer written in Python has this property
+whether or not its authors mention it.
 
 What actually bounds the damage is the shape of the device, not the code:
 
@@ -730,13 +759,13 @@ carries the removed modules for people who want
 codex32, BIP-85 and more, and merges `main` forward so every fix here
 reaches it.
 
-**Layer 2 — sees secrets, computes nothing with them. 2014 lines.**
+**Layer 2 — sees secrets, computes nothing with them. 2017 lines.**
 The device's body, and the wire to Core: menus, screens, buttons, and the
 calls that hand Core what you supplied. It routes and displays key material
 during entry and backup, and performs no arithmetic on any of it.
-[`corky/main.py`](corky/main.py) (1053) ·
+[`corky/main.py`](corky/main.py) (1054) ·
 [`corky/screens.py`](corky/screens.py) (593) ·
-[`corky/signer.py`](corky/signer.py) (279) ·
+[`corky/signer.py`](corky/signer.py) (281) ·
 [`corky/splash.py`](corky/splash.py) (13) ·
 [`corky/hal.py`](corky/hal.py) (76).
 
@@ -750,11 +779,11 @@ README's own definition.
 [`corky/qrchannel.py`](corky/qrchannel.py) (189) move PSBTs as opaque
 bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 
-**Total functional code: 2,263 lines** (4,228 with blanks/comments).
+**Total functional code: 2,266 lines** (4,256 with blanks/comments).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 4,705 lines — none of it ships on the device.**
+**Test code: 4,797 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 15 adversarial
 checks, 9 scripted device sessions, property and fuzz suites, per-module mutation kill-rates — 74–100% on secret-touching modules,

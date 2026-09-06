@@ -45,6 +45,14 @@ this device to a person who is not Ben, and why.
   keypresses and a test that measured a high-water mark. Splash had no
   test and is the first thing the device runs.
 
+- [A2 Does the layer model actually hold, end to end](tickets/A2-layer-model-holds.md):
+  the model holds, the published account of it did not. Scanning a key
+  photographed it onto a developer's disk; a mistyped WIF reached the panel
+  and the journal unredacted; and the property that prevents both was
+  guarded by one incidental test. A mutation sweep now catches six of six.
+  The README's "two moments" was five to ten minutes, and its heap figure
+  counted allocations as though they were live.
+
 ## The frontier, and what waits behind it
 
 Open tickets are not listed as decisions; this is the shape of them, so a
