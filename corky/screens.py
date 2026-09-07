@@ -81,8 +81,18 @@ def _icon(d, cx, cy, size, name, col):
     d.text((cx, cy), ICON[name], font=_iconfont(size), fill=col, anchor="mm")
 
 
-def _fit(d, xy, text, size, fill, anchor, maxw):
+def _fit(d, xy, text, size, fill, anchor, maxw, bold=False):
     """Draw text at `size`, shrinking until it fits `maxw`.
+
+    `bold` draws the word a second time one pixel to the right, which
+    thickens the stems and leaves the letterforms alone. The panel font is
+    Pillow's built-in and has no bold cut, and vendoring a second face to
+    thicken four words would put a new file in the supply chain, its
+    licence in the NOTICE and its name in three tests. The obvious
+    alternative, `stroke_width=1`, outlines every glyph on all four sides:
+    at 12px that closed the counters and "SETTINGS" came out a smear
+    (looked at, 2026-09-06). The extra pixel is measured as well as drawn,
+    so a bold word keeps the same width guarantee.
 
     The panel has no scrollbar: a string wider than the canvas is simply not
     there. Every screen that renders content it did not choose itself (an
@@ -92,20 +102,23 @@ def _fit(d, xy, text, size, fill, anchor, maxw):
     key material never reaches that path (text_pages sizes each page, and
     test_screen_fit pins every string inside the canvas).
     """
+    weight = 1 if bold else 0
     while True:
         font = _font(size)
         box = d.textbbox(xy, text, font=font, anchor=anchor)
-        if box[2] - box[0] <= maxw or size <= 6:
+        if box[2] - box[0] + weight <= maxw or size <= 6:
             break
         size -= 1
-    if box[2] - box[0] > maxw:
+    if box[2] - box[0] + weight > maxw:
         while len(text) > 1:
             text = text[:-1]
             box = d.textbbox(xy, text + "…", font=font, anchor=anchor)
-            if box[2] - box[0] <= maxw:
+            if box[2] - box[0] + weight <= maxw:
                 break
         text += "…"
-    d.text(xy, text, font=font, fill=fill, anchor=anchor)
+    for dx in range(weight + 1):
+        d.text((xy[0] + dx, xy[1]), text, font=font, fill=fill,
+               anchor=anchor)
 
 
 def _fit_block(d, lines, xs, size, fill, anchor, maxw):
@@ -208,6 +221,9 @@ def _frame(w, h, title=None):
 # Sign uses it for a transaction, Keys for a key, Tools to check an
 # address. Naming the first tile after the camera made it the place
 # everything happened, and then no word fitted it.
+#: The four home tiles, as (name, icon). The names are identifiers, so
+#: they stay lower case here and the screen upper-cases them when it
+#: draws; tests/e2e_keys.py's home_press() looks a tile up by this name.
 HOME_TILES = [("sign", "signature"), ("keys", "key"),
               ("tools", "tools"), ("settings", "gear")]
 
@@ -247,10 +263,18 @@ def home(w, h, selected=0, xfp=None):
         else:
             d.rounded_rectangle([x, y, x + bw, y + bh], radius=TILE_RADIUS,
                                 outline="#3A352E")
+        # The SYMBOL is gold when the tile is not chosen; the WORD is the
+        # same light cream as body text everywhere else, so the icon leads
+        # the eye and the label reads as a label (Ben, 2026-09-06). The
+        # chosen tile inverts wholesale: gold block, both in ink.
         mark = INK if active else OCHRE
+        word = INK if active else CREAM
         _icon(d, x + bw // 2, y + int(bh * 0.36), int(bh * 0.44), icon, mark)
-        d.text((x + bw // 2, y + int(bh * 0.80)), label,
-               font=_font(int(h * 0.05)), fill=mark, anchor="mm")
+        # Upper case, like the fingerprint above them and every other
+        # title on the device (Ben, 2026-09-06). Drawn through _fit so a
+        # longer word than "SETTINGS" can never run out of its tile.
+        _fit(d, (x + bw // 2, y + int(bh * 0.80)), label.upper(),
+             int(h * 0.05), word, "mm", int(bw * 0.88), bold=True)
     return img
 
 
