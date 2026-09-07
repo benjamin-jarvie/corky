@@ -2,20 +2,116 @@
 
 **Core's keys, nothing kept.**
 
-Corky is a stateless, air-gapped Bitcoin signing device built from DIY
-general-purpose hardware, in the same tradition as SeedSigner (which uses a
-radio-free Raspberry Pi Zero 1.3, or a Zero 2 W). Corky's primary build is a
-radio-free Raspberry Pi CM4 Lite, a camera, and the SeedSigner+ display
-hat; a Pi Zero 2 W pocket build exists too. Corky has one difference that is
-the whole point: the wallet brain is **Bitcoin Core itself**, running wallet-only
-and offline. Key derivation, PSBT parsing, fee computation and transaction
-signing are done by the same reviewed C++ code that runs the Bitcoin network's
-reference node. No reimplementation of wallet logic.
+A stateless, air-gapped Bitcoin signer built from general-purpose
+hardware, in the tradition of SeedSigner. One difference is the whole
+point: **the wallet is Bitcoin Core itself**, running wallet-only and
+offline. Corky draws screens, reads buttons and carries bytes. It never
+computes anything on a key.
 
-The device holds nothing. The wallet lives on a ramdisk, the key is entered
-each session, and power-off wipes everything. A key arrives as an **xprv**,
-which is your private key written the standard way, or as a **descriptor**,
-which is that key plus the rules for deriving addresses from it.
+## Why Bitcoin Core's wallet, and not another one
+
+Corky reimplements no wallet logic. Key derivation, PSBT parsing, fee
+computation and signing are done by Bitcoin Core, running wallet-only and
+offline, driven over its own RPC.
+
+The reason is review depth, and it is measurable rather than sentimental.
+Counted on 2026-09-07:
+
+| project | since | contributors | merged PRs, last 12 months |
+|---|---|---|---|
+| **Bitcoin Core** | 2010 | 343+ | **1,366** |
+| Coldcard firmware | 2018 | 53 | 231 |
+| SeedSigner | 2020 | 56 | 71 |
+| Blockstream Jade | 2021 | 37 | 6 |
+| Foundation Passport | 2022 | 12 | 40 |
+
+Read honestly: those are healthy projects, and merged-pull-request counts
+include trivial changes. Core's contributor figure is GitHub's capped
+list, so it is a floor. What the numbers say is not that the others are
+careless. It is that a change to Core's wallet passes more independent
+eyes than a change to any other Bitcoin wallet, that Core's review
+convention requires reviewers to publicly ACK a specific commit, and that
+the same code is what the network's reference node runs. Bugs are harder
+to land there, by construction, and a great deal more is watching if one
+does.
+
+**The standards tell the same story.** BIP39, the seed phrase, was
+written by SatoshiLabs, a hardware wallet vendor. Output descriptors
+(BIPs 380 to 386) were written by Pieter Wuille and Ava Chow, Bitcoin
+Core contributors. Core has never implemented BIP39: asked directly,
+v31.1 answers `sethdseed` with "Method not found" and has no mnemonic
+call at all.
+
+**And a seed phrase does not carry enough.** It holds the key and nothing
+else: not the script policy, not the derivation path, not whether the
+wallet is single-signature or one key of a multisig quorum. Restoring
+from words alone is a guess about which addresses were yours. A
+descriptor carries all of it, which is why Corky's backup is Core's own
+master key and its export is Core's own descriptor string, checksum
+included.
+
+Greg Maxwell, on the BIPs repository's own comments page for BIP39
+([source](https://github.com/bitcoin/bips/wiki/Comments:BIP-0039)):
+
+> "The lack of versioning is a serious design flaw in this proposal. On
+> this basis alone I would recommend against use of this proposal."
+>
+> "The general design is a thinly disguised brainwallet."
+>
+> "…an attractive nuisance which has directly caused funds loss."
+
+Corky takes the other road. The key arrives as an **xprv** or a
+**descriptor**, and Bitcoin Core is the only thing that ever parses it.
+
+## Why people build these themselves
+
+There is a long-standing instinct to build a signer out of hardware you
+can see: SeedSigner on a radio-free Pi Zero, Bitcoin Core on an
+air-gapped laptop, people desoldering the wifi module off a board before
+they will trust it. The instinct is right and the results are usually
+unfinished, because the hard part is not the signing, it is everything
+around it.
+
+Corky is that instinct finished. Two builds:
+
+- **The CM4 Lite has no radio at all**, by manufacture. That is physics
+  rather than configuration, and it is the primary build.
+- **The Pi Zero 2 W pocket build** carries wifi and Bluetooth on the
+  board. `image/harden.sh` disables them in firmware, blacklists the
+  drivers and moves their firmware aside, and `image/leak-check.sh`
+  reports on every one. The radio chip still has power. Removing the
+  part is the only version of this that is physics, and on a Zero 2 W the
+  radio is a separate component beside the processor, so removal is
+  possible.
+
+The device is stateless either way. The wallet lives on a ramdisk, the
+key is entered each session, and power-off wipes it.
+
+## Why it needs a screen
+
+A signer with no screen is a signer most people will not use. The
+alternative they reach for instead is usually friendlier, custodial in
+some way they did not read, and more likely to lose their coins than the
+command line ever was. A good interface is not decoration on a security
+product. It is the thing that decides whether the secure option is the
+one people actually take.
+
+So every flow below is on the device itself, and these are recordings of
+the real screens, drawn by the real code, with real output from Bitcoin
+Core on regtest.
+
+| | what it shows |
+|---|---|
+| [Generate a key](docs/demo/01-generate-a-key.mp4) | Core makes the key, and the fingerprint that names it |
+| [Back it up on paper](docs/demo/02-back-it-up-on-paper.mp4) | 111 characters over three pages. There is no file |
+| [Verify the backup](docs/demo/03-verify-the-backup.mp4) | Type it back. The wrong character is named, and Core confirms the paper opens the key |
+| [Export the public key](docs/demo/04-export-the-public-key.mp4) | Four script policies, then a QR carrying the fingerprint, policy and derivation path |
+| [Check an address](docs/demo/05-check-an-address.mp4) | Whether that address on the other screen is really yours |
+| [Sign a transaction](docs/demo/06-sign-a-transaction.mp4) | In by camera, reviewed with Core's numbers, out by camera |
+
+Rebuild them with `python3 tools/make_demo_videos.py`. Nothing in that
+script is a mockup, and nothing leaves the machine: narration is macOS
+`say`.
 
 ## What Corky aims to achieve
 
