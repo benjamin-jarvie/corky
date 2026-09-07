@@ -398,6 +398,27 @@ carries no filesystem. The only thing that ever parses PSBT bytes is Core.
 The USB stick still exists as an option for people who want it, and it
 carries the same risk there as anywhere.
 
+**On the pocket build, QR is the only channel that closes the loop.** All
+three work, but the other two do not come back round on a Zero 2 W:
+
+- **USB works**, and is a choice rather than a hardware limit: the board
+  runs `otg_mode=1` with `dtoverlay=dwc2,dr_mode=host` and presents a USB
+  host bus (checked on the board, 2026-09-06). It needs a micro-USB OTG
+  adapter and a hole in the case to use.
+- **The card is the boot device.** Corky can write to it, but reading it
+  anywhere else means powering the board off, and the datadir is a tmpfs
+  that dies with it. So the card is a one-way export, useful for handing
+  Bitcoin Core a watch-only wallet file and useless for a signing round
+  trip.
+- **QR needs nothing plugged in and nothing powered down**, in both
+  directions.
+
+Measured against Sparrow's own zxing on 2026-09-06: 742 of 750 outbound
+frames decode first time, 8 missed at 1.1%. The panel loops, so a miss
+costs one cycle rather than a transfer, and `tests/m1/outbound_margin.py`
+keeps measuring it because Corky renders at exactly 4.0 pixels per module
+and cannot go higher without sending more frames.
+
 **Corky wins**, and this is the largest single difference between the two.
 
 ### Reviewing what you are about to sign

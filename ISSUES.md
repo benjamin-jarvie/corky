@@ -56,6 +56,20 @@ naming the third combination is Ben's call. Recorded in
 tester's card cannot be reproduced from that file as it stands. Audit
 A7 owns it.
 
+### QR is the only channel that closes a loop on the pocket build
+
+Not a defect, and worth writing down because it changes what a tester
+must be given. On a Zero 2 W the card is the boot device, so reading it
+elsewhere means powering off and the tmpfs datadir dies with the session.
+USB host genuinely works (`otg_mode=1`, `dtoverlay=dwc2,dr_mode=host`,
+checked on the board 2026-09-06) but needs a micro-USB OTG adapter and a
+cutout in the case.
+
+So a tester with no adapter has exactly one way in and out: the camera
+and the panel. The outbound margin is thin by construction, 4.0 pixels
+per module with no room above it, and measured at 8 misses in 750 frames
+on 2026-09-06. The panel loops, so a miss costs a cycle.
+
 ## Standing hardware-blocked work
 
 Not defects. Recorded so the list above is not confused with them.

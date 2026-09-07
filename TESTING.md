@@ -171,6 +171,12 @@ It was not intermittent. The same image failed five attempts out of five. And
 scanner saw the identical unreadable image forever. At 13 to 21 frames per
 PSBT, roughly one transfer in seven could never complete.
 
+**Re-measured 2026-09-06: 8 of 750 frames, 1.1%.** Same order, and it
+matters more than it did: on the pocket build the card is the boot device
+and USB needs an adapter and a hole in the case, so QR is the only channel
+that closes a signing loop. Run `tests/m1/outbound_margin.py` after
+anything that touches frame size.
+
 No suite could have found this, because every suite asked Corky's own decoder.
 The fix is `tests/sparrow`, which runs Sparrow 2.5.4's real library out of the
 sha256-verified release, and `tests/m1/outbound_margin.py`, which keeps
