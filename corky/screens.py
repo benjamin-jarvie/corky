@@ -81,7 +81,36 @@ def _icon(d, cx, cy, size, name, col):
     d.text((cx, cy), ICON[name], font=_iconfont(size), fill=col, anchor="mm")
 
 
-def _fit(d, xy, text, size, fill, anchor, maxw, bold=False):
+def _tracked(d, xy, text, font, fill, anchor, tracking, weight):
+    """Draw `text` with `tracking` pixels between characters.
+
+    Pillow draws a string in one call and has no letter-spacing, so the
+    characters are placed one at a time and the gap is added by hand.
+    Only the home tiles ask for this; every other screen takes the plain
+    path above, which is left exactly as it was.
+    """
+    widths = [font.getlength(ch) for ch in text]
+    total = sum(widths) + tracking * max(len(text) - 1, 0) + weight
+    horizontal, vertical = anchor[0], anchor[1]
+    x = xy[0]
+    if horizontal == "m":
+        x -= total / 2
+    elif horizontal == "r":
+        x -= total
+    for ch, adv in zip(text, widths, strict=True):
+        for dx in range(weight + 1):
+            d.text((x + dx, xy[1]), ch, font=font, fill=fill,
+                   anchor="l" + vertical)
+        x += adv + tracking
+    return total
+
+
+def _tracked_width(font, text, tracking, weight):
+    return (sum(font.getlength(ch) for ch in text)
+            + tracking * max(len(text) - 1, 0) + weight)
+
+
+def _fit(d, xy, text, size, fill, anchor, maxw, bold=False, tracking=0.0):
     """Draw text at `size`, shrinking until it fits `maxw`.
 
     `bold` draws the word a second time one pixel to the right, which
@@ -103,19 +132,27 @@ def _fit(d, xy, text, size, fill, anchor, maxw, bold=False):
     test_screen_fit pins every string inside the canvas).
     """
     weight = 1 if bold else 0
+
+    def width(s_, f_):
+        if tracking:
+            return _tracked_width(f_, s_, tracking, weight)
+        box = d.textbbox(xy, s_, font=f_, anchor=anchor)
+        return box[2] - box[0] + weight
+
     while True:
         font = _font(size)
-        box = d.textbbox(xy, text, font=font, anchor=anchor)
-        if box[2] - box[0] + weight <= maxw or size <= 6:
+        if width(text, font) <= maxw or size <= 6:
             break
         size -= 1
-    if box[2] - box[0] + weight > maxw:
+    if width(text, font) > maxw:
         while len(text) > 1:
             text = text[:-1]
-            box = d.textbbox(xy, text + "…", font=font, anchor=anchor)
-            if box[2] - box[0] + weight <= maxw:
+            if width(text + "…", font) <= maxw:
                 break
         text += "…"
+    if tracking:
+        _tracked(d, xy, text, font, fill, anchor, tracking, weight)
+        return
     for dx in range(weight + 1):
         d.text((xy[0] + dx, xy[1]), text, font=font, fill=fill,
                anchor=anchor)
@@ -221,6 +258,14 @@ def _frame(w, h, title=None):
 # Sign uses it for a transaction, Keys for a key, Tools to check an
 # address. Naming the first tile after the camera made it the place
 # everything happened, and then no word fitted it.
+#: Pixels of air between the letters of a tile title (Ben, 2026-09-06).
+#: Bolder letters need it: at zero the stems of SETTINGS run together.
+#: Looked at against 1.0, 1.5 and 2.0 at the shipped size; past 1.5 a
+#: short word like SIGN stops reading as one word. Pixels and not ems
+#: because both panels this build supports are 240 high, so the title is
+#: 12px on either; a taller panel would want this scaled with the size.
+TILE_TRACKING = 1.25
+
 #: The four home tiles, as (name, icon). The names are identifiers, so
 #: they stay lower case here and the screen upper-cases them when it
 #: draws; tests/e2e_keys.py's home_press() looks a tile up by this name.
@@ -274,7 +319,8 @@ def home(w, h, selected=0, xfp=None):
         # title on the device (Ben, 2026-09-06). Drawn through _fit so a
         # longer word than "SETTINGS" can never run out of its tile.
         _fit(d, (x + bw // 2, y + int(bh * 0.80)), label.upper(),
-             int(h * 0.05), word, "mm", int(bw * 0.88), bold=True)
+             int(h * 0.05), word, "mm", int(bw * 0.88), bold=True,
+             tracking=TILE_TRACKING)
     return img
 
 

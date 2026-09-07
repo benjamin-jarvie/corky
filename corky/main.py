@@ -232,6 +232,29 @@ class DevQrSource:
         return iter(Path(self.psbt_path).read_text().split())
 
 
+#: The most inputs this board will sign, and it is a memory limit.
+#:
+#: Measured with the M0 gate on a Pi Zero 2 W, 2026-09-06, on the shape
+#: that costs the most: inputs funded 100 to a transaction, the way an
+#: exchange pays a batch of withdrawals. Every input carries the whole
+#: transaction that paid it, so that shape is 2,778 bytes per input
+#: against 378 for an ordinary payment.
+#:
+#:   150 inputs   121MB headroom   PASS
+#:   175 inputs   114MB headroom   PASS
+#:   200 inputs    78MB headroom   FAIL   (100MB required)
+#:   250 inputs    72MB headroom   FAIL
+#:
+#: 150 is the largest count measured to pass with room to spare, and the
+#: cliff between 175 and 200 is 36MB, so the line is drawn below it
+#: rather than on it.
+#:
+#: This is bitcoind's memory and not Corky's. Corky's own process was cut
+#: from 56MB to 45MB by not reading previous transactions it never used,
+#: and the headroom moved 2MB. No further work of ours raises this
+#: number; a board with more RAM does.
+MAX_SIGNABLE_INPUTS = 150
+
 # What a PSBT run reports back to the home screen.
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
@@ -1636,6 +1659,18 @@ class Session:
         if wallet is None:
             return TO_HOME
         info = signer.describe_psbt(self.rpc, psbt)
+        if info["input_count"] > MAX_SIGNABLE_INPUTS:
+            # Refusing beats dying half way through. Measured on the
+            # board, 250 batch-funded inputs leave 72MB where 100MB is
+            # required, and the kernel kills whichever process asks for
+            # the next page. That can be bitcoind holding the only copy
+            # of a signature.
+            self.display.show(screens.result(
+                self.w, self.h, ok=False,
+                detail=f"{info['input_count']} inputs; this board signs "
+                       f"up to {MAX_SIGNABLE_INPUTS}"))
+            self.buttons.read()
+            return TO_HOME
         if info["fee_btc"] is None:
             # Missing input data: refuse loudly instead of crashing (a fee
             # the device cannot show is a transaction it must not sign).

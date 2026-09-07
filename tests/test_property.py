@@ -12,6 +12,7 @@ and the one number it computes:
      uncaught exception on garbage, only their controlled errors.
   2. Fee and amount Decimal arithmetic in describe_psbt is exact.
 """
+import base64
 import shutil
 import time
 import sys
@@ -338,6 +339,95 @@ def prop_a_slow_node_does_not_freeze_the_device():
     assert was >= 60, f"RPC_TIMEOUT is {was}s, too close to real work"
 
 
+def prop_too_many_inputs_is_refused_not_signed():
+    """A PSBT past the board's memory limit is refused, and one under it
+    is not.
+
+    Measured on a Zero 2 W: 250 batch-funded inputs leave 72MB where
+    100MB is required, and the kernel then kills whichever process asks
+    for the next page. That can be bitcoind, holding the only copy of a
+    signature. Refusing on a screen beats dying half way through.
+
+    Driven through the real `state_review`, with a Core that answers as
+    Core does, because the point is the wiring and not the arithmetic.
+    The limit itself cannot be reached on a dev machine, so it is
+    asserted here instead (TESTING.md rule 9).
+    """
+    import hal
+    import main as corky_main
+    import screens
+
+    class Painted:
+        width, height = 320, 240
+
+        def __init__(self):
+            self.shown = []
+
+        def show(self, image, sensitive=False):
+            self.shown.append(image)
+
+    class Answers:
+        chain = "regtest"
+
+        def __init__(self, n):
+            self.n = n
+
+        def call(self, method, *params, wallet=None, stdin=False, drop=()):
+            if method == "decodepsbt":
+                return {"tx": {"vout": [{"value": Decimal("1"),
+                                         "scriptPubKey": {"address": "bcrt1q"}}],
+                               "vin": [{}] * self.n},
+                        "fee": Decimal("0.0001"),
+                        "inputs": [{}] * self.n}
+            if method == "analyzepsbt":
+                return {"next": "signer"}
+            if method == "listdescriptors":
+                return {"descriptors": [{"desc": "wpkh([73c5da0a/84h/1h/0h]x)"}]}
+            if method == "walletprocesspsbt":
+                # Reached only by the UNDER-limit run, which is the half
+                # that proves the guard does not refuse real work.
+                return {"psbt": base64.b64encode(b"psbt\xffsigned").decode(),
+                        "complete": True}
+            return ""
+
+    limit = corky_main.MAX_SIGNABLE_INPUTS
+    # Pin the VALUE against the board, not just the wiring. Reading the
+    # constant and testing limit+1 follows the code wherever it goes:
+    # setting it to 1 passed this check until the band below was added.
+    # 200 inputs measured 78MB of headroom against 100MB required, and
+    # 175 measured 114MB, so anything from 200 up ships a known failure
+    # and anything under 100 refuses transactions the board can hold.
+    if not 100 <= limit < 200:
+        raise AssertionError(
+            f"MAX_SIGNABLE_INPUTS is {limit}. The board was measured at "
+            "114MB of headroom on 175 inputs and 78MB on 200, against "
+            "100MB required, so the limit belongs between 100 and 199")
+    for n, want_refusal in ((limit + 1, True), (limit, False)):
+        disp = Painted()
+        sess = corky_main.Session(disp, hal.DevButtons("a" * 40),
+                                  rpc=Answers(n), animate=False,
+                                  on_device=False)
+        sess.keys = [corky_main.LoadedKey("corky-73c5da0a", "73c5da0a")] \
+            if hasattr(corky_main, "LoadedKey") else []
+        sess._key_for = lambda _psbt: "corky-73c5da0a"
+        try:
+            sess.state_review("cHNidP8B", None)
+        except hal.ScriptExhausted:
+            pass
+        refusal = screens.result(
+            320, 240, ok=False,
+            detail=f"{n} inputs; this board signs up to {limit}")
+        drew = any(f.tobytes() == refusal.tobytes() for f in disp.shown)
+        if want_refusal and not drew:
+            raise AssertionError(
+                f"{n} inputs is past the {limit} the board can hold, and "
+                "the device did not refuse it")
+        if not want_refusal and drew:
+            raise AssertionError(
+                f"{n} inputs is within the limit and was refused anyway; "
+                "a guard that refuses real work is worse than no guard")
+
+
 def main():
     checks = [
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
@@ -348,6 +438,8 @@ def main():
         ("amounts never become floats", prop_amounts_never_become_floats),
         ("a slow node does not freeze the device",
          prop_a_slow_node_does_not_freeze_the_device),
+        ("too many inputs is refused, not signed",
+         prop_too_many_inputs_is_refused_not_signed),
     ]
     failed = 0
     for name, fn in checks:

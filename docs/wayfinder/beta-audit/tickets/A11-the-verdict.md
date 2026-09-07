@@ -43,7 +43,8 @@ The no-go is about the **package**, not the program. Three things.
 
 ### The three findings that decide it
 
-**1. A large consolidation can take the board out of memory.**
+**1. A large consolidation can take the board out of memory. FIXED by a
+limit, not by code.**
 Measured today: ordinary payments pass at 250 inputs with 187MB of
 headroom; exchange-batch withdrawals pass to 175 inputs and **fail from
 200**, at 78MB against a 100MB requirement. A tester consolidating an
@@ -95,9 +96,14 @@ Four things, each finishable, none depending on another:
    | 200 | 78MB | FAIL |
    | 250 | 72MB | FAIL |
 
-   **About 175.** Ordinary payments are unaffected and pass at 250 with
-   187MB. The device should refuse past the limit rather than dying
-   mid-sign, and the tester instructions should say so.
+   **DONE, 2026-09-06.** `MAX_SIGNABLE_INPUTS = 150` and the device
+   refuses past it on the review screen, naming the count and the limit,
+   instead of dying mid-sign. 150 rather than 175 because the cliff
+   between 175 and 200 is 36MB, so the line is drawn below it and not on
+   it. Ordinary payments are unaffected and pass at 250 with 187MB.
+   `tests/test_property.py` fails if the guard goes, if it fires on a
+   transaction within the limit, or if the number is moved outside the
+   band the board was measured at.
 
 Items 1, 2 and 3 are hours. Item 4 is a decision first.
 
@@ -113,9 +119,9 @@ light, and a coordinator that is not a test harness.
 - **The paper backup is the only backup.** 111 characters, by hand. There
   is no file, no encryption, no second copy. Lose the paper and the coins
   are gone. PLAN A-24, and it is deliberate.
-- **Do not consolidate more than about 150 inputs.** Ordinary payments of
-  any size are fine. The board runs out of memory somewhere between 175
-  and 200 exchange-batch inputs, and nothing yet refuses on your behalf.
+- **The device signs up to 150 inputs** and refuses more, on screen,
+  saying so. Ordinary payments of any size are fine. The limit is the
+  board's memory, not a policy.
 - **This card is a dev image** unless `harden.sh` has been run on it: SSH
   and both radios are live.
 - **Only Bitcoin Core and Sparrow can open the paper backup.** BlueWallet,
