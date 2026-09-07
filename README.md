@@ -2,7 +2,7 @@
 
 **Core's keys, nothing kept.**
 
-A stateless, air-gapped [?](#g-air-gapped "No network of any kind") Bitcoin signer built from general-purpose
+A stateless, air-gapped Bitcoin signer built from general-purpose
 hardware, in the tradition of SeedSigner. One difference is the whole
 point: **the wallet is Bitcoin Core itself**, running wallet-only and
 offline. Corky draws screens, reads buttons and carries bytes. It never
@@ -10,13 +10,13 @@ computes anything on a key.
 
 ## Why Bitcoin Core's wallet, and not another one
 
-Corky reimplements no wallet logic. Key derivation, PSBT [?](#g-psbt "A partially signed bitcoin transaction") parsing, fee
+Corky reimplements no wallet logic. Key derivation, PSBT parsing, fee
 computation and signing are done by Bitcoin Core, running wallet-only and
 offline, driven over its own RPC.
 
-That shape is not a workaround. Greg Sanders
-([@theinstagibbs](https://x.com/theinstagibbs/status/2096565881048269263)),
-a Bitcoin Core contributor, quote-tweeting "We're all one-shotted Bitcoin
+That shape is not a workaround.
+[@instagibbs](https://x.com/theinstagibbs/status/2096565881048269263), a
+Bitcoin Core contributor, quote-tweeting "We're all one-shotted Bitcoin
 Core contributors now":
 
 > "Moderately hot take: in the age of AI anything that can be split off
@@ -78,18 +78,16 @@ to land there, by construction, and far more is watching if one does.
 
 **The standards tell the same story.** BIP39, the seed phrase, was
 written by SatoshiLabs, a hardware wallet vendor. Output descriptors
-[?](#g-descriptor "A string with the key, script policy and derivation path, plus a checksum")
 (BIPs 380 to 386) were written by Pieter Wuille and Ava Chow, Bitcoin
 Core contributors. Core has never implemented BIP39.
 
 **And a seed phrase does not carry enough.** It holds the key and nothing
-else: not the script policy [?](#g-script-policy "Legacy, nested segwit, native segwit or taproot"),
-not the derivation path [?](#g-derivation-path "The route from a master key to one address, like m/84h/0h/0h"), not whether the
+else: not the script policy, not the derivation path, not whether the
 wallet is single-signature or one key of a multisig quorum. Restoring
 from words alone is a guess about which addresses were yours. A
 descriptor carries all of it, which is why Corky's backup is Core's own
 master key and its export is Core's own descriptor string, checksum
-[?](#g-checksum "Trailing characters that let software reject a mistyped string") included.
+included.
 
 Greg Maxwell, on the BIPs repository's own comments page for BIP39
 ([source](https://github.com/bitcoin/bips/wiki/Comments:BIP-0039)):
@@ -140,34 +138,34 @@ So every flow below is on the device itself, and these are recordings of
 the real screens, drawn by the real code, with real output from Bitcoin
 Core on regtest.
 
-Each one below plays silently in the page. The **narrated** version is
-the MP4 beside it, and it is worth the audio: the narration is where the
-security claims are made.
+**Watch the narrated versions.** The previews below play silently in the
+page and click through to the narrated MP4, which is where the security
+claims actually get made.
 
 ### Generate a key
 
 Core makes the key with its own randomness, and names it by fingerprint.
 
-![Generating a key](docs/demo/01-generate-a-key.gif)
+[![Generating a key](docs/demo/01-generate-a-key.gif)](docs/demo/01-generate-a-key.mp4)
 
-*[Narrated version](docs/demo/01-generate-a-key.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/01-generate-a-key.mp4)** — the narration is where the claims are made.*
 
 ### Back it up on paper
 
 111 characters over three pages. There is no file and no encryption.
 
-![Backing up on paper](docs/demo/02-back-it-up-on-paper.gif)
+[![Backing up on paper](docs/demo/02-back-it-up-on-paper.gif)](docs/demo/02-back-it-up-on-paper.mp4)
 
-*[Narrated version](docs/demo/02-back-it-up-on-paper.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/02-back-it-up-on-paper.mp4)** — the narration is where the claims are made.*
 
 ### Verify the backup
 
 Type it back in. The wrong character is named rather than just refused,
 and at the end Core confirms the paper opens this key.
 
-![Verifying the backup](docs/demo/03-verify-the-backup.gif)
+[![Verifying the backup](docs/demo/03-verify-the-backup.gif)](docs/demo/03-verify-the-backup.mp4)
 
-*[Narrated version](docs/demo/03-verify-the-backup.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/03-verify-the-backup.mp4)** — the narration is where the claims are made.*
 
 ### Export the public key
 
@@ -175,27 +173,27 @@ All four script policies, then a QR carrying the fingerprint, the policy
 and the derivation path, so the coordinator can be checked rather than
 trusted.
 
-![Exporting the public key](docs/demo/04-export-the-public-key.gif)
+[![Exporting the public key](docs/demo/04-export-the-public-key.gif)](docs/demo/04-export-the-public-key.mp4)
 
-*[Narrated version](docs/demo/04-export-the-public-key.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/04-export-the-public-key.mp4)** — the narration is where the claims are made.*
 
 ### Check an address
 
 Whether the address on that other screen is really yours. Core answers,
 per loaded key.
 
-![Checking an address](docs/demo/05-check-an-address.gif)
+[![Checking an address](docs/demo/05-check-an-address.gif)](docs/demo/05-check-an-address.mp4)
 
-*[Narrated version](docs/demo/05-check-an-address.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/05-check-an-address.mp4)** — the narration is where the claims are made.*
 
 ### Sign a transaction
 
 In by camera, reviewed with Core's numbers, out by camera. Nothing is
 ever plugged in.
 
-![Signing a transaction](docs/demo/06-sign-a-transaction.gif)
+[![Signing a transaction](docs/demo/06-sign-a-transaction.gif)](docs/demo/06-sign-a-transaction.mp4)
 
-*[Narrated version](docs/demo/06-sign-a-transaction.mp4)*
+*Silent preview. **[Play it narrated](docs/demo/06-sign-a-transaction.mp4)** — the narration is where the claims are made.*
 
 Rebuild them with `python3 tools/make_demo_videos.py`. Nothing in that
 script is a mockup, and nothing leaves the machine: narration is macOS
@@ -1178,56 +1176,3 @@ phone wallets. `docs/wayfinder/e2e-before-testers/` charts it.
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |
 | M4 | mainnet trial | software path proven on real funds (ECDSA + Taproot, both confirmed); on-device trial pending hardware |
 
-## Glossary
-
-Jargon used above, in one line each. Every term in the text carries a
-[?](#glossary "hover a question mark for the short version, click it to
-come here") you can hover for the short version and click to reach the
-full entry. Where a term has an authoritative definition elsewhere, the
-entry links to it rather than competing with it.
-
-<a id="g-descriptor"></a>**Descriptor** — a text string that says
-everything needed to find a wallet's coins: the key, the script policy
-and the derivation path, with a checksum. Corky exports Core's own
-descriptor string and never rewrites one.
-([Optech](https://bitcoinops.org/en/topics/output-script-descriptors/),
-[BIP380](https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki))
-
-<a id="g-checksum"></a>**Checksum** — a few characters at the end of a
-string that let software reject the string if a character was mistyped,
-before anything acts on it. Descriptors and base58 keys both carry one.
-
-<a id="g-xprv"></a>**xprv** — the master private key, written the
-standard way. Whoever holds it can spend the coins. This is what Corky's
-paper backup is.
-([BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki))
-
-<a id="g-xpub"></a>**xpub** — the public half of the same key. It can
-derive every address the wallet will ever use, so it can watch, but it
-cannot spend.
-
-<a id="g-psbt"></a>**PSBT** — a partially signed bitcoin transaction. The
-file format a coordinator uses to hand an unsigned transaction to a
-signer and get it back signed.
-([Optech](https://bitcoinops.org/en/topics/partially-signed-bitcoin-transactions/),
-[BIP174](https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki))
-
-<a id="g-derivation-path"></a>**Derivation path** — the route from a
-master key to one particular address, written like `m/84h/0h/0h`. Two
-wallets with the same key and different paths hold different coins.
-
-<a id="g-script-policy"></a>**Script policy** — the kind of address a key
-produces. Bitcoin Core makes four from one key: legacy, nested segwit,
-native segwit and taproot. Coins sent to any of them are yours.
-
-<a id="g-fingerprint"></a>**Fingerprint** — eight hex characters derived
-from a key's public half, used to name it on screen and inside a
-transaction. Written XFP in the code.
-
-<a id="g-air-gapped"></a>**Air-gapped** — the device has no network of
-any kind, so data crosses to it only by camera, screen or removable
-media.
-
-<a id="g-coordinator"></a>**Coordinator** — the software that watches the
-chain, builds transactions and broadcasts them: Sparrow, a Bitcoin Core
-laptop, a phone wallet. Corky is never a coordinator.

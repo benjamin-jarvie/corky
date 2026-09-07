@@ -187,7 +187,11 @@ def yield_scenes(xfp, xprv, desc, addrs, kinds, pages, path,
 
     # ---- 1. generate a key ------------------------------------------
     shot("v1_home", screens.home(W, H, 1))
-    shot("v1_keys", screens.keys_menu(W, H, [], selected=1))
+    # New key is row 0 of KEYS_ACTIONS. Highlighting row 1 put the
+    # cursor on "Scan a key" in a video about generating one (Ben,
+    # 2026-09-07).
+    new_key_row = [lbl for lbl, _n in screens.KEYS_ACTIONS].index("New key")
+    shot("v1_keys", screens.keys_menu(W, H, [], selected=new_key_row))
     shot("v1_busy", screens.busy(W, H, "Bitcoin Core is making a key…"))
     shot("v1_made", screens.key_menu(W, H, xfp, 0))
     shot("v1_home2", screens.home(W, H, 1, xfp=xfp))
