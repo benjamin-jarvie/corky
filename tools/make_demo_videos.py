@@ -10,6 +10,7 @@ demo-video skill.
 
     python3 tools/make_demo_videos.py [outdir]
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,32 @@ import signer                                          # noqa: E402
 
 W, H = 320, 240
 SCALE = 4                       # 1280x960
-VOICE, RATE = "Daniel", 172
+# Narration engine. `say` is macOS's own: free, offline, instant, and
+# audibly synthetic. `piper` is a local neural model, still free and still
+# offline, and much easier to listen to for three minutes. Set VOICE to a
+# model name in ~/.local/share/piper-voices to use it.
+#
+#   VOICE=Daniel                             -> macOS say
+#   VOICE=en_GB-alba-medium                  -> piper
+VOICE = os.environ.get("CORKY_VOICE", "Daniel")
+RATE = int(os.environ.get("CORKY_RATE", "172"))
+PIPER_DIR = Path.home() / ".local" / "share" / "piper-voices"
+
+
+def narrate(text, out_wav):
+    """Speak `text` into out_wav. Neither engine sends anything anywhere."""
+    model = PIPER_DIR / f"{VOICE}.onnx"
+    if model.exists():
+        subprocess.run([sys.executable, "-m", "piper", "-m", str(model),
+                        "-f", str(out_wav)], input=text, text=True,
+                       check=True, capture_output=True)
+        return
+    aiff = out_wav.with_suffix(".aiff")
+    subprocess.run(["say", "-v", VOICE, "-r", str(RATE), "-o", str(aiff),
+                    text], check=True)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(aiff),
+                    "-ar", "22050", "-y", str(out_wav)], check=True)
+    aiff.unlink()
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "tmp" / "video")
 
 
@@ -47,13 +73,12 @@ def build(video, scenes):
         seg = OUT / f"{video}_{i:02d}.mp4"
         audio = OUT / f"{video}_{i:02d}.mp3"
         if text:
-            aiff = OUT / f"{video}_{i:02d}.aiff"
-            subprocess.run(["say", "-v", VOICE, "-r", str(RATE),
-                            "-o", str(aiff), text], check=True)
-            subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(aiff),
+            wav = OUT / f"{video}_{i:02d}.wav"
+            narrate(text, wav)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(wav),
                             "-ar", "22050", "-b:a", "128k", "-y", str(audio)],
                            check=True)
-            aiff.unlink()
+            wav.unlink()
             subprocess.run(
                 ["ffmpeg", "-loglevel", "error", "-loop", "1",
                  "-i", str(OUT / f"{png}.png"), "-i", str(audio),
@@ -79,7 +104,23 @@ def build(video, scenes):
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=nw=1:nk=1", str(final)],
         capture_output=True, text=True).stdout.strip()
-    print(f"  {video}.mp4   {float(dur):5.1f}s   {len(parts)} scenes")
+    # A GIF too, because GitHub only auto-plays videos it hosts itself:
+    # an .mp4 committed to a repo renders as a link nobody clicks. Every
+    # scene is a still, so 2fps compresses to a couple of hundred KB and
+    # the page shows the flow without anyone downloading anything.
+    gif = OUT / f"{video}.gif"
+    pal = OUT / "_pal.png"
+    vf = "fps=2,scale=640:-1:flags=lanczos"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(final),
+                    "-vf", f"{vf},palettegen=stats_mode=diff",
+                    "-y", str(pal)], check=True)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(final),
+                    "-i", str(pal), "-lavfi",
+                    f"{vf}[x];[x][1:v]paletteuse=dither=none",
+                    "-y", str(gif)], check=True)
+    pal.unlink()
+    print(f"  {video}.mp4   {float(dur):5.1f}s   {len(parts)} scenes"
+          f"   + {gif.stat().st_size // 1024}KB gif")
     for p in parts:
         (OUT / p).unlink()
     concat.unlink()
@@ -270,6 +311,8 @@ def yield_scenes(xfp, xprv, desc, addrs, kinds, pages, path,
     for p in OUT.glob("v*.png"):
         p.unlink()
     for p in OUT.glob("*.mp3"):
+        p.unlink()
+    for p in OUT.glob("*.wav"):
         p.unlink()
 
 

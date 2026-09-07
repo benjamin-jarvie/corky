@@ -2,7 +2,7 @@
 
 **Core's keys, nothing kept.**
 
-A stateless, air-gapped Bitcoin signer built from general-purpose
+A stateless, air-gapped [?](#g-air-gapped "No network of any kind") Bitcoin signer built from general-purpose
 hardware, in the tradition of SeedSigner. One difference is the whole
 point: **the wallet is Bitcoin Core itself**, running wallet-only and
 offline. Corky draws screens, reads buttons and carries bytes. It never
@@ -10,9 +10,51 @@ computes anything on a key.
 
 ## Why Bitcoin Core's wallet, and not another one
 
-Corky reimplements no wallet logic. Key derivation, PSBT parsing, fee
+Corky reimplements no wallet logic. Key derivation, PSBT [?](#g-psbt "A partially signed bitcoin transaction") parsing, fee
 computation and signing are done by Bitcoin Core, running wallet-only and
 offline, driven over its own RPC.
+
+That shape is not a workaround. Greg Sanders
+([@theinstagibbs](https://x.com/theinstagibbs/status/2096565881048269263)),
+a Bitcoin Core contributor, quote-tweeting "We're all one-shotted Bitcoin
+Core contributors now":
+
+> "Moderately hot take: in the age of AI anything that can be split off
+> from the repo should. As long as the mechanics of the wallet RPC are
+> safe people should just make their own GUI to their liking."
+
+Corky is exactly that, built as if it were meant seriously: a GUI over
+the wallet RPC, on hardware with no network, that adds nothing to the
+parts which handle the key.
+
+### This is more to trust than Core alone, and we are not going to pretend otherwise
+
+Ben Westgate put it to us straight: **"the less code between the user and
+Core, the better"**, and **"people have to trust it and it needs to be
+easily reviewable if they're going to use it."** He is right on both
+counts, and the honest consequence is worth saying before anything else
+in this document.
+
+**If you want the least trust available, you do not want Corky.** You
+want Bitcoin Core's command line on an air-gapped laptop you built
+yourself. That is Core's reviewed code and nothing else, and no interface
+of ours sits between you and it. It is the smaller thing to check, and it
+will still be the smaller thing to check after Corky is finished.
+
+Corky is Core **plus** a body of new code that draws screens, reads
+buttons and moves bytes. That code is young. It has one author and an
+audit trail rather than years of adversarial review from strangers. We
+verify Core's binaries against the release signatures, and we intend our
+own builds to be reproducible, but "intend" is the honest word today.
+
+What Corky buys for that cost is the interface, and the interface is not
+a luxury. A signer nobody will use protects nobody. The alternative most
+people actually reach for is friendlier, custodial in a way they did not
+read, and more likely to lose their coins than a command line ever was.
+
+So the claim is narrow, and it is the only one we make: **of the handheld
+signers, this is the one whose wallet is Bitcoin Core.** Everything below
+is written so you can check that claim rather than take it.
 
 The reason is review depth, and it is measurable rather than sentimental.
 Counted on 2026-09-07:
@@ -25,30 +67,29 @@ Counted on 2026-09-07:
 | Blockstream Jade | 2021 | 37 | 6 |
 | Foundation Passport | 2022 | 12 | 40 |
 
-Read honestly: those are healthy projects, and merged-pull-request counts
-include trivial changes. Core's contributor figure is GitHub's capped
-list, so it is a floor. What the numbers say is not that the others are
-careless. It is that a change to Core's wallet passes more independent
+Those are healthy projects, and merged-pull-request counts include
+trivial changes. GitHub does not list every contributor either, so Core's
+real figure is higher than the one above. None of this says the others
+are careless. It says a change to Core's wallet passes more independent
 eyes than a change to any other Bitcoin wallet, that Core's review
 convention requires reviewers to publicly ACK a specific commit, and that
 the same code is what the network's reference node runs. Bugs are harder
-to land there, by construction, and a great deal more is watching if one
-does.
+to land there, by construction, and far more is watching if one does.
 
 **The standards tell the same story.** BIP39, the seed phrase, was
 written by SatoshiLabs, a hardware wallet vendor. Output descriptors
+[?](#g-descriptor "A string with the key, script policy and derivation path, plus a checksum")
 (BIPs 380 to 386) were written by Pieter Wuille and Ava Chow, Bitcoin
-Core contributors. Core has never implemented BIP39: asked directly,
-v31.1 answers `sethdseed` with "Method not found" and has no mnemonic
-call at all.
+Core contributors. Core has never implemented BIP39.
 
 **And a seed phrase does not carry enough.** It holds the key and nothing
-else: not the script policy, not the derivation path, not whether the
+else: not the script policy [?](#g-script-policy "Legacy, nested segwit, native segwit or taproot"),
+not the derivation path [?](#g-derivation-path "The route from a master key to one address, like m/84h/0h/0h"), not whether the
 wallet is single-signature or one key of a multisig quorum. Restoring
 from words alone is a guess about which addresses were yours. A
 descriptor carries all of it, which is why Corky's backup is Core's own
 master key and its export is Core's own descriptor string, checksum
-included.
+[?](#g-checksum "Trailing characters that let software reject a mistyped string") included.
 
 Greg Maxwell, on the BIPs repository's own comments page for BIP39
 ([source](https://github.com/bitcoin/bips/wiki/Comments:BIP-0039)):
@@ -74,15 +115,14 @@ around it.
 
 Corky is that instinct finished. Two builds:
 
-- **The CM4 Lite has no radio at all**, by manufacture. That is physics
-  rather than configuration, and it is the primary build.
+- **The CM4 Lite has no radio at all**, because none was ever fitted.
 - **The Pi Zero 2 W pocket build** carries wifi and Bluetooth on the
   board. `image/harden.sh` disables them in firmware, blacklists the
   drivers and moves their firmware aside, and `image/leak-check.sh`
-  reports on every one. The radio chip still has power. Removing the
-  part is the only version of this that is physics, and on a Zero 2 W the
-  radio is a separate component beside the processor, so removal is
-  possible.
+  reports on every one. The chip still has power, though, so software can
+  only ever say the radio is unused. The one way to be certain is to take
+  the chip off the board, and on a Zero 2 W that is possible: the radio
+  sits beside the processor as its own component, not inside it.
 
 The device is stateless either way. The wallet lives on a ramdisk, the
 key is entered each session, and power-off wipes it.
@@ -100,14 +140,62 @@ So every flow below is on the device itself, and these are recordings of
 the real screens, drawn by the real code, with real output from Bitcoin
 Core on regtest.
 
-| | what it shows |
-|---|---|
-| [Generate a key](docs/demo/01-generate-a-key.mp4) | Core makes the key, and the fingerprint that names it |
-| [Back it up on paper](docs/demo/02-back-it-up-on-paper.mp4) | 111 characters over three pages. There is no file |
-| [Verify the backup](docs/demo/03-verify-the-backup.mp4) | Type it back. The wrong character is named, and Core confirms the paper opens the key |
-| [Export the public key](docs/demo/04-export-the-public-key.mp4) | Four script policies, then a QR carrying the fingerprint, policy and derivation path |
-| [Check an address](docs/demo/05-check-an-address.mp4) | Whether that address on the other screen is really yours |
-| [Sign a transaction](docs/demo/06-sign-a-transaction.mp4) | In by camera, reviewed with Core's numbers, out by camera |
+Each one below plays silently in the page. The **narrated** version is
+the MP4 beside it, and it is worth the audio: the narration is where the
+security claims are made.
+
+### Generate a key
+
+Core makes the key with its own randomness, and names it by fingerprint.
+
+![Generating a key](docs/demo/01-generate-a-key.gif)
+
+*[Narrated version](docs/demo/01-generate-a-key.mp4)*
+
+### Back it up on paper
+
+111 characters over three pages. There is no file and no encryption.
+
+![Backing up on paper](docs/demo/02-back-it-up-on-paper.gif)
+
+*[Narrated version](docs/demo/02-back-it-up-on-paper.mp4)*
+
+### Verify the backup
+
+Type it back in. The wrong character is named rather than just refused,
+and at the end Core confirms the paper opens this key.
+
+![Verifying the backup](docs/demo/03-verify-the-backup.gif)
+
+*[Narrated version](docs/demo/03-verify-the-backup.mp4)*
+
+### Export the public key
+
+All four script policies, then a QR carrying the fingerprint, the policy
+and the derivation path, so the coordinator can be checked rather than
+trusted.
+
+![Exporting the public key](docs/demo/04-export-the-public-key.gif)
+
+*[Narrated version](docs/demo/04-export-the-public-key.mp4)*
+
+### Check an address
+
+Whether the address on that other screen is really yours. Core answers,
+per loaded key.
+
+![Checking an address](docs/demo/05-check-an-address.gif)
+
+*[Narrated version](docs/demo/05-check-an-address.mp4)*
+
+### Sign a transaction
+
+In by camera, reviewed with Core's numbers, out by camera. Nothing is
+ever plugged in.
+
+![Signing a transaction](docs/demo/06-sign-a-transaction.gif)
+
+*[Narrated version](docs/demo/06-sign-a-transaction.mp4)*
 
 Rebuild them with `python3 tools/make_demo_videos.py`. Nothing in that
 script is a mockup, and nothing leaves the machine: narration is macOS
@@ -1089,3 +1177,57 @@ phone wallets. `docs/wayfinder/e2e-before-testers/` charts it.
 | M2 | stateless UI on the LCD hat | power-on→ready < 90s; power cycle provably wipes |
 | M3 | hardened reproducible image | read-only root; radios dead; image hash reproducible |
 | M4 | mainnet trial | software path proven on real funds (ECDSA + Taproot, both confirmed); on-device trial pending hardware |
+
+## Glossary
+
+Jargon used above, in one line each. Every term in the text carries a
+[?](#glossary "hover a question mark for the short version, click it to
+come here") you can hover for the short version and click to reach the
+full entry. Where a term has an authoritative definition elsewhere, the
+entry links to it rather than competing with it.
+
+<a id="g-descriptor"></a>**Descriptor** — a text string that says
+everything needed to find a wallet's coins: the key, the script policy
+and the derivation path, with a checksum. Corky exports Core's own
+descriptor string and never rewrites one.
+([Optech](https://bitcoinops.org/en/topics/output-script-descriptors/),
+[BIP380](https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki))
+
+<a id="g-checksum"></a>**Checksum** — a few characters at the end of a
+string that let software reject the string if a character was mistyped,
+before anything acts on it. Descriptors and base58 keys both carry one.
+
+<a id="g-xprv"></a>**xprv** — the master private key, written the
+standard way. Whoever holds it can spend the coins. This is what Corky's
+paper backup is.
+([BIP32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki))
+
+<a id="g-xpub"></a>**xpub** — the public half of the same key. It can
+derive every address the wallet will ever use, so it can watch, but it
+cannot spend.
+
+<a id="g-psbt"></a>**PSBT** — a partially signed bitcoin transaction. The
+file format a coordinator uses to hand an unsigned transaction to a
+signer and get it back signed.
+([Optech](https://bitcoinops.org/en/topics/partially-signed-bitcoin-transactions/),
+[BIP174](https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki))
+
+<a id="g-derivation-path"></a>**Derivation path** — the route from a
+master key to one particular address, written like `m/84h/0h/0h`. Two
+wallets with the same key and different paths hold different coins.
+
+<a id="g-script-policy"></a>**Script policy** — the kind of address a key
+produces. Bitcoin Core makes four from one key: legacy, nested segwit,
+native segwit and taproot. Coins sent to any of them are yours.
+
+<a id="g-fingerprint"></a>**Fingerprint** — eight hex characters derived
+from a key's public half, used to name it on screen and inside a
+transaction. Written XFP in the code.
+
+<a id="g-air-gapped"></a>**Air-gapped** — the device has no network of
+any kind, so data crosses to it only by camera, screen or removable
+media.
+
+<a id="g-coordinator"></a>**Coordinator** — the software that watches the
+chain, builds transactions and broadcasts them: Sparrow, a Bitcoin Core
+laptop, a phone wallet. Corky is never a coordinator.
