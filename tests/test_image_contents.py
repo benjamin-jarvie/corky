@@ -79,7 +79,7 @@ def main():
     required = ("corky/main.py", "corky/signer.py", "corky/screens.py",
                 "corky/qrchannel.py", "corky/filechannel.py",
                 "corky/hal.py", "corky/splash.py",
-                "image/leak-check.sh", "image/harden.sh",
+                "image/leak-check.sh", "image/harden.sh", "image/unharden.sh",
                 "image/verify-install.sh", "image/PINS",
                 "hw/vendor/st7789.py", "hw/vendor/ur2/__init__.py",
                 "hw/vendor/fonts/fa-solid-subset.ttf", "LICENSE")

@@ -180,8 +180,23 @@ readers.
 on a board without them. It still closes the paths that have no development
 value, so swap, the journal, the serial console and USB device mode are shut
 there. `image/harden.sh` is the **one-way step** you run when the board is
-about to hold a real key: it takes the radios and SSH away, and reflashing
-the card is the only way back. A dev image is expected to fail the radio
+about to hold a real key: it takes the radios and SSH away.
+
+**How you get back in.** Hardening does not touch `getty@tty1`, so a
+mini-HDMI adapter, a screen and a USB keyboard still give a local login;
+the account has a password, checked on the board on 2026-09-06. From
+there `image/unharden.sh` reverses every step in one command. If the
+board will not boot far enough for that, the boot partition is FAT and
+opens on any computer: append ` init=/bin/sh` to `cmdline.txt` for a
+rescue shell with no login, or mount the ext4 root on a Linux machine and
+run the same script with `ROOT=` pointing at it. Reflashing is the last
+resort and costs nothing but evidence, because the device keeps no state.
+`tests/test_harden_reversible.py` fails if the two scripts ever stop
+being exact inverses, or if hardening starts closing the console that is
+the way back.
+
+**Take an image of the card before you harden it.** Restoring one is ten
+minutes and it leaves the broken card intact to look at. A dev image is expected to fail the radio
 rows of the leak check, and the report says so rather than crying wolf.
 
 **A clean run proves the OS is not driving the radio. It does not prove
@@ -804,7 +819,7 @@ bytes. Core is the only parser, by law ([PLAN.md A-11](PLAN.md)).
 A bug in either layer can show you the wrong thing. Neither can compute
 you the wrong key, because neither computes keys at all.
 
-**Test code: 5,366 lines — none of it ships on the device.**
+**Test code: 5,460 lines — none of it ships on the device.**
 [`tests/`](tests/). More test
 than device is deliberate: a 36-cell signing matrix, 7 adversarial attack scenarios,
 21 scripted device sessions, property and fuzz suites, and 86% of `corky/`
