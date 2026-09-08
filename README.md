@@ -223,7 +223,7 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,401 lines** (4,852 with blanks/comments).
-**Test code: 6,474 lines**, none of which ships.
+**Test code: 6,547 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
@@ -240,6 +240,21 @@ code can select: `hal.py` imports `st7789` and nothing else. It is
 carried for a 2.4" board Corky does not ship.
 `tests/test_vendor_pinned.py` records the sha256 of each file, so a
 change to any of them is a failing test rather than a surprise.
+
+**"Audit upstream" is a fact here, not a phrase.** Every vendored file
+was compared byte for byte with SeedSigner at commit `85cd9a0211ee` on
+2026-09-08, and the result is in
+[`tests/vendor-upstream.json`](tests/vendor-upstream.json): 15 of 17
+identical, the two display drivers modified and saying so at the top.
+The pin is a commit and not a branch, so it does not move. Repeat it
+with `python3 tests/test_vendor_pinned.py --verify-upstream`, which
+fetches that same commit and re-derives every hash.
+
+One of those modifications is a bug fix upstream does not have.
+SeedSigner's `SetWindows` hardcodes the high octet of every coordinate to
+zero, which is right only below 256 pixels; on Corky's 320-wide primary
+panel it addresses a 64-column window. That belongs upstream and we will
+send it.
 
 Layer 1 being empty is enforced, not asserted.
 [`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped

@@ -4,7 +4,7 @@
   "hw/vendor/ili9341.py": "4813345dc8e64e31b0254d51008b4ef64235f40955a6d587262da69828f4994c",
   "hw/vendor/st7789.py": "1d6147507ae8c33eecd6e6acc3a14368bbfcd016f08b7679cd1de4feab02754d",
   "hw/vendor/ur2/LICENSE": "2f1b5bb0af989ba3080b7eae752992e65873e294db9fa13bef1858c96fc91113",
-  "hw/vendor/ur2/VENDORED.md": "ed3c903eb7b74608f8034d8b2d73074122a34688f2291285232467ea24612dc4",
+  "hw/vendor/ur2/VENDORED.md": "e4b6d2d34fe498b7a4bd3ef8d6b7d02a072a6e2da56e53d1e7a69bdcb97c1584",
   "hw/vendor/ur2/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "hw/vendor/ur2/bytewords.py": "b652f89758fb84d2beafaeb01e77a8af5f3e7a201d5b3fa1473e01ef8418bfc1",
   "hw/vendor/ur2/cbor_lite.py": "313c06f8d23542fcd7eaa0c25ccb57d568571ba7afd6e630c5d9d418c2265913",
