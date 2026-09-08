@@ -28,9 +28,26 @@
 # The device's own Tools screen reads that. The checks are written once and
 # read two ways.
 
-PASS=0; FAIL=0
+PASS=0; FAIL=0; UNKNOWN=0
 PORCELAIN=0
 [ "${1:-}" = "--porcelain" ] && PORCELAIN=1
+
+# ROOT, OR NOTHING. Half of what follows reads restricted sources: dmesg
+# is gated by kernel.dmesg_restrict, swapon and lsmod answer thinly, and
+# every one of those returns EMPTY rather than an error. Empty reads as
+# "nothing found", which reads as a pass. A leak check that quietly turns
+# into a clean bill of health because it could not look is worse than no
+# leak check, so it refuses instead (audit of image/, 2026-09-08).
+if [ "$(id -u)" -ne 0 ]; then
+    if [ "$PORCELAIN" -eq 1 ]; then
+        printf "FAIL\t%s\t%s\n" "leak check" "not run as root; nothing checked"
+    else
+        printf "%s\n" "Run this as root: sudo bash $0"
+        printf "%s\n" "Without it dmesg, lsmod and swapon answer empty, and"
+        printf "%s\n" "empty would be reported as clean."
+    fi
+    exit 2
+fi
 say()  { [ "$PORCELAIN" -eq 1 ] || printf "%s\n" "$1"; }
 ok()   { PASS=$((PASS+1))
          if [ "$PORCELAIN" -eq 1 ]; then printf "ok\t%s\t%s\n" "$1" "$2"
@@ -38,6 +55,14 @@ ok()   { PASS=$((PASS+1))
 bad()  { FAIL=$((FAIL+1))
          if [ "$PORCELAIN" -eq 1 ]; then printf "FAIL\t%s\t%s\n" "$1" "$2"
          else printf "  LEAK  %-22s %s\n" "$1" "$2"; fi; }
+# Neither clean nor leaking: a fact worth showing that is not a verdict,
+# and a check that could not be made. Counting either as a pass inflates
+# "ALL N CLEAR", which is the one line a reader takes at face value.
+note() { if [ "$PORCELAIN" -eq 1 ]; then printf "note\t%s\t%s\n" "$1" "$2"
+         else printf "  --    %-22s %s\n" "$1" "$2"; fi; }
+huh()  { UNKNOWN=$((UNKNOWN+1))
+         if [ "$PORCELAIN" -eq 1 ]; then printf "huh\t%s\t%s\n" "$1" "$2"
+         else printf "  ????  %-22s %s\n" "$1" "$2"; fi; }
 
 # systemctl prints its answer on stdout AND exits non-zero for a unit that
 # does not exist, so the answer must be read as one line and the exit code
@@ -73,36 +98,74 @@ say "Corky leak check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
 say ""
 say "RADIO"
 
-grep -q "^dtoverlay=disable-wifi" "$CFG" 2>/dev/null \
-    && ok "Wi-Fi overlay" "disabled" || bad "Wi-Fi overlay" "not set"
-grep -q "^dtoverlay=disable-bt" "$CFG" 2>/dev/null \
-    && ok "Bluetooth overlay" "disabled" || bad "Bluetooth overlay" "not set"
+if grep -q "^dtoverlay=disable-wifi" "$CFG" 2>/dev/null; then
+    ok "Wi-Fi overlay" "disabled"
+else
+    bad "Wi-Fi overlay" "not set"
+fi
+if grep -q "^dtoverlay=disable-bt" "$CFG" 2>/dev/null; then
+    ok "Bluetooth overlay" "disabled"
+else
+    bad "Bluetooth overlay" "not set"
+fi
 
 WIFI_MODS=$(lsmod 2>/dev/null | grep -cE "^(brcmfmac|brcmutil|cfg80211)")
-[ "$WIFI_MODS" -eq 0 ] && ok "Wi-Fi driver" "not loaded" \
-                       || bad "Wi-Fi driver" "loaded"
+if [ "$WIFI_MODS" -eq 0 ]; then ok "Wi-Fi driver" "not loaded"
+else bad "Wi-Fi driver" "loaded"; fi
 BT_MODS=$(lsmod 2>/dev/null | grep -cE "^(bluetooth|btbcm|hci_uart|btsdio)")
-[ "$BT_MODS" -eq 0 ] && ok "Bluetooth driver" "not loaded" \
-                     || bad "Bluetooth driver" "loaded"
+if [ "$BT_MODS" -eq 0 ]; then ok "Bluetooth driver" "not loaded"
+else bad "Bluetooth driver" "loaded"; fi
 
-[ -f /etc/modprobe.d/corky-no-radio.conf ] \
-    && ok "Driver blacklist" "installed" || bad "Driver blacklist" "missing"
+if [ -f /etc/modprobe.d/corky-no-radio.conf ]; then
+    ok "Driver blacklist" "installed"
+else bad "Driver blacklist" "missing"; fi
 
-[ -d /lib/firmware/brcm ] && bad "Radio firmware" "on the card" \
-                          || ok "Radio firmware" "removed"
+if [ -d /lib/firmware/brcm ]; then bad "Radio firmware" "on the card"
+else ok "Radio firmware" "removed"; fi
 
-WIFI_IF=$(ls /sys/class/net 2>/dev/null | grep -vE '^(lo|usb|eth)' | tr '\n' ' ')
-[ -z "$WIFI_IF" ] && ok "Wi-Fi interface" "none" \
-                  || bad "Wi-Fi interface" "$(echo "$WIFI_IF" | tr -d ' ')"
-if command -v hciconfig >/dev/null 2>&1; then
-    [ -z "$(hciconfig 2>/dev/null)" ] && ok "Bluetooth device" "none" \
-                                      || bad "Bluetooth device" "present"
+# The kernel marks a wireless interface with a `wireless` directory, so
+# ask it rather than guessing from the name. The old test listed
+# /sys/class/net and called anything not matching lo, usb or eth a radio,
+# which flags a bridge, a tap or a predictably-named USB ethernet
+# (enx0011...) as Wi-Fi. Crying wolf is the one thing this report must
+# not do (audit of image/, 2026-09-08).
+WIFI_IF=""
+for _n in /sys/class/net/*; do
+    [ -e "$_n/wireless" ] || [ -e "$_n/phy80211" ] || continue
+    WIFI_IF="$WIFI_IF$(basename "$_n") "
+done
+if [ -z "$WIFI_IF" ]; then
+    ok "Wi-Fi interface" "none"
+else
+    bad "Wi-Fi interface" "$(echo "$WIFI_IF" | tr -s ' ' | sed 's/ $//')"
+fi
+
+# Bluetooth devices from sysfs, which is always there. This used to need
+# hciconfig and was wrapped in `if command -v`, so on an image without
+# bluez the row SILENTLY DISAPPEARED: the reader counts rows and sees no
+# Bluetooth line at all, which is not the same as being told there is no
+# device.
+if [ -d /sys/class/bluetooth ]; then
+    BT_DEV=$(find /sys/class/bluetooth -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+    if [ "$BT_DEV" -eq 0 ]; then
+        ok "Bluetooth device" "none"
+    else
+        bad "Bluetooth device" "$BT_DEV present"
+    fi
+else
+    ok "Bluetooth device" "no bluetooth class at all"
 fi
 service_row "Wi-Fi service" wpa_supplicant
 service_row "Bluetooth service" bluetooth
 service_row "Network manager" NetworkManager
 
-if dmesg 2>/dev/null | grep -qiE "brcmfmac|Bluetooth: hci"; then
+# An unreadable dmesg produces no output, and no output matched nothing,
+# and nothing matched used to read as "silent". That is a check passing
+# because it could not look. Distinguish the two.
+DMESG=$(dmesg 2>/dev/null)
+if [ -z "$DMESG" ]; then
+    huh "Radio at boot" "dmesg unreadable; cannot say"
+elif printf "%s" "$DMESG" | grep -qiE "brcmfmac|Bluetooth: hci"; then
     bad "Radio at boot" "brought up"
 else
     ok "Radio at boot" "silent"
@@ -121,54 +184,78 @@ for unit in dphys-swapfile dev-zram0.swap; do
     st=$(unit_state "$unit"); [ -n "$st" ] || st=not-found
     unit_off "$st" || SWAP_BACK=yes
 done
-[ -f /etc/systemd/zram-generator.conf ] \
-    && grep -qE "zram-size *= *0" /etc/systemd/zram-generator.conf || {
-        [ -x /usr/lib/systemd/system-generators/zram-generator ] && SWAP_BACK=yes; }
-[ "$SWAP_BACK" = "no" ] && ok "Swap at boot" "cannot return" \
-                        || bad "Swap at boot" "comes back"
+# zram is the other way swap comes back. It is off only if the generator
+# config exists AND pins the size to zero; otherwise, if the generator
+# binary is there at all, it can make swap at the next boot. Written as
+# A && B || C this was correct and unreadable, which is its own defect in
+# a file people audit.
+ZRAM_PINNED_OFF=no
+if [ -f /etc/systemd/zram-generator.conf ] &&
+   grep -qE "zram-size *= *0" /etc/systemd/zram-generator.conf; then
+    ZRAM_PINNED_OFF=yes
+fi
+if [ "$ZRAM_PINNED_OFF" = "no" ] &&
+   [ -x /usr/lib/systemd/system-generators/zram-generator ]; then
+    SWAP_BACK=yes
+fi
+if [ "$SWAP_BACK" = "no" ]; then ok "Swap at boot" "cannot return"
+else bad "Swap at boot" "comes back"; fi
 
-[ -d /var/log/journal ] && bad "Journal" "written to the card" \
-                        || ok "Journal" "in RAM only"
+if [ -d /var/log/journal ]; then bad "Journal" "written to the card"
+else ok "Journal" "in RAM only"; fi
 
 say ""
 say "PORTS AND CONSOLES"
 
-grep -qE "console=(serial0|ttyAMA0|ttyS0)" "$CMDLINE" 2>/dev/null \
-    && bad "Serial console" "on the GPIO header" \
-    || ok "Serial console" "off"
+if grep -qE "console=(serial0|ttyAMA0|ttyS0)" "$CMDLINE" 2>/dev/null; then
+    bad "Serial console" "on the GPIO header"
+else ok "Serial console" "off"; fi
 GETTY=off
 for unit in serial-getty@ttyAMA0.service serial-getty@ttyS0.service; do
     st=$(unit_state "$unit"); [ -n "$st" ] || st=not-found
     unit_off "$st" || GETTY=on
 done
-[ "$GETTY" = "off" ] && ok "Serial login" "off" || bad "Serial login" "enabled"
+if [ "$GETTY" = "off" ]; then ok "Serial login" "off"
+else bad "Serial login" "enabled"; fi
 
 if [ -n "$(ls /sys/class/udc 2>/dev/null)" ]; then
     bad "USB device mode" "active, can pretend to be a disk"
 else
     ok "USB device mode" "off, host only"
 fi
-[ -f /etc/modprobe.d/corky-no-gadget.conf ] \
-    && ok "USB gadget blacklist" "installed" \
-    || bad "USB gadget blacklist" "missing"
+if [ -f /etc/modprobe.d/corky-no-gadget.conf ]; then
+    ok "USB gadget blacklist" "installed"
+else bad "USB gadget blacklist" "missing"; fi
 
 ATTACHED=$(grep -l "^connected" /sys/class/drm/*/status 2>/dev/null | wc -l)
-[ "$ATTACHED" -eq 0 ] && ok "HDMI" "nothing attached" \
-                      || ok "HDMI" "a screen is plugged in"
+if [ "$ATTACHED" -eq 0 ]; then
+    note "HDMI" "nothing attached"
+else
+    note "HDMI" "a screen is plugged in"
+fi
 
 service_row "Remote login" ssh
 
 say ""
 say "BITCOIN CORE"
-grep -q "^networkactive=0" /etc/corky-bitcoin.conf 2>/dev/null \
-    && ok "Core networking" "off" || bad "Core networking" "on"
+if grep -q "^networkactive=0" /etc/corky-bitcoin.conf 2>/dev/null; then
+    ok "Core networking" "off"
+else bad "Core networking" "on"; fi
 
 say ""
 say "==================================================================="
-if [ "$FAIL" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "$UNKNOWN" -eq 0 ]; then
     say "OS SILENT: all $PASS checks pass."
     say ""
     say "The operating system is not driving any way off this board."
+elif [ "$FAIL" -eq 0 ]; then
+    # An unanswerable check is not a pass. Saying "all clear" while a row
+    # reads "cannot say" is the false assurance this whole file exists to
+    # avoid (audit of image/, 2026-09-08).
+    say "$UNKNOWN check(s) could not be answered. $PASS passed, none failed."
+    say ""
+    say "This is NOT a clean run. Find out why those rows could not be"
+    say "read before trusting the rest."
 else
     say "$FAIL of $((PASS+FAIL)) checks found a way off this board."
     say ""
@@ -210,5 +297,7 @@ say ""
 say "What no script can check: the activity LED can be modulated, and the"
 say "power line and the panel both emit. Those need a room, not a config."
 say "==================================================================="
-[ "$PORCELAIN" -eq 1 ] && printf "TOTAL\t%s\t%s\n" "$PASS" "$FAIL"
-exit $FAIL
+[ "$PORCELAIN" -eq 1 ] && printf "TOTAL\t%s\t%s\n" "$PASS" "$((FAIL+UNKNOWN))"
+# A check that could not be answered exits non-zero like a failing one.
+# Callers branch on this, and "I could not look" must not read as "clean".
+exit $((FAIL + UNKNOWN))

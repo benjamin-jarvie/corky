@@ -90,11 +90,11 @@ for unit in wpa_supplicant bluetooth hciuart dhcpcd NetworkManager \
     if [ -n "$ROOT" ]; then
         # Offline: a mask is a symlink to /dev/null. Delete it by hand,
         # because systemctl cannot talk to a system that is not running.
-        for d in "$ROOT/etc/systemd/system"; do
-            for f in "$d/$unit" "$d/$unit.service"; do
-                [ -L "$f" ] && [ "$(readlink "$f")" = "/dev/null" ] \
-                    && rm -f "$f" && say ok "unmasked $unit"
-            done
+        _sysd="$ROOT/etc/systemd/system"
+        for f in "$_sysd/$unit" "$_sysd/$unit.service"; do
+            if [ -L "$f" ] && [ "$(readlink "$f")" = "/dev/null" ]; then
+                rm -f "$f" && say ok "unmasked $unit"
+            fi
         done
     else
         systemctl unmask "$unit" >/dev/null 2>&1 && say ok "unmasked $unit"

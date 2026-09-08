@@ -1304,9 +1304,15 @@ class Session:
             if len(parts) < 3:
                 continue
             verdict, label, state = parts[0], parts[1], parts[2]
-            if verdict == "FAIL":
+            if verdict in ("FAIL", "huh"):
+                # "huh" is a check the script could not answer. It shows
+                # with the leaks, because a question nobody answered is
+                # not a pass, and because a verdict this parser does not
+                # recognise used to be dropped on the floor: the row
+                # simply never reached the screen (audit of image/,
+                # 2026-09-08).
                 leaks.append((label, state, "leak"))
-            elif verdict == "ok":
+            elif verdict in ("ok", "note"):
                 clear.append((label, state, "normal"))
         rows = leaks + clear          # what you opened this for comes first
         if not rows:

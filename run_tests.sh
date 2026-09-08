@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 export PYTHONDONTWRITEBYTECODE=1
 find . -name __pycache__ -not -path "./hw/vendor/*" -exec rm -rf {} + 2>/dev/null || true
 PY="arch -arm64 python3"
-SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_buttons.py tests/test_keyscan.py tests/test_menu_wiring.py tests/test_scroll.py tests/test_splash.py tests/test_backup_check.py tests/test_channels.py tests/test_key_persistence.py tests/test_harden_reversible.py tests/test_vendor_pinned.py"
+SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_buttons.py tests/test_keyscan.py tests/test_menu_wiring.py tests/test_scroll.py tests/test_splash.py tests/test_backup_check.py tests/test_channels.py tests/test_key_persistence.py tests/test_harden_reversible.py tests/test_vendor_pinned.py tests/test_leak_check.py"
 SUITES_NODE="tests/test_addresses.py tests/e2e_regtest.py tests/e2e_filechannel.py tests/e2e_session.py tests/test_generate.py tests/test_matrix.py tests/test_adversarial.py tests/test_keys.py tests/e2e_keys.py tests/test_no_persistence.py tests/test_export.py"
 FAILED=0
 # Static checks first, because they are seconds and the suites are minutes.
@@ -22,6 +22,17 @@ if $PY -m ruff --version >/dev/null 2>&1; then
   if $PY -m mypy corky/signer.py corky/qrchannel.py corky/filechannel.py --ignore-missing-imports --check-untyped-defs >/dev/null 2>&1; then echo "PASS mypy (the seam)"; else echo "FAIL mypy (the seam)"; FAILED=1; fi
 else
   echo "(not run: ruff, vulture, mypy. python3 -m pip install --user -r requirements-dev.txt, on the DEV machine only.)"
+fi
+# Static analysis for the 753 lines that run as ROOT on the board, which
+# is what shellcheck is for. It found a loop that ran once, an ls|grep,
+# and sixteen A && B || C rows in the one report a hardened device is
+# trusted on (audit of image/, 2026-09-08). NOTE: a comment starting with
+# the tool's own name is read as a DIRECTIVE, which is how this comment
+# first broke the very check it introduces.
+if command -v shellcheck >/dev/null 2>&1; then
+  if shellcheck -S warning image/*.sh run_tests.sh >/dev/null 2>&1; then echo "PASS shellcheck"; else echo "FAIL shellcheck"; shellcheck -S warning image/*.sh run_tests.sh 2>&1 | head -12; FAILED=1; fi
+else
+  echo "(not run: shellcheck. brew install shellcheck, on the DEV machine only.)"
 fi
 # A failing suite used to print its name and nothing else, so the first
 # thing anyone did was run it again by hand. Keep the output and show the
