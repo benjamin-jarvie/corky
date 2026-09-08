@@ -1177,6 +1177,15 @@ class Session:
                 # the count is what tells the operator the camera IS
                 # reading, and that what it reads is not what is wanted.
                 skipped += 1
+                # And READING A CODE IS PROGRESS, so the clock starts
+                # again. This deadline was set once before the loop and
+                # never moved, which made it a total time limit wearing a
+                # no-progress name: a scan that decoded a stray code on
+                # every single tick still died at 20 seconds saying
+                # "nothing read", while the camera was working perfectly
+                # (found reading main.py, 2026-09-07). qrchannel.PsbtScan
+                # has always reset on progress; this now agrees with it.
+                deadline = self.clock() + qrchannel.NO_PROGRESS_TIMEOUT
             caption = message
             if skipped:
                 caption = f"{message} ({skipped} skipped)"
@@ -1186,8 +1195,13 @@ class Session:
             if self.buttons.pressed() in ("b", "c"):
                 raise qrchannel.ScanAborted("cancelled")
             if self.clock() > deadline:
+                # Two different failures, and they want different answers
+                # from the person holding the device: aim it, or hold up
+                # something else.
+                secs = int(qrchannel.NO_PROGRESS_TIMEOUT)
                 raise qrchannel.ScanTimeout(
-                    f"nothing read in {int(qrchannel.NO_PROGRESS_TIMEOUT)}s")
+                    f"nothing read in {secs}s" if not skipped
+                    else f"{skipped} codes read, none of them the right kind")
             time.sleep(0.02)
 
     def _guard_key_payload(self, payload):

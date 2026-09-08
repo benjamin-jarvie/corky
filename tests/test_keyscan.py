@@ -202,6 +202,64 @@ def main():
         bad(f"the scan does not report what it skipped: {kind}, "
             f"{len(painted)} frames")
 
+    # 10. Reading a code is PROGRESS, so a scan that keeps reading keeps
+    #     going. The deadline was set once before the loop and never
+    #     moved, which made it a total time limit wearing a no-progress
+    #     name: a camera decoding a stray code on every tick still died
+    #     at 20 seconds saying "nothing read", which was both premature
+    #     and untrue (found reading main.py, 2026-09-07).
+    class Ticking:
+        """A clock that advances a whole second per poll."""
+
+        def __init__(self):
+            self.t = 0.0
+
+        def __call__(self):
+            self.t += 1.0
+            return self.t
+
+    class StrayThenReal:
+        last_image = None
+
+        def __init__(self):
+            self.n = 0
+
+        def strings(self):
+            while True:
+                self.n += 1
+                yield XPRV if self.n > 40 else "https://example.com/junk"
+
+    sess = corky_main.Session(Display(), Buttons(), rpc=None,
+                              qr_source=StrayThenReal())
+    sess.clock = Ticking()
+    try:
+        kind, got = sess._scan_until(
+            "hold the key QR in view",
+            lambda p: "key" if p.startswith(("xprv", "tprv")) else None)
+        ok(f"40 stray codes over 80s do not end the scan; the real one "
+           f"still arrives ({kind})") if got == XPRV else \
+            bad(f"the scan returned {got[:20]!r}, not the key")
+    except qrchannel.ScanTimeout as exc:
+        bad(f"a camera reading a code every tick timed out anyway: {exc}")
+
+    # But a camera reading NOTHING must still give up, or a blind board
+    # waits for ever.
+    class Blind:
+        last_image = None
+
+        def strings(self):
+            while True:
+                yield None
+
+    blind = corky_main.Session(Display(), Buttons(), rpc=None,
+                               qr_source=Blind())
+    blind.clock = Ticking()
+    try:
+        blind._scan_until("hold the key QR in view", lambda _p: "key")
+        bad("a blind camera never timed out")
+    except qrchannel.ScanTimeout as exc:
+        ok(f"a camera that reads nothing still gives up: {exc}")
+
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")
     sys.exit(1 if fails else 0)
