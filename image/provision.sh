@@ -52,7 +52,8 @@ apt-get update -qq
 # list that quietly dropped python3-picamera2, so an unavailable
 # python3-zbar would have cost the camera and said nothing until a scan
 # failed on the board.
-# libzbar0: pyzbar (in PIP_PINS) dlopens it at import; pip cannot provide it.
+# libzbar0: pyzbar (in image/requirements.txt) dlopens it at import;
+# pip cannot provide it.
 REQUIRED_PKGS="python3-pil python3-rpi.gpio python3-spidev python3-picamera2 libzbar0 python3-pip"
 for pkg in $REQUIRED_PKGS; do
     apt-get install -y -qq "$pkg" || {
@@ -65,9 +66,6 @@ done
 # only needs libzbar0 above, so this is a convenience, not a requirement.
 apt-get install -y -qq python3-zbar 2>/dev/null \
   || echo "   (python3-zbar unavailable; pyzbar from pip covers it)"
-# shellcheck disable=SC2086
-python3 -m pip install --quiet --break-system-packages $PIP_PINS
-
 echo "== 3/5 corky -> /opt/corky"
 # VERIFY THE PAYLOAD FIRST. Bitcoin Core is checked against a sha256 and
 # eleven GPG signatures a few lines above; the signer's own code was the
@@ -90,6 +88,21 @@ mkdir -p /opt/corky
 # --no-same-owner: everything belongs to root, whatever the tarball says.
 tar xzf "$BOOT/corky.tar.gz" -C /opt/corky --no-same-owner
 cp "$BOOT/corky-PINS" /opt/corky/PINS.installed
+
+# pip LAST, and from the payload, in that order on purpose. The lock file
+# ships inside corky.tar.gz, so it can only be trusted after the tarball
+# has been checked against its hash directly above. Installing from it
+# before unpacking would have read a file that was not there yet, which
+# is what the first version of this change did.
+#
+# Pinned by CONTENT, not just by version: --require-hashes refuses any
+# wheel whose sha256 does not match, so a compromised index cannot hand
+# this device a different qrcode under the same version number. Core has
+# been pinned this way since the beginning; these four were version-only
+# until the image/ audit on 2026-09-08.
+echo "   pip, hash-pinned"
+python3 -m pip install --quiet --break-system-packages \
+    --require-hashes -r /opt/corky/image/requirements.txt
 
 echo "== 4/5 ramdisk datadir + bitcoin.conf"
 mkdir -p /run/corky

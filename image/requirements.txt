@@ -1,0 +1,27 @@
+# What pip installs on the signer, pinned by CONTENT and not just by
+# version. `pip install --require-hashes` refuses anything whose sha256
+# does not match, so a compromised index or a hijacked release cannot
+# hand this device a different wheel under the same version number.
+#
+# Bitcoin Core has been pinned this way since the beginning. These four
+# were pinned by version only, which stops an accidental upgrade and
+# stops nothing else (audit of image/, 2026-09-08).
+#
+# All four are pure Python (py3-none-any), so the wheel the Pi installs
+# is byte-for-byte the wheel hashed here on the dev machine. Fetched with:
+#   pip download --only-binary=:all: --platform manylinux2014_aarch64 \
+#       --python-version 3.11 --implementation cp qrcode==7.4.2 pyzbar==0.1.9
+#
+# To change a version: re-run that, regenerate this file, and say in the
+# commit why the version moved.
+#
+# --require-hashes needs EVERY package hashed, transitive ones included,
+# which is why pypng and typing_extensions are here: qrcode pulls them.
+pypng==0.20220715.0 \
+    --hash=sha256:4a43e969b8f5aaafb2a415536c1a8ec7e341cd6a3f957fd5b5f32a4cfeed902c
+pyzbar==0.1.9 \
+    --hash=sha256:4559628b8192feb25766d954b36a3753baaf5c97c03135aec7e4a026036b475d
+qrcode==7.4.2 \
+    --hash=sha256:581dca7a029bcb2deef5d01068e39093e80ef00b4a61098a2182eac59d01643a
+typing-extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

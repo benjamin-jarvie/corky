@@ -223,7 +223,7 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,370 lines** (4,586 with blanks/comments).
-**Test code: 5,882 lines**, none of which ships.
+**Test code: 5,908 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
@@ -304,7 +304,8 @@ as an import allowlist, so adding one means changing this section,
 |---|---|
 | Raspberry Pi OS Lite 64-bit | pinned in `image/PINS` |
 | Bitcoin Core 31.1 | official binary, sha256 pinned, 11 GPG signatures checked out of band |
-| Pillow, qrcode, pyzbar, picamera2, spidev, RPi.GPIO | apt or pinned pip |
+| Pillow, picamera2, spidev, RPi.GPIO, libzbar0 | apt |
+| qrcode, pyzbar, and their two dependencies | pip, pinned by **sha256** in `image/requirements.txt` and installed with `--require-hashes` |
 | ST7789 driver, BC-UR codec, icon font | vendored in `hw/vendor/`, MIT/BSD/CC-BY |
 
 Verify a device against this repository with

@@ -81,6 +81,7 @@ def main():
                 "corky/hal.py", "corky/splash.py",
                 "image/leak-check.sh", "image/harden.sh", "image/unharden.sh",
                 "image/verify-install.sh", "image/PINS",
+                "image/requirements.txt",
                 "hw/vendor/st7789.py", "hw/vendor/ur2/__init__.py",
                 "hw/vendor/fonts/fa-solid-subset.ttf", "LICENSE")
     absent = [r for r in required if r not in names]
@@ -154,6 +155,37 @@ def main():
             "/opt/corky should belong to root whatever the archive says")
     else:
         ok("the payload unpacks as root, whatever the archive claims")
+
+    # 6b. pip must be pinned by CONTENT. A version number stops an
+    #     accidental upgrade and stops nothing else: a compromised index
+    #     serves a different wheel under the same version.
+    req = ROOT / "image" / "requirements.txt"
+    if not req.exists():
+        bad("image/requirements.txt is missing, so pip has no hash lock")
+    elif "--require-hashes" not in prov:
+        bad("provision.sh installs pip packages without --require-hashes, "
+            "so the hashes in requirements.txt are decoration")
+    else:
+        lines = req.read_text().splitlines()
+        pkgs = [ln for ln in lines if "==" in ln and not ln.startswith("#")]
+        hashes = [ln for ln in lines if "--hash=sha256:" in ln]
+        if not pkgs:
+            bad("requirements.txt pins no packages")
+        elif len(hashes) < len(pkgs):
+            bad(f"{len(pkgs)} packages but only {len(hashes)} hashes; "
+                "--require-hashes needs one for every package, transitive "
+                "ones included")
+        else:
+            ok(f"all {len(pkgs)} pip packages are pinned by sha256 and "
+               "installed with --require-hashes")
+        # The lock ships inside the payload, so it can only be trusted
+        # after the payload has been verified. Order matters.
+        if prov.index("--require-hashes") < prov.index("tar xzf \"$BOOT"):
+            bad("pip installs from the lock file BEFORE the payload "
+                "carrying it is unpacked and verified")
+        else:
+            ok("pip installs only after the payload carrying the lock is "
+               "verified and unpacked")
 
     # 7. A card must say which Corky is on it. CORKY_COMMIT="HEAD" told a
     #    tester nothing and made two cards a week apart indistinguishable
