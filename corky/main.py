@@ -1366,8 +1366,13 @@ class Session:
                 sel = 0
             elif key in ("l", "r") and last:
                 sel = 1 - sel
-            elif key in ("a", "p"):
+            elif key in ("a", "p", "d"):
+                # DOWN turns the page, as it does on the export's text
+                # pages. It did nothing here, so the same gesture worked
+                # on one paged screen and not the other.
                 if last:
+                    if key == "d":
+                        continue
                     return "check" if sel == 1 else "done"
                 i += 1
 
@@ -1878,6 +1883,13 @@ class Session:
                 sel = 1 - sel
             elif key in ("a", "p"):
                 return SIGN_AGAIN if sel == 0 else POWER_OFF
+            elif key == "b":
+                # BACK was dead here. Everywhere else on this device it
+                # leaves the screen, and D7 already settled that leaving
+                # a transaction goes home with the key still loaded. A
+                # button that does nothing is the defect Ben reported off
+                # the board on 2026-09-05, in a different menu.
+                return TO_HOME
             elif key == "c":
                 return POWER_OFF
 

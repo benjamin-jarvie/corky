@@ -255,6 +255,49 @@ else:
     else:
         bad("_browse_addresses returned silently with nothing on screen")
 
+# Dead buttons. Ben reported one off the board on 2026-09-05 (BACK did
+# nothing on the backup menu) and TESTING.md rule 11 came out of it. A
+# sweep of every button-reading loop on 2026-09-07 found two more: the
+# signed screen ignored BACK, and DOWN turned the page on the export's
+# text screens but did nothing on the backup's.
+class Keys:
+    """Presses, then a guaranteed way out so a stuck loop is not a hang."""
+
+    def __init__(self, script):
+        self.script = iter(script)
+
+    def read(self):
+        try:
+            return next(self.script)
+        except StopIteration:
+            raise hal.ScriptExhausted("script exhausted") from None
+
+    pressed = read
+
+
+sess4 = corky_main.Session(NullDisplay(), Keys("b"), rpc=NullRpc())
+try:
+    got = sess4._state_signed("1 input signed")
+    ok("BACK leaves the signed screen and goes home") \
+        if got == corky_main.TO_HOME else \
+        bad(f"BACK on the signed screen returned {got!r}, not TO_HOME")
+except hal.ScriptExhausted:
+    bad("BACK is still dead on the signed screen: the loop repainted and "
+        "asked for another press")
+
+# DOWN must turn a backup page, as it does on the export's text pages.
+# A real 111-character master key is three pages, so two DOWNs reach the
+# last one and A finishes.
+_pages = len(screens.text_pages("x" * 111))
+sess5 = corky_main.Session(NullDisplay(), Keys("d" * (_pages - 1) + "a"),
+                           rpc=NullRpc())
+try:
+    got5 = sess5._show_backup("x" * 111, "KEY  ABCD1234")
+    ok(f"DOWN turns the backup pages, as it does elsewhere ({got5})")
+except hal.ScriptExhausted:
+    bad(f"DOWN is still dead on the backup pages: {_pages - 1} "
+        "presses did not reach the last one")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)
