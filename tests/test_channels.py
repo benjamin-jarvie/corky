@@ -174,6 +174,48 @@ for flag in ("noexec", "nosuid", "nodev"):
             f"{sorted(given) or 'no -o at all'}")
 
 
+# --- 6. BACK does not grow the stack ------------------------------------
+# state_load offers a channel; the channel loader used to return
+# self.state_load() when B was pressed, which is mutual recursion. The
+# stack grew one frame per press and RecursionError arrived at about 500,
+# measured 2026-09-07. It takes the UI down, and the restart that follows
+# clears the loaded key, so a fidgeting thumb could end a session.
+#
+# 4,000 presses here: well past where the old code died, fast because
+# nothing is drawn.
+import traceback                                       # noqa: E402
+
+stick6 = tempfile.mkdtemp()
+sess6 = corky_main.Session(NullDisplay(), hal.DevButtons("b" * 4000),
+                           rpc=NullRpc(), animate=False, on_device=False,
+                           stick_dir=stick6)
+sess6.qr = type("NoCamera", (), {
+    "available": False,
+    "strings": lambda self: iter(()),
+    "scan_psbt_frames": lambda self: iter(()),
+})()
+deepest = [0]
+real_stick = corky_main.Session._load_by_stick
+
+
+def _watch_depth(self):
+    deepest[0] = max(deepest[0], len(traceback.extract_stack()))
+    return real_stick(self)
+
+
+corky_main.Session._load_by_stick = _watch_depth
+try:
+    sess6.state_load()
+    ok(f"4,000 back presses do not grow the stack (peak depth "
+       f"{deepest[0]})")
+except RecursionError:
+    bad(f"back is still recursive: RecursionError at depth {deepest[0]}")
+except hal.ScriptExhausted:
+    bad("the loader stopped reading presses, so this proves nothing")
+finally:
+    corky_main.Session._load_by_stick = real_stick
+    shutil.rmtree(stick6, ignore_errors=True)
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)

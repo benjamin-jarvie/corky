@@ -258,6 +258,15 @@ MAX_SIGNABLE_INPUTS = 150
 # What a PSBT run reports back to the home screen.
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
+#: A channel loader returns this when B was pressed: go back to the
+#: channel menu. It used to `return self.state_load()`, which is mutual
+#: recursion, and the stack grew by a frame every time somebody pressed
+#: back. 500 presses raised RecursionError and took the UI down with it,
+#: measured 2026-09-07. On a device whose only recovery is a restart, and
+#: whose restart clears the loaded key, a button doing that is a way to
+#: lose your session by fidgeting.
+BACK_TO_CHANNELS = "channels"
+
 # How the board is halted. Under systemd the poweroff is the whole teardown:
 # it stops corky-bitcoind.service by that unit's own ExecStop, which runs
 # bitcoin-cli stop and waits up to TimeoutStopSec=30. FALLBACK_HALT_CMD and
@@ -1488,21 +1497,31 @@ class Session:
                 self.w, self.h, ok=False, detail="no way to load a PSBT"))
             self.buttons.read()
             return TO_HOME
-        if not can_stick:
-            return self._load_by_qr()
-        if not can_qr:
-            return self._load_by_stick()
         choice = 0
         while True:
-            self.display.show(screens.channel_menu(self.w, self.h, choice))
-            key = self.buttons.read()
-            if key in ("u", "d"):
-                choice = 1 - choice
-            elif key in ("a", "p"):
-                break
-            elif key in ("b", "c"):
-                return TO_HOME
-        return self._load_by_stick() if choice == 1 else self._load_by_qr()
+            if not can_stick:
+                outcome = self._load_by_qr()
+            elif not can_qr:
+                outcome = self._load_by_stick()
+            else:
+                while True:
+                    self.display.show(
+                        screens.channel_menu(self.w, self.h, choice))
+                    key = self.buttons.read()
+                    if key in ("u", "d"):
+                        choice = 1 - choice
+                    elif key in ("a", "p"):
+                        break
+                    elif key in ("b", "c"):
+                        return TO_HOME
+                outcome = (self._load_by_stick() if choice == 1
+                           else self._load_by_qr())
+            if outcome is BACK_TO_CHANNELS:
+                # Only one channel to offer, so back means all the way out.
+                if not (can_qr and can_stick):
+                    return TO_HOME
+                continue
+            return outcome
 
     def _load_by_stick(self):
         """Wait on the USB stick alone. No timeout: fetching one is not a
@@ -1541,7 +1560,7 @@ class Session:
                         message = f"{found[0].name}: still being written…"
             key = self.buttons.pressed()
             if key == "b":
-                return self.state_load()
+                return BACK_TO_CHANNELS
             if key == "c":
                 return TO_HOME
             time.sleep(0.2)
@@ -1615,7 +1634,7 @@ class Session:
                 # on its own moves you nowhere; ticket 05 settled that it
                 # says why and keeps waiting.
                 if key == "b":
-                    return self.state_load()
+                    return BACK_TO_CHANNELS
                 if key == "c":
                     return TO_HOME
             time.sleep(0.02)
