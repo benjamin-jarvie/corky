@@ -258,7 +258,12 @@ def main():
         blind._scan_until("hold the key QR in view", lambda _p: "key")
         bad("a blind camera never timed out")
     except qrchannel.ScanTimeout as exc:
-        ok(f"a camera that reads nothing still gives up: {exc}")
+        msg = str(exc)
+        if "skipped" in msg:
+            bad(f"a camera that read NOTHING was told codes were skipped: "
+                f"{msg}")
+        else:
+            ok(f"a camera that reads nothing still gives up: {msg}")
 
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")

@@ -186,34 +186,86 @@ for flag in ("noexec", "nosuid", "nodev"):
 import traceback                                       # noqa: E402
 
 stick6 = tempfile.mkdtemp()
-sess6 = corky_main.Session(NullDisplay(), hal.DevButtons("b" * 4000),
+# BOTH channels must exist, or state_load takes its single-channel
+# branch, the first BACK returns TO_HOME, and the loop under test never
+# runs at all. The first version of this check did exactly that: it
+# consumed ONE of its four thousand presses, never entered _load_by_qr,
+# and reported a "peak depth" measured over a single call. Two
+# independent reviewers caught it on 2026-09-08; the fix it was written
+# to protect was never exercised by it.
+# "a" picks a channel at the menu, the loader then reads one press and
+# backs out, and the menu comes round again: two presses per round trip.
+# The menu opens on row 0, which is the QR channel, and the row is
+# remembered, so a single "d" half way through moves every later round to
+# the stick. Without it _load_by_stick is never entered at all and its
+# recursion mutation survives (2026-09-08).
+sess6 = corky_main.Session(NullDisplay(),
+                           hal.DevButtons("ab" * 1000 + "d" + "ab" * 1000),
                            rpc=NullRpc(), animate=False, on_device=False,
                            stick_dir=stick6)
-sess6.qr = type("NoCamera", (), {
-    "available": False,
+sess6.qr = type("Camera", (), {
+    "available": True,           # so the CHANNEL MENU appears and loops
     "strings": lambda self: iter(()),
     "scan_psbt_frames": lambda self: iter(()),
 })()
-deepest = [0]
+# Every depth seen, not the maximum. A threshold is the wrong assertion
+# here: restoring the recursion in _load_by_stick makes the inner
+# state_load reset the channel row, so the stick is entered ONCE and the
+# stack grows by three frames, which no sensible threshold catches. What
+# a loop guarantees and recursion cannot is that the depth never changes
+# at all (2026-09-08).
+depths = []
+entered = {"stick": 0, "qr": 0}
 real_stick = corky_main.Session._load_by_stick
+real_qr = corky_main.Session._load_by_qr
 
 
-def _watch_depth(self):
-    deepest[0] = max(deepest[0], len(traceback.extract_stack()))
-    return real_stick(self)
+def _watch(name, real):
+    """Observe the REAL loader. Do not stand in for it.
+
+    A first version returned BACK_TO_CHANNELS itself instead of calling
+    through, so the recursion under test was replaced by the test and
+    both mutations survived. Wrapping and delegating is the difference
+    between measuring the code and measuring the mock (2026-09-08).
+
+    Both real loaders return on the first "b" without sleeping, and an
+    empty stick directory means neither finds anything, so each round
+    trip costs exactly one press and no wall-clock.
+    """
+    def spy(self):
+        entered[name] += 1
+        depths.append(len(traceback.extract_stack()))
+        return real(self)
+    return spy
 
 
-corky_main.Session._load_by_stick = _watch_depth
+corky_main.Session._load_by_stick = _watch("stick", real_stick)
+corky_main.Session._load_by_qr = _watch("qr", real_qr)
 try:
     sess6.state_load()
-    ok(f"4,000 back presses do not grow the stack (peak depth "
-       f"{deepest[0]})")
+    bad("state_load returned instead of looping until the presses ran out")
 except RecursionError:
-    bad(f"back is still recursive: RecursionError at depth {deepest[0]}")
+    bad(f"back is still recursive: RecursionError at depth "
+        f"{max(depths) if depths else 0}")
 except hal.ScriptExhausted:
-    bad("the loader stopped reading presses, so this proves nothing")
+    rounds = entered["stick"] + entered["qr"]
+    if not (entered["qr"] and entered["stick"]):
+        bad(f"only one channel was exercised: {entered}. A recursion left "
+            "in the other loader would go unnoticed.")
+    elif rounds < 100:
+        bad(f"the loop ran only {rounds} times, so the presses were not "
+            "spent on it and the depth below means little")
+    elif len(set(depths)) != 1:
+        bad(f"the stack depth changed across {rounds} back-outs: "
+            f"{sorted(set(depths))[:6]}. A loop returns to the same frame "
+            "every time; recursion does not.")
+    else:
+        ok(f"{rounds} back-outs across both channels "
+           f"(qr {entered['qr']}, stick {entered['stick']}), every one at "
+           f"the same stack depth of {depths[0]}")
 finally:
     corky_main.Session._load_by_stick = real_stick
+    corky_main.Session._load_by_qr = real_qr
     shutil.rmtree(stick6, ignore_errors=True)
 
 print()

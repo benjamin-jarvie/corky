@@ -257,7 +257,14 @@ elif [ "$FAIL" -eq 0 ]; then
     say "This is NOT a clean run. Find out why those rows could not be"
     say "read before trusting the rest."
 else
-    say "$FAIL of $((PASS+FAIL)) checks found a way off this board."
+    say "$FAIL of $((PASS+FAIL+UNKNOWN)) checks found a way off this board."
+    if [ "$UNKNOWN" -gt 0 ]; then
+        # This branch omitted UNKNOWN from both the count and the total,
+        # so whenever a failure and an unanswerable row appeared together
+        # the human report never mentioned the second (two-axis review,
+        # 2026-09-08). Only the all-clear branch had been fixed.
+        say "$UNKNOWN more could not be answered at all."
+    fi
     say ""
     say "A DEV image is expected to fail the radio and login rows, because"
     say "it keeps SSH so you can work on it. Run image/harden.sh when the"

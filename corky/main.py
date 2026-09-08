@@ -1239,10 +1239,22 @@ class Session:
                 # Two different failures, and they want different answers
                 # from the person holding the device: aim it, or hold up
                 # something else.
+                # The deadline resets on every read, so whatever else is
+                # true, NOTHING has been read for the last `secs`. Say
+                # that first, because it is the fact that is always true,
+                # and add the skip count because it changes the advice:
+                # some skips means the camera works and is pointed at the
+                # wrong thing, none means aim it or look at the lens.
+                #
+                # Keying the whole message off the cumulative count told a
+                # camera that read three strays and then went blind to
+                # hold up something else, which is the wrong advice from
+                # the very change that exists to separate the two
+                # (two-axis review, 2026-09-08).
                 secs = int(qrchannel.NO_PROGRESS_TIMEOUT)
                 raise qrchannel.ScanTimeout(
-                    f"nothing read in {secs}s" if not skipped
-                    else f"{skipped} codes read, none of them the right kind")
+                    f"nothing read in {secs}s"
+                    + (f"; {skipped} skipped earlier" if skipped else ""))
             time.sleep(0.02)
 
     def _guard_key_payload(self, payload):
@@ -1591,7 +1603,7 @@ class Session:
                         return TO_HOME
                 outcome = (self._load_by_stick() if choice == 1
                            else self._load_by_qr())
-            if outcome is BACK_TO_CHANNELS:
+            if outcome == BACK_TO_CHANNELS:
                 # Only one channel to offer, so back means all the way out.
                 if not (can_qr and can_stick):
                     return TO_HOME
