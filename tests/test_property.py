@@ -428,6 +428,68 @@ def prop_too_many_inputs_is_refused_not_signed():
                 "a guard that refuses real work is worse than no guard")
 
 
+def prop_a_failing_stick_does_not_lose_a_signature():
+    """Core has signed. If the stick then fails, the screen delivers it.
+
+    The QR path has always said that letting an error unwind here throws
+    the signature away and makes the user approve the whole transaction
+    again. The FILE path did not, and audit A3 then taught write_signed
+    to refuse a short write, which gave a full or failing stick a brand
+    new way to lose a signature (found reading main.py, 2026-09-07).
+
+    The screen cannot be full, unplugged or mounted read-only, so it is
+    the fallback.
+    """
+    import filechannel
+    import hal
+    import main as corky_main
+
+    class Painted:
+        width, height = 320, 240
+
+        def __init__(self):
+            self.shown = []
+
+        def show(self, image, sensitive=False):
+            self.shown.append(image)
+
+    class Signs:
+        chain = "regtest"
+
+        def call(self, method, *params, wallet=None, stdin=False, drop=()):
+            if method == "walletprocesspsbt":
+                return {"psbt": base64.b64encode(b"psbt\xffSIGNED").decode(),
+                        "complete": True}
+            return ""
+
+    src = Path(tempfile.mkdtemp()) / "tx.psbt"
+    src.write_bytes(b"psbt\xff")
+    real = filechannel.write_signed
+
+    def full_medium(source, b64):
+        raise filechannel.FileChannelError(
+            "tx-signed.psbt: wrote 100 of 4005 bytes, the medium is full")
+
+    filechannel.write_signed = full_medium
+    sess = corky_main.Session(Painted(), hal.DevButtons("a" * 30),
+                              rpc=Signs(), animate=False, on_device=False)
+    try:
+        out = sess._sign_and_deliver("cHNidP8B", src, "corky-x")
+    except filechannel.FileChannelError:
+        raise AssertionError(
+            "the stick failed and the error unwound out of "
+            "_sign_and_deliver, so a signature Core had already made was "
+            "thrown away") from None
+    finally:
+        filechannel.write_signed = real
+        shutil.rmtree(src.parent, ignore_errors=True)
+    assert out in (corky_main.SIGN_AGAIN, corky_main.POWER_OFF,
+                   corky_main.TO_HOME), f"unexpected outcome {out!r}"
+    assert out != corky_main.TO_HOME, (
+        "the run went home instead of reaching the signed screen, so the "
+        "signature was not delivered anywhere")
+
+
 def main():
     checks = [
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
@@ -440,6 +502,8 @@ def main():
          prop_a_slow_node_does_not_freeze_the_device),
         ("too many inputs is refused, not signed",
          prop_too_many_inputs_is_refused_not_signed),
+        ("a failing stick does not lose a signature",
+         prop_a_failing_stick_does_not_lose_a_signature),
     ]
     failed = 0
     for name, fn in checks:

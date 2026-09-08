@@ -1742,17 +1742,30 @@ class Session:
                 detail="wallet cannot complete this PSBT"))
             self.buttons.read()
             return TO_HOME
+        detail = None
         if source is not None:
-            out = filechannel.write_signed(source, signed["psbt"])
-            detail = f"{out.name} written"
-        else:
+            try:
+                out = filechannel.write_signed(source, signed["psbt"])
+                detail = f"{out.name} written"
+            except (filechannel.FileChannelError, OSError) as exc:
+                # THE PSBT IS ALREADY SIGNED. Letting this unwind throws
+                # the signature away and the user has to scan and approve
+                # the whole transaction again, which is the one thing this
+                # screen exists to avoid. The QR path below has said so
+                # since it was written; the file path did not, and audit
+                # A3 then made write_signed refuse a short write, which
+                # gave a full stick a brand new way to lose a signature
+                # (found reading main.py, 2026-09-07).
+                #
+                # So fall through to the screen. It cannot be full, it
+                # cannot be unplugged, and it cannot be mounted read-only.
+                self._hold(f"file failed: {str(exc)[:40]}")
+        if detail is None:
             frames = qrchannel.psbt_to_frames(signed["psbt"])
             try:
                 self._show_qr_loop(frames)
             except qrchannel.QrChannelError as exc:
-                # The PSBT IS signed. Losing the run here would unwind past
-                # the result screen and throw the signature away, so say
-                # what happened and offer the file channel instead.
+                # Both channels gone. Nothing left but to say so.
                 self.display.show(screens.result(
                     self.w, self.h, ok=False,
                     detail=f"signed, but not shown: {exc}"))
