@@ -209,6 +209,41 @@ check("a filesystem that refuses directory fsync does not stop the write",
 check("and the directory fsync really was attempted and refused",
       len(dir_fsyncs), 1)
 
+# A SHORT WRITE must take its own half-written file with it.
+#
+# Audit A3 made write_signed refuse a short write, which was right, and
+# left the partial file on the stick, which was not. 5000 bytes of a
+# 5005-byte PSBT sat there under exactly the name a successful signature
+# has (measured 2026-09-08). The signature is not lost, because the
+# device falls through to the QR, but the user has a file they have every
+# reason to read as their signed transaction, and whether a truncated
+# PSBT is refused by a parser is that parser's business, not something to
+# leave to chance.
+full = tmp / "fullstick"
+full.mkdir()
+short_src = full / "tx.psbt"
+short_src.write_bytes(b"psbt\xff")
+big = base64.b64encode(b"psbt\xff" + b"\x01" * 5000).decode()
+real_write = os.write
+
+
+def hundred_bytes_left(fd, data):
+    return real_write(fd, data[:100]) if len(data) > 100 else 0
+
+
+os.write = hundred_bytes_left
+try:
+    filechannel.write_signed(short_src, big)
+    refused = False
+except filechannel.FileChannelError:
+    refused = True
+finally:
+    os.write = real_write
+check("a short write is refused", refused, True)
+check("and takes its half-written file with it, so nothing on the stick "
+      "can be read as a signed transaction",
+      sorted(q.name for q in full.iterdir()), ["tx.psbt"])
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILURES")

@@ -1,6 +1,11 @@
 """Hardware abstraction: the same UI code runs on the device and on a dev
-machine. Device backends drive the vendored ST7789/ILI9341 drivers and GPIO;
-dev backends save frames as PNGs and read keys from stdin."""
+machine. The device backend drives the vendored ST7789 driver and GPIO; the
+dev backends save frames as PNGs and read keys from a script string.
+
+ST7789 and nothing else. This said "the vendored ST7789/ILI9341 drivers",
+and hw/vendor/ili9341.py is imported by no line in this repository
+(two-axis review, 2026-09-08). The README made the same claim about the
+same file and has been corrected too."""
 
 from pathlib import Path
 

@@ -239,6 +239,39 @@ def main():
         ok(f"read() waits through {waiter.polls - before} polls, then "
            "returns the press")
 
+    # The pin map against the document a person WIRES THE BOARD from.
+    #
+    # Every check above reads hal.DeviceButtons.PINS, so all of them pass
+    # against any map at all. hw/HARDWARE.md carries the same map as a
+    # table, and nothing compared the two: the code could move a pin and
+    # the build instructions would go on naming the old one, which costs
+    # a builder an afternoon and a multimeter (found reading hal.py,
+    # 2026-09-08).
+    import re
+    doc = (ROOT / "hw" / "HARDWARE.md").read_text()
+    NAMES = {"joystick up": "u", "joystick down": "d", "joystick left": "l",
+             "joystick right": "r", "joystick press": "press",
+             "key1 (top)": "a", "key2 (middle)": "b", "key3 (bottom)": "c"}
+    documented = {}
+    for label, pin in re.findall(r"^\| *([^|]+?) *\| *(\d+) *\|$",
+                                 doc, re.M):
+        key = NAMES.get(label.lower())
+        if key:
+            documented[key] = int(pin)
+    if len(documented) != len(NAMES):
+        missing = sorted(set(NAMES.values()) - set(documented))
+        bad(f"hw/HARDWARE.md no longer gives a pin for {missing}, so this "
+            "check cannot compare the two")
+    elif documented != hal.DeviceButtons.PINS:
+        differ = {k: (hal.DeviceButtons.PINS.get(k), documented.get(k))
+                  for k in set(documented) | set(hal.DeviceButtons.PINS)
+                  if documented.get(k) != hal.DeviceButtons.PINS.get(k)}
+        bad(f"hal.DeviceButtons.PINS and hw/HARDWARE.md disagree about "
+            f"(code, doc): {differ}")
+    else:
+        ok(f"all {len(documented)} pins match hw/HARDWARE.md, which is what "
+           "a builder wires from")
+
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")
     sys.exit(1 if fails else 0)

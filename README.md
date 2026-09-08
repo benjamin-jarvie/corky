@@ -219,11 +219,11 @@ repository computes on a key.
 [`screens.py`](corky/screens.py): they carry the key as a string to Core
 and draw it on the panel.
 
-**Layer 3 never touches secrets at all. 269 lines.** The channels, the
+**Layer 3 never touches secrets at all. 275 lines.** The channels, the
 panel driver and the buttons.
 
-**Total functional code: 2,387 lines** (4,790 with blanks/comments).
-**Test code: 6,365 lines**, none of which ships.
+**Total functional code: 2,393 lines** (4,813 with blanks/comments).
+**Test code: 6,409 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which

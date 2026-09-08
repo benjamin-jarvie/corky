@@ -115,6 +115,7 @@ def write_signed(source: Path, signed_psbt_b64: str) -> Path:
     act after the result screen is to pull the stick, and a signature still
     sitting in the page cache is a signature that never left the device.
     """
+    import contextlib
     import os
     out = source.with_name(source.name[: -len(".psbt")] + SIGNED_SUFFIX)
     raw = base64.b64decode(signed_psbt_b64)
@@ -139,7 +140,24 @@ def write_signed(source: Path, signed_psbt_b64: str) -> Path:
                 f"{out.name}: wrote {done} of {len(raw)} bytes, "
                 "the medium is full or failing")
         os.fsync(fd)
-    finally:
+    except BaseException:
+        # AND TAKE THE PARTIAL FILE WITH IT. Raising alone left 5000 bytes
+        # of a 5005-byte PSBT on the stick, under exactly the name a
+        # successful signature has (measured 2026-09-08). The device says
+        # the file channel failed and falls through to the QR, so the
+        # signature is not lost; what is left behind is a file the user
+        # has every reason to believe is their signed transaction, and a
+        # truncated PSBT is one a parser may or may not refuse. Nothing
+        # should be able to read a half-written signature as a whole one.
+        #
+        # unlink is suppressed rather than checked: this runs while the
+        # stick is already full, failing, or gone. Losing the file is the
+        # goal and the original error is the thing worth reporting.
+        os.close(fd)
+        with contextlib.suppress(OSError):
+            out.unlink()
+        raise
+    else:
         os.close(fd)
     # And the directory entry itself, so the file is findable after a pull.
     dfd = os.open(out.parent, os.O_RDONLY)
