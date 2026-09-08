@@ -132,6 +132,46 @@ def main():
             bad(f"{key} is missing or not a sha256 in image/PINS, so "
                 "verify-install.sh cannot check the binary on the board")
 
+    # 6. The signer's own payload must be verified before it is unpacked
+    #    as root. Bitcoin Core is checked against a sha256 and eleven GPG
+    #    signatures; corky.tar.gz was taken on trust, unpacked as root and
+    #    then run as root at every boot (audit of image/, 2026-09-08).
+    prov = (ROOT / "image" / "provision.sh").read_text()
+    prep = (ROOT / "image" / "prepare-sd.sh").read_text()
+    if "CORKY_TARBALL_SHA256" not in prep:
+        bad("prepare-sd.sh records no hash for corky.tar.gz, so the "
+            "device has nothing to check the payload against")
+    elif "CORKY_TARBALL_SHA256" not in prov:
+        bad("provision.sh does not check corky.tar.gz against a hash "
+            "before unpacking it as root")
+    elif "sha256sum -c" not in prov:
+        bad("provision.sh names the hash but never verifies it")
+    else:
+        ok("the payload is hashed when the card is written and verified "
+           "before it is unpacked")
+    if "--no-same-owner" not in prov:
+        bad("tar unpacks with the tarball's own ownership; everything in "
+            "/opt/corky should belong to root whatever the archive says")
+    else:
+        ok("the payload unpacks as root, whatever the archive claims")
+
+    # 7. A card must say which Corky is on it. CORKY_COMMIT="HEAD" told a
+    #    tester nothing and made two cards a week apart indistinguishable
+    #    (audit A7).
+    if 'CORKY_COMMIT=' not in prep or "rev-parse HEAD" not in prep:
+        bad("prepare-sd.sh does not pin the commit it packed into the "
+            "card's PINS, so a tester cannot say which Corky they have")
+    else:
+        ok("the card records the exact commit it was written from")
+
+    # 8. git archive packs HEAD, so uncommitted work silently does not
+    #    reach the card.
+    if "diff-index --quiet HEAD" not in prep:
+        bad("prepare-sd.sh writes a card from HEAD without checking for "
+            "uncommitted changes, so edited code can silently not ship")
+    else:
+        ok("a dirty working tree stops the card being written")
+
     print()
     print("FAILED %d" % len(fails) if fails else "ALL PASS")
     sys.exit(1 if fails else 0)

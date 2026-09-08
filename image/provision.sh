@@ -69,9 +69,26 @@ apt-get install -y -qq python3-zbar 2>/dev/null \
 python3 -m pip install --quiet --break-system-packages $PIP_PINS
 
 echo "== 3/5 corky -> /opt/corky"
+# VERIFY THE PAYLOAD FIRST. Bitcoin Core is checked against a sha256 and
+# eleven GPG signatures a few lines above; the signer's own code was the
+# one thing this script took on trust, unpacked as root, and then ran as
+# root at every boot. prepare-sd.sh records the hash beside the tarball
+# (audit of image/, 2026-09-08).
+if [ -z "${CORKY_TARBALL_SHA256:-}" ]; then
+    echo "!! corky-PINS carries no CORKY_TARBALL_SHA256."
+    echo "!! Re-run image/prepare-sd.sh to write the card; a payload this"
+    echo "!! script cannot check is a payload it will not unpack as root."
+    exit 1
+fi
+echo "$CORKY_TARBALL_SHA256  $BOOT/corky.tar.gz" | sha256sum -c - || {
+    echo "!! corky.tar.gz does not match the hash on this card."
+    echo "!! Either the card was written twice, or somebody changed it."
+    exit 1
+}
 rm -rf /opt/corky      # stale files from a prior provision must not survive
 mkdir -p /opt/corky
-tar xzf "$BOOT/corky.tar.gz" -C /opt/corky
+# --no-same-owner: everything belongs to root, whatever the tarball says.
+tar xzf "$BOOT/corky.tar.gz" -C /opt/corky --no-same-owner
 cp "$BOOT/corky-PINS" /opt/corky/PINS.installed
 
 echo "== 4/5 ramdisk datadir + bitcoin.conf"
@@ -136,14 +153,14 @@ if [ -f "$CMDLINE" ]; then
 fi
 systemctl disable --now serial-getty@ttyAMA0.service serial-getty@ttyS0.service 2>/dev/null || true
 systemctl mask serial-getty@ttyAMA0.service serial-getty@ttyS0.service 2>/dev/null || true
-grep -q "^enable_uart=0" "$CFG0" 2>/dev/null || echo "enable_uart=0" >> "${CFG0:-/boot/firmware/config.txt}"
+grep -q "^enable_uart=0" "$CFG0" 2>/dev/null || echo "enable_uart=0" >> "$CFG0"
 
 # USB. The Zero's port can be a HOST or a DEVICE. As a device it can
 # enumerate to a computer as a network card, a serial port or a disk, all
 # of which are ways off this board. Force host mode and refuse the gadget
 # drivers.
-grep -q "^dtoverlay=dwc2,dr_mode=host" "${CFG0:-/boot/firmware/config.txt}" || \
-    echo "dtoverlay=dwc2,dr_mode=host" >> "${CFG0:-/boot/firmware/config.txt}"
+grep -q "^dtoverlay=dwc2,dr_mode=host" "$CFG0" || \
+    echo "dtoverlay=dwc2,dr_mode=host" >> "$CFG0"
 cat > /etc/modprobe.d/corky-no-gadget.conf <<'GEOF'
 # Corky: this device is a USB host. It is never a USB device.
 blacklist g_ether
@@ -183,7 +200,12 @@ raspi-config nonint do_spi 0 || true
 # services die with "vc_sm_cma_vchi_init: failed to open VCHI service",
 # which takes bcm2835_isp with them, and that is the ISP libcamera uses.
 # 32 is the smallest split that keeps them healthy.
-CFG=/boot/firmware/config.txt
+# CFG0, computed above with a fallback to the old boot layout. This block
+# used to define its own CFG=/boot/firmware/config.txt with no fallback,
+# so on a board using /boot/config.txt the `cp -n` below failed and
+# `set -e` killed provisioning at the last step (audit of image/,
+# 2026-09-08).
+CFG="$CFG0"
 if ! grep -q "^gpu_mem=" "$CFG"; then
     cp -n "$CFG" "$CFG.pre-corky"     # one file to put the stock split back
     printf '\n# Corky: headless signer. 32 is the floor; 16 starves the\n# VideoCore services that bcm2835_isp needs.\ngpu_mem=32\n' >> "$CFG"

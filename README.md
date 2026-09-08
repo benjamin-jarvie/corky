@@ -223,7 +223,7 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,370 lines** (4,586 with blanks/comments).
-**Test code: 5,854 lines**, none of which ships.
+**Test code: 5,882 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
