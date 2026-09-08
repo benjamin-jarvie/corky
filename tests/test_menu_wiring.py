@@ -232,6 +232,29 @@ else:
         bad("_export returned silently on a key with no policies; the "
             "user is sent back with nothing said")
 
+# Browsing addresses has the SAME root and a different symptom:
+# _page_addresses did order[0] on the tuple available_kinds returned, and
+# IndexError is no more catchable by HANDLED than ZeroDivisionError was.
+# Fixed alongside the export menu; missed on the first pass through it
+# (2026-09-07).
+disp3 = Painted()
+sess3 = corky_main.Session(disp3, hal.DevButtons("a"), rpc=NoPolicies())
+try:
+    sess3._browse_addresses("corky-x")
+except IndexError:
+    bad("_page_addresses still indexes an empty policy list, which ends "
+        "the process")
+except hal.ScriptExhausted:
+    bad("_page_addresses opened a screen for a key with no policies")
+else:
+    want3 = screens.result(320, 240, ok=False,
+                           detail="this key derives no addresses",
+                           label="FAILED").tobytes()
+    if any(f.tobytes() == want3 for f in disp3.shown):
+        ok("a key that derives no addresses says so")
+    else:
+        bad("_browse_addresses returned silently with nothing on screen")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)

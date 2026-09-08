@@ -916,6 +916,13 @@ class Session:
         the wallet's address index.
         """
         order = signer.available_kinds(self.rpc, name)
+        if not order:
+            # order[0] on an empty tuple is an IndexError, which is not in
+            # HANDLED and so ends the process. Same root as the empty
+            # export menu fixed alongside this: available_kinds returns
+            # only the policies a wallet HOLDS, and a wallet imported as a
+            # bare descriptor need not hold any (2026-09-07).
+            return self._hold("this key derives no addresses")
         if kind not in order:
             kind = order[0]
         i, base, block = 0, 0, []
@@ -965,7 +972,6 @@ class Session:
             stop()
         self._hold(f"{out.name} written", ok=True)
         return True
-
 
     def _backup_paper(self, name, xfp):
         """Backup key. Core's master private key, in four-character groups
