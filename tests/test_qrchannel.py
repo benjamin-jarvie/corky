@@ -223,6 +223,52 @@ elif _scan.psbt_b64 != base64.b64encode(b"psbt\xff" + b"\x11" * 400).decode():
 else:
     print("ok   the restarted scan assembles the SECOND transaction whole")
 
+# The same rule for a SINGLE-part UR arriving mid-scan. A single-part UR
+# carries no sequence, so frame_identity returns None for it, and the
+# restart test used to require an identity to compare. That meant a
+# one-frame PSBT wandering into view mid-scan COMPLETED the scan with the
+# other transaction and reported nothing (found reading qrchannel.py,
+# 2026-09-08). The review screen still showed the substituted
+# transaction's own outputs, so nothing could be signed unseen, but the
+# user aimed at one transaction and was handed another with no notice.
+_one = qrchannel.psbt_to_frames(
+    base64.b64encode(b"psbt\xff" + b"\x22" * 20).decode())
+if len(_one) != 1:
+    failures.append(f"the single-part fixture is {len(_one)} frames, so it "
+                    "cannot test the single-part path")
+    print(f"FAIL fixture is not single-part ({len(_one)} frames)")
+else:
+    _ev2 = []
+    _s2 = qrchannel.PsbtScan(on_event=lambda kind, _d: _ev2.append(kind))
+    for _f in _a[:4]:
+        _s2.feed(_f)
+    _done = _s2.feed(_one[0])
+    if not _done:
+        failures.append("a single-part UR mid-scan did not complete")
+        print("FAIL the single-part UR was not assembled")
+    elif "restart" not in _ev2:
+        failures.append("a single-part UR replaced the transaction being "
+                        "scanned and said nothing")
+        print("FAIL a single-part UR substituted the transaction in silence")
+    elif _s2.psbt_b64 != base64.b64encode(b"psbt\xff" + b"\x22" * 20).decode():
+        failures.append("the single-part UR assembled the wrong bytes")
+        print("FAIL the single-part UR spliced two transactions")
+    else:
+        print("ok   a single-part UR mid-scan announces the restart before "
+              "handing over a different transaction")
+
+# ...and a scan that only ever sees ONE single-part UR must not announce a
+# restart, or the notice means nothing.
+_ev3 = []
+_s3 = qrchannel.PsbtScan(on_event=lambda kind, _d: _ev3.append(kind))
+_s3.feed(_one[0])
+if "restart" in _ev3:
+    failures.append("a plain single-part scan announced a restart, so the "
+                    "notice fires on the ordinary case too")
+    print("FAIL a plain single-part scan claimed the transaction changed")
+else:
+    print("ok   a plain single-part scan announces no restart")
+
 
 if failures:
     sys.exit(1)

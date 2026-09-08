@@ -352,5 +352,59 @@ if _last.tobytes() in _busy_frames:
 else:
     ok("Core's refusal is what the panel is left showing, not the spinner")
 
+# --- the export QR must never be wider than the panel it is pasted onto ---
+#
+# screens.qr_export paints the code with img.paste, and PIL's paste CROPS
+# whatever falls outside the destination. A cropped QR still looks like a
+# QR and no scanner will ever read it, which is the one failure the whole
+# fit_to_panel/frames_to_images contract exists to refuse.
+#
+# What keeps it unreachable is arithmetic, not a check: a QR tops out at
+# version 40, 177 modules, so with qrchannel's 2-module border the widest
+# code is 181 across, and screens.QR_MAX_PX is 190. Nothing pinned that
+# gap, so lowering QR_MAX_PX would have reopened the crop in silence
+# (found reading qrchannel.py, 2026-09-08).
+import qrcode                                              # noqa: E402
+
+BORDER = 2                          # qrchannel.text_to_image's default
+_v40 = qrcode.QRCode(box_size=1, border=BORDER,
+                     error_correction=qrcode.constants.ERROR_CORRECT_M)
+_v40.add_data("x" * 2300)          # the most ECC-M carries at version 40
+_v40.make(fit=True)
+_widest = _v40.modules_count + 2 * BORDER
+if _v40.version != 40:
+    bad(f"2300 characters no longer reaches QR version 40 ({_v40.version}), "
+        "so this check is not measuring the widest code any more")
+elif _widest > screens.QR_MAX_PX:
+    bad(f"QR_MAX_PX is {screens.QR_MAX_PX} and the widest QR is {_widest} "
+        "modules, so text_to_image can be handed a panel it cannot fit and "
+        "qr_export would paste a cropped, unreadable code")
+else:
+    ok(f"the widest QR is {_widest} modules and QR_MAX_PX is "
+       f"{screens.QR_MAX_PX}, so the export code always fits its card")
+
+# ...and when it genuinely cannot fit, it refuses rather than clamping.
+try:
+    qrchannel.text_to_image("x" * 200, panel=(40, 40))
+except qrchannel.QrChannelError:
+    ok("a code too large for its panel is refused, not silently oversized")
+except Exception as exc:
+    bad(f"a code too large for its panel raised {type(exc).__name__}, which "
+        f"Session.HANDLED does not catch: {exc}")
+else:
+    bad("a code too large for its panel came back anyway; qr_export would "
+        "paste it cropped")
+
+# ...and a text no QR can carry is a message, not a dead process.
+try:
+    qrchannel.text_to_image("x" * 2400, panel=(320, screens.QR_MAX_PX))
+except qrchannel.QrChannelError:
+    ok("a text past QR version 40 is refused with an error the panel shows")
+except Exception as exc:
+    bad(f"a text past QR version 40 raised {type(exc).__name__}, which "
+        f"Session.HANDLED does not catch, so the process ends: {exc}")
+else:
+    bad("a text past QR version 40 rendered something anyway")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

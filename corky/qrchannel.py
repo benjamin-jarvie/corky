@@ -253,7 +253,30 @@ class PsbtScan:
             self._say("advisory", len(frame))
 
         seen = frame_identity(frame)
-        if seen is not None and self._identity is not None and seen != self._identity:
+        # A single-part UR carries no sequence, so `seen` is None for it.
+        # The test used to require `seen is not None`, which meant a
+        # single-part frame could never trigger a restart: aiming at a
+        # one-frame PSBT while a multi-part scan was 9% through COMPLETED
+        # the scan with the other transaction and said nothing (measured
+        # 2026-09-08). Nothing is signed unreviewed, because the review
+        # screen is the boundary and it showed the substituted
+        # transaction's own outputs. But the user aimed at one
+        # transaction, was told nothing, and was reviewing another.
+        #
+        # A message is either single-part or multi-part, never both, so a
+        # frame with no sequence arriving mid-sequence IS a different
+        # message. That is the whole test.
+        #
+        # The notice barely shows in this case, and that is understood:
+        # a single-part frame restarts and COMPLETES in the same feed, so
+        # main._load_by_qr paints "different transaction" once and then
+        # opens the review screen. What protects the user is not the
+        # notice; it is that the review screen shows the substituted
+        # transaction's own outputs and amounts, and nothing is signed
+        # without approving those.
+        different = (seen != self._identity if seen is not None
+                     else self._identity is not None)
+        if different and self._identity is not None:
             self._say("restart", seen)
             self._assembler = FrameAssembler()
             self._identity = None
@@ -319,21 +342,49 @@ def text_to_image(text, panel=None, box_size=8, border=2):
     definition) and destroys a descriptor, where `xpub` and the checksum
     are case-sensitive. This encodes the bytes as given.
 
-    `panel` lowers box_size so the code fits the screen, as the frame
-    renderer does.
+    `panel` lowers box_size so the code fits the screen, and REFUSES when
+    it cannot, exactly as the frame renderer does. It used to clamp with
+    `max(1, ...)`, which returns an image wider than the panel instead of
+    saying so, and `screens.qr_export` paints the code with `img.paste`,
+    which crops in silence. The panel would then show something QR-shaped
+    that no scanner can read, which is the failure `fit_to_panel` exists
+    to refuse (found reading qrchannel.py, 2026-09-08).
+
+    Unreachable today, and the reason is worth stating because it is not
+    obvious: a QR tops out at version 40, 177 modules, so span never
+    exceeds 181 and screens.QR_MAX_PX is 190.
+    `tests/test_qr_out.py` pins that gap, so lowering QR_MAX_PX cannot
+    quietly reopen the crop.
+
+    Past version 40, qrcode raises a bare ValueError("Invalid version"),
+    which Session.HANDLED does not catch, so a descriptor too long for
+    any QR ended the process rather than painting a message. It is a
+    QrChannelError now, which is what this module's docstring promises
+    of every error it can raise.
     """
     import qrcode
-    qr = qrcode.QRCode(box_size=box_size, border=border,
-                       error_correction=qrcode.constants.ERROR_CORRECT_M)
-    qr.add_data(text)
-    qr.make(fit=True)
-    if panel:
-        span = qr.modules_count + 2 * border
-        box_size = max(1, min(box_size, min(panel) // span))
-        qr = qrcode.QRCode(box_size=box_size, border=border,
+
+    def build(size):
+        qr = qrcode.QRCode(box_size=size, border=border,
                            error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(text)
-        qr.make(fit=True)
+        try:
+            qr.make(fit=True)
+        except ValueError as exc:           # "Invalid version (was 41...)"
+            raise QrChannelError(
+                f"{len(text)} characters is more than one QR can carry "
+                f"({exc})") from None
+        return qr
+
+    qr = build(box_size)
+    if panel:
+        span = qr.modules_count + 2 * border
+        fitted = min(box_size, min(panel) // span)
+        if fitted < 1:
+            raise QrChannelError(
+                f"a {span}-module QR does not fit a {min(panel)}px panel at "
+                "one pixel per module")
+        qr = build(fitted)
     return qr.make_image(fill_color="black", back_color="white").convert("RGB")
 
 
