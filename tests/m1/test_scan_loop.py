@@ -148,7 +148,7 @@ def main():
     # board. Drive the real class over the same PNGs, including the None it
     # must emit for a tick with nothing in view.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
-    from main import ImageQrSource, CameraQrSource
+    from qrsource import ImageQrSource, CameraQrSource
     from PIL import Image
 
     class FileImages(ImageQrSource):

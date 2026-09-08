@@ -47,7 +47,8 @@ check("absent: the whole shim/ directory", not (ROOT / "shim").exists())
 # unneeded dependencies left on the pinned signer).
 import sys as _sys
 _STDLIB = set(_sys.stdlib_module_names)
-_OURS = {"signer", "screens", "filechannel", "qrchannel", "hal", "splash", "main"}
+_OURS = {"signer", "screens", "filechannel", "qrchannel", "hal", "splash",
+         "qrsource", "main"}
 
 ALLOWED_THIRD_PARTY = {
     "PIL",         # Pillow: every screen is a PIL image     (apt python3-pil)

@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 import main as corky_main  # noqa: E402
+import qrsource  # noqa: E402
 import screens  # noqa: E402
 
 fails = []
@@ -200,7 +201,7 @@ display = named_screens(RecordingDisplay())
 buttons = ScriptedButtons(["r", "a"] + ["d", "a"] + ["a"] + ["a"] +
                           ["c"] + ["d", "r", "a", "a"])
 session = corky_main.Session(display, buttons, FakeRpc())
-session.qr = corky_main.CameraQrSource()
+session.qr = qrsource.CameraQrSource()
 raised = None
 try:
     session.state_home()

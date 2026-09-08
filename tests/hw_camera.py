@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "corky"))
 from PIL import Image, ImageDraw          # noqa: E402
 import hal                                 # noqa: E402
 import qrchannel                           # noqa: E402
-import main as corky_main                  # noqa: E402
+import qrsource                            # noqa: E402
 
 
 def viewfinder(display, frame, line1, line2, rotate=0, fill=False):
@@ -81,7 +81,7 @@ def main():
     seconds, rotate, fill = parsed.seconds, parsed.rotate, parsed.fill
 
     display = hal.DeviceDisplay()
-    src = corky_main.CameraQrSource()
+    src = qrsource.CameraQrSource()
     assembler = qrchannel.FrameAssembler()
 
     print(f"panel {display.width}x{display.height}, camera {src.SIZE[0]}x{src.SIZE[1]}")

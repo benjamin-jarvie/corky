@@ -47,8 +47,14 @@ LAYER1 = []
 # passphrase pair went with PLAN A-24. CONTEXT.md: "Layer 2 sees secrets and
 # carries them as strings. Layer 3 is opaque to secrets." It always carried
 # the xprv; the README said otherwise for longer than it should have.
+# qrsource.py is LAYER 2, not 3. DevQrSource.strings() yields whatever is
+# in --qr-key, and on the device ImageQrSource.strings() yields whatever
+# the camera decoded, which on the Scan-a-key flow is a private key. It
+# carries the key as a string and computes nothing on it, which is the
+# definition. qrchannel.py stays layer 3 because it only ever handles
+# crypto-psbt frames (extracted 2026-09-08).
 LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
-          "corky/hal.py", "corky/signer.py"]
+          "corky/hal.py", "corky/signer.py", "corky/qrsource.py"]
 LAYER3 = ["corky/filechannel.py", "corky/qrchannel.py"]
 
 #: Rewrite the numbers instead of reporting them. Every commit that
