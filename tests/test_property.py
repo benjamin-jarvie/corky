@@ -470,7 +470,22 @@ def prop_a_failing_stick_does_not_lose_a_signature():
         raise filechannel.FileChannelError(
             "tx-signed.psbt: wrote 100 of 4005 bytes, the medium is full")
 
+    # What reaching the signed screen is worth depends on what is ON it.
+    # Until 2026-09-08 this property asserted the outcome alone, so a
+    # fallback that showed the UNSIGNED psbt back to the user passed it:
+    # the screen was reached, the signature was still lost, and the test
+    # said the signature was delivered.
+    import qrchannel
+    framed = []
+    real_frames = qrchannel.psbt_to_frames
+
+    def spy(b64):
+        framed.append(b64)
+        return real_frames(b64)
+
+    signed_b64 = base64.b64encode(b"psbt\xffSIGNED").decode()
     filechannel.write_signed = full_medium
+    qrchannel.psbt_to_frames = spy
     sess = corky_main.Session(Painted(), hal.DevButtons("a" * 30),
                               rpc=Signs(), animate=False, on_device=False)
     try:
@@ -482,12 +497,19 @@ def prop_a_failing_stick_does_not_lose_a_signature():
             "thrown away") from None
     finally:
         filechannel.write_signed = real
+        qrchannel.psbt_to_frames = real_frames
         shutil.rmtree(src.parent, ignore_errors=True)
     assert out in (corky_main.SIGN_AGAIN, corky_main.POWER_OFF,
                    corky_main.TO_HOME), f"unexpected outcome {out!r}"
     assert out != corky_main.TO_HOME, (
         "the run went home instead of reaching the signed screen, so the "
         "signature was not delivered anywhere")
+    assert framed, (
+        "the signed screen was reached but nothing was ever turned into "
+        "frames, so the screen carried no transaction")
+    assert framed == [signed_b64], (
+        f"the QR fallback framed {framed!r}, not the psbt Core signed. "
+        f"The screen was reached and the signature was still lost.")
 
 
 def main():

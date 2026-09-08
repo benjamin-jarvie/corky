@@ -143,6 +143,17 @@ try:
     check_session = corky_main.Session(
         RecordingDisplay(), ScriptedButtons("ara"), FakeRpc())
     chose_check = check_session._show_backup("z" * 49, "KEY  D2B7E45C")
+
+    # DOWN turns the page everywhere else, so it turns the page here too
+    # (057d910). On the LAST page there is nowhere to turn to, and it must
+    # not fall through into DONE: the same gesture would then finish the
+    # backup, and the user meant "next page". The `continue` that stops
+    # that had no assertion behind it until 2026-09-08.
+    backup_calls.clear()
+    down_session = corky_main.Session(
+        RecordingDisplay(), ScriptedButtons("dda"), FakeRpc())
+    down_result = down_session._show_backup("w" * 49, "KEY  D2B7E45C")
+    down_calls = list(backup_calls)
 finally:
     screens.backup_page = real_backup_screen
 
@@ -161,6 +172,18 @@ if chose_check != "check":
     bad(f"CHECK IT on the last backup page returned {chose_check!r}")
 else:
     ok("CHECK IT on the last backup page reaches the caller")
+
+# "d" turns page 0 -> 1, then "d" on the last page redraws it, then "a"
+# finishes. Four paints for three presses: pages 0, 1, and 1 again.
+expected_down = [("w" * 48, 0, 2), ("w", 1, 2), ("w", 1, 2)]
+if down_result != "done":
+    bad(f"DOWN then DONE on the last backup page returned {down_result!r}")
+elif down_calls != expected_down:
+    bad(f"DOWN on the LAST backup page did not simply redraw it: "
+        f"{down_calls}")
+else:
+    ok("DOWN turns the page, and on the last page redraws it rather than "
+       "finishing the backup")
 
 
 # --- D6: a failing seed mode must hold its message ------------------------

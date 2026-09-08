@@ -140,6 +140,97 @@ for f in dead:
     ok(f"README names the dead driver {rel}") if rel in README else \
         bad(f"{rel} is imported nowhere and the README does not say so")
 
+# The README calls the drivers modified and the codec unmodified. That
+# split is a claim about what a reader must audit, and nothing checked it
+# against the files (two-axis review, 2026-09-08). It cannot be checked
+# against upstream from here, and it does not need to be: detecting a
+# change to a vendored file is test_vendor_pinned.py's job. What is
+# checked here is that the README and the tree tell the same story.
+drivers = sorted(VEND.glob("*.py"))
+undeclared = [f.name for f in drivers if "Modified:" not in f.read_text()[:400]]
+if undeclared:
+    bad(f"{undeclared} carry no 'Modified:' line, but the README calls "
+        "SeedSigner's two display drivers modified")
+else:
+    ok(f"all {len(drivers)} display drivers say how they were modified")
+vendored_md = VEND / "ur2" / "VENDORED.md"
+if not vendored_md.exists():
+    bad("hw/vendor/ur2/VENDORED.md is gone; the codec has no provenance")
+elif "Unmodified" not in vendored_md.read_text():
+    bad("VENDORED.md no longer says the BC-UR codec is unmodified, but "
+        "the README does")
+else:
+    ok("the BC-UR codec's provenance says unmodified, as the README does")
+
+
+def table_cell(source_word):
+    """The first cell of the dependency row whose source cell starts with
+    `source_word`.
+
+    Scoped to the ROW on purpose. The first version of this check asked
+    whether the whole README contained the string "pip", which the pip
+    row's own source cell satisfies, so a missing apt package passed.
+    """
+    for line in README.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) == 2 and cells[1].startswith(source_word):
+            return cells[0]
+    return None
+
+
+# What provision.sh really installs, against the table on this page. The
+# table named five packages and provision.sh asked for six.
+prov = (ROOT / "image" / "provision.sh").read_text()
+m = re.search(r'REQUIRED_PKGS="([^"]+)"', prov)
+apt_cell = table_cell("apt")
+if not m:
+    bad("provision.sh no longer names REQUIRED_PKGS, so this check is blind")
+elif apt_cell is None:
+    bad("the README has no apt row in the dependency table")
+else:
+    # apt package name -> the word the README uses for it. A new package
+    # with no entry fails, which is the point: it must be named on the
+    # page a reader audits, or deliberately excused here.
+    APT_NAMES = {"python3-pil": "Pillow", "python3-rpi.gpio": "RPi.GPIO",
+                 "python3-spidev": "spidev", "python3-picamera2": "picamera2",
+                 "libzbar0": "libzbar0", "python3-pip": "pip"}
+    pkgs = m.group(1).split()
+    unknown = [q for q in pkgs if q not in APT_NAMES]
+    absent = [APT_NAMES[q] for q in pkgs
+              if q in APT_NAMES and APT_NAMES[q] not in apt_cell]
+    if unknown:
+        bad(f"provision.sh installs {unknown} which this check has never "
+            "heard of; name them in the README and add them here")
+    elif absent:
+        bad(f"provision.sh installs {absent}, which the README's apt row "
+            f"does not mention: {apt_cell!r}")
+    else:
+        ok(f"the README's apt row names all {len(pkgs)} packages "
+           "provision.sh installs")
+
+# ...and the pip row against requirements.txt, by name and by count.
+reqs = sorted(ln.split("==")[0] for ln in
+              (ROOT / "image" / "requirements.txt").read_text().splitlines()
+              if ln[:1].isalpha())
+pip_cell = table_cell("pip")
+WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+if pip_cell is None:
+    bad("the README has no pip row in the dependency table")
+else:
+    named = [r for r in reqs if r in pip_cell]
+    m2 = re.search(r"their (\w+) dependencies", pip_cell)
+    rest = WORDS.get(m2.group(1)) if m2 else None
+    if rest is None:
+        bad(f"the pip row does not say how many unnamed dependencies come "
+            f"with it: {pip_cell!r}")
+    elif len(named) + rest != len(reqs):
+        bad(f"the README's pip row names {named} plus {rest} more, which "
+            f"is {len(named) + rest}; requirements.txt pins {len(reqs)}: "
+            f"{reqs}")
+    else:
+        ok(f"the README's pip row accounts for all {len(reqs)} pins in "
+           "requirements.txt")
+
 # Every file the README links must exist
 broken = [link for link in set(re.findall(r"\]\((?!http)([^)#]+)\)", README))
           if not (ROOT / link).exists()]

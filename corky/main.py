@@ -1867,7 +1867,10 @@ class Session:
                 #
                 # So fall through to the screen. It cannot be full, it
                 # cannot be unplugged, and it cannot be mounted read-only.
-                self._hold(f"file failed: {str(exc)[:40]}")
+                # "file channel" is CONTEXT.md's word for stick and card
+                # together, which is exactly what can have failed here.
+                # "file" was not a word this codebase defines.
+                self._hold(f"file channel failed: {str(exc)[:34]}")
         if detail is None:
             frames = qrchannel.psbt_to_frames(signed["psbt"])
             try:

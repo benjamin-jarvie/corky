@@ -380,6 +380,20 @@ def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
     imported as a bare descriptor holds exactly what that descriptor
     described, and exporting a policy a wallet has not got should be
     something the panel cannot offer rather than an error the user reaches.
+
+    SO IT CAN RETURN AN EMPTY TUPLE, and `order[0]` on one is an
+    IndexError, which is not in Session.HANDLED and therefore ends the
+    process rather than painting an error. That bug existed at three call
+    sites at once and was found at one (2026-09-07). Every caller guards
+    it now, with its own message because the three screens are answering
+    different questions:
+
+      main._next_kind      returns the current policy unchanged
+      main._export         "this key has no policies to export"
+      main._page_addresses "this key derives no addresses"
+
+    A fourth caller needs a fourth answer. There is no shared one to
+    inherit, which is why this note is here and not in a wrapper.
     """
     have = export_descriptors(rpc, wallet=wallet)
     return tuple(k for k in EXPORT_ORDER

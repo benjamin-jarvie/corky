@@ -47,6 +47,18 @@ a real thing until 2026-09-05 and is now only a thing that was removed.
 screen shows. **stick**: a USB stick in the OTG port. **card**: the boot
 microSD, read in another computer.
 
+**file channel**: stick and card together, as against QR. The device
+offers whichever of the two is really there. _In code_: `filechannel.py`,
+`Session._file_channels`.
+
+**policy**: which script type a key's addresses use. There are four:
+Native segwit, Taproot, Nested segwit and Legacy, in the words Sparrow,
+BlueWallet and Core's own GUI use for them. One key holds all four unless
+it was imported as a bare descriptor. _In code_: `kind`, and the four are
+`wpkh`, `tr`, `sh`, `pkh`. _Avoid_: script type and address type as
+screen words; derivation path, which is a different thing that a policy
+implies.
+
 **primary build**: the CM4 Lite with the SeedSigner+ display hat, 2.8"
 ST7789 at 320x240 (PLAN A-13b/A-15). **pocket build**: the Pi Zero 2 W in
 the SeedSigner case.
