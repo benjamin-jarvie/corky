@@ -90,10 +90,88 @@ def _no_key_in_argv(method, params, stdin):
     if stdin:
         return
     for p in params:
-        if isinstance(p, str) and any(x in p for x in signer.XPRV_PREFIXES):
+        # signer.redact is the ONE definition of what key material looks
+        # like. This used to substring-search XPRV_PREFIXES, which is half
+        # of it, so a WIF passed the check (two-axis review, 2026-09-08).
+        if isinstance(p, str) and signer.redact(p) != p:
             raise AssertionError(
                 f"{method} put key material in argv, where a process "
                 f"listing shows it. Pass stdin=True (Rpc.call, S4).")
+
+
+def prop_no_key_form_reaches_argv():
+    """Drive the REAL Rpc.call: nothing redact() strips may reach argv.
+
+    The double above asserts what CALLERS pass. This asserts what the
+    module BUILDS, which is the thing `ps` actually reads, and it does it
+    for every private key form the redactor knows rather than for the one
+    a test author thought of. Three escaped on 2026-09-08: SLIP-132's
+    Zprv and Uprv, because XPRV_PREFIXES held only the lowercase
+    single-sig prefixes, and a WIF, because a WIF has no word-shaped
+    prefix and the guard searched for prefixes.
+    """
+    import subprocess as sp
+    import signer as sg
+
+    class Probe(sg.Rpc):
+        def __init__(self):
+            self.base = ["true"]
+            self.chain = "regtest"
+            self.net_dir = Path("/tmp")
+
+    forms = {
+        "mainnet xprv":
+            "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqji"
+            "ChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi",
+        "testnet tprv":
+            "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXi"
+            "Ao2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd",
+        "SLIP-132 Zprv":
+            "ZprvAhWyxUFHYPKrpTGnMgVwHnGpvSKXnEfGVKrCZLxqTerAiWgAWL7hVQR"
+            "5AKMTnRhLpGVHBWD8YyxTHqiFEHFwLwYYs2rUvNtcgVVKvBhVLdc",
+        "SLIP-132 Uprv":
+            "UprvA6NLj9GFvGyfHKq9d3iA1nhbXcCJHfSbXhfWq4dXjRe3H1sMHqCjJc4"
+            "vDPLD4S4vSA8HXBUyGP9hjbb7bmVoq7dVpDPGXPbLdVpvyxa6XoV",
+        "WIF, compressed":
+            "L1aW4aubDFB7yfras2S1mN3bqg9nwySY8nkoLmJebSLD5BWv3ENZ",
+        "WIF, uncompressed":
+            "5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ",
+    }
+    def argv_for(probe, arg):
+        """The command line Rpc.call really builds, with no cli run."""
+        seen = {}
+
+        def fake(cmd, **kw):
+            seen["cmd"] = cmd
+
+            class R:
+                returncode, stdout, stderr = 0, "{}", ""
+            return R()
+
+        real, sp.run = sp.run, fake
+        try:
+            probe.call("getdescriptorinfo", arg)
+        finally:
+            sp.run = real
+        return seen["cmd"]
+
+    probe = Probe()
+    for label, key in forms.items():
+        cmd = argv_for(probe, f"wpkh({key}/0/*)")
+        on_argv = [a for a in cmd if key in a]
+        assert not on_argv, (
+            f"a {label} reached argv, where `ps` reads it: {on_argv[0][:40]}…")
+        assert sg.redact(key) == "<key redacted>", (
+            f"a {label} is not redacted, so Core's refusal quotes it back "
+            f"to the panel and the journal: {sg.redact(key)[:40]}")
+
+    # ...and the public form must NOT be pushed to stdin, or the guard is
+    # matching everything and proving nothing.
+    xpub = ("xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2"
+            "gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8")
+    assert any(xpub in a for a in argv_for(probe, f"wpkh({xpub}/0/*)")), (
+        "an xpub was pushed to stdin, so the guard fires on public keys "
+        "too and the private-key results above prove nothing")
 
 
 class FakeRpc:
@@ -514,6 +592,7 @@ def prop_a_failing_stick_does_not_lose_a_signature():
 
 def main():
     checks = [
+        ("no key form reaches argv", prop_no_key_form_reaches_argv),
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
         ("read_psbt no-crash fuzz", prop_read_psbt_no_crash),
         ("fee Decimal exact", prop_fee_decimal_exact),

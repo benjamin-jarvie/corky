@@ -33,7 +33,16 @@ from pathlib import Path
 #: Every prefix a BIP32 extended PRIVATE key can carry, across networks and
 #: SLIP-132 script types. One list, so the redactor and the scan classifier
 #: cannot disagree about what a private key looks like.
-XPRV_PREFIXES = ("xprv", "tprv", "yprv", "zprv", "vprv", "uprv")
+#:
+#: The four UPPERCASE forms are SLIP-132's multisig prefixes. They were
+#: missing until 2026-09-08, and the list is used for two different jobs,
+#: so a Zprv escaped both of them: it was not redacted out of Core's
+#: refusal, and it did not trip the stdin guard in Rpc.call, so it went
+#: into argv where `ps` reads it. Corky does not accept a multisig key and
+#: Core refuses one, but the refusal quotes the key back, and by then it
+#: had already been on the process list.
+XPRV_PREFIXES = ("xprv", "tprv", "yprv", "zprv", "vprv", "uprv",
+                 "Yprv", "Zprv", "Uprv", "Vprv")
 
 #: A WIF private key, which carries no word-shaped prefix at all: one
 #: character for network and compression, then 50 or 51 base58 characters.
@@ -92,6 +101,11 @@ Key = namedtuple("Key", "name xfp")
 #: address nor the balance. Measured on the board: four pairs is a 44kB
 #: wallet against 20kB for two, and the node's RSS does not move. 24kB per
 #: key against 512MB of RAM is not a reason to hide half a wallet.
+PURPOSE_FUNCS = ((44, "pkh({key})"),
+                 (49, "sh(wpkh({key}))"),
+                 (84, "wpkh({key})"),
+                 (86, "tr({key})"))
+
 #: How long any one bitcoin-cli call may take before the device gives up.
 #:
 #: Measured on the Zero 2 W, 2026-09-06, with the M0 gate: opening a key
@@ -100,11 +114,6 @@ Key = namedtuple("Key", "name xfp")
 #: the slowest of those, so it cannot fire on a healthy node doing real
 #: work; it exists only to turn "frozen for ever" into a message.
 RPC_TIMEOUT = 120.0
-
-PURPOSE_FUNCS = ((44, "pkh({key})"),
-                 (49, "sh(wpkh({key}))"),
-                 (84, "wpkh({key})"),
-                 (86, "tr({key})"))
 
 
 class Rpc:
@@ -145,9 +154,10 @@ class Rpc:
         nowhere. On 2026-09-05 a caller forgot and a master private key
         went into argv twice per paper check; a two-axis review found it,
         not the suite. An invariant a module can check for itself does not
-        belong in its interface, so this one checks: any argument carrying
-        a private key goes through stdin whether it was asked for or not.
-        Passing stdin=True still works and is still right for a PSBT.
+        belong in its interface, so this one checks: any argument that
+        `redact` would strip goes through stdin whether it was asked for
+        or not. Passing stdin=True still works and is still right for a
+        PSBT.
 
         Callers that pass a PSBT should set it, for a second reason.
         Linux caps any SINGLE argument at MAX_ARG_STRLEN, 32 pages, which
@@ -165,7 +175,22 @@ class Rpc:
         # not have to. An empty argument list stays on argv, because
         # -stdin with nothing to read is a blank line bitcoin-cli has no
         # use for.
-        if args and any(any(x in a for x in XPRV_PREFIXES) for a in args):
+        #
+        # THE SAME MATCHER AS redact(). This used to substring-search
+        # XPRV_PREFIXES, which is one of the two things _SECRET_RE is
+        # built from, so it saw extended keys and never a WIF: a WIF has
+        # no word-shaped prefix at all, and one typed on the pad went
+        # straight into argv (two-axis review, 2026-09-08). Two readings
+        # of the same question in one file will disagree eventually, so
+        # there is now one reading.
+        #
+        # It over-matches. _WIF_RE finds a hit in most megabyte-sized
+        # base64, so a large PSBT is pushed to stdin whether or not it
+        # holds a key. That is the direction to be wrong in, and it is
+        # where a PSBT belonged anyway: Linux caps a single argument at
+        # 128KB. Measured on 1MB of base64: 2.3ms, faster than the six
+        # substring scans it replaces.
+        if args and any(_SECRET_RE.search(a) for a in args):
             stdin = True
         feed = None
         if stdin:
