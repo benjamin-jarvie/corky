@@ -304,7 +304,13 @@ def _import(rpc: "Rpc", descriptors: list[dict]) -> str:
     failures = [r for r in result if not r.get("success")]
     if failures:
         _drop_wallet(rpc, name)
-        raise RuntimeError(f"importdescriptors failed: {failures}")
+        # redact, though measured not to be needed: six malformed private
+        # descriptors were pushed through Core 31.1 on 2026-09-08 and none
+        # came back with the key in the failure body. That is Core's
+        # behaviour and not this module's guarantee, and `failures` is the
+        # one Core answer here that is not stderr, so it is not covered by
+        # Rpc.call's redaction.
+        raise RuntimeError(f"importdescriptors failed: {redact(str(failures))}")
     # The fingerprint is only knowable once Core holds the key:
     # getdescriptorinfo's public form keeps hardened steps on the xpub and
     # carries no origin. So a duplicate is found after the import and the
@@ -481,7 +487,8 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
         result = rpc.call("importdescriptors", descs, wallet=scratch)
         failures = [r for r in result if not r.get("success")]
         if failures:
-            raise RuntimeError(f"watch-only import failed: {failures}")
+            raise RuntimeError(
+                f"watch-only import failed: {redact(str(failures))}")
         out = Path(dest_dir) / f"{WATCH_PREFIX}{xfp}-watch.dat"
         rpc.call("backupwallet", str(out), wallet=scratch)
         return out

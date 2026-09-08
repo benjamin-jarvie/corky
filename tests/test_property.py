@@ -99,6 +99,74 @@ def _no_key_in_argv(method, params, stdin):
                 f"listing shows it. Pass stdin=True (Rpc.call, S4).")
 
 
+def prop_no_key_reaches_the_panel():
+    """Every message funnel redacts, so no caller has to remember.
+
+    Rpc.call redacts what Core writes to STDERR. It cannot redact a
+    failure Core reports in the JSON BODY, and it cannot redact a message
+    built any other way. Ten call sites put str(exc) on the result screen
+    (two-axis review, 2026-09-08), and one of them went around _hold
+    entirely and called screens.result itself.
+
+    A message on the panel is also a message in the journal on the SD
+    card, which is the one place PLAN A-24 says a private key must never
+    reach.
+    """
+    import hal
+    import main as corky_main
+    import screens as scr
+    import signer as sg
+
+    KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXi"
+           "Ao2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
+    WIF = "L1aW4aubDFB7yfras2S1mN3bqg9nwySY8nkoLmJebSLD5BWv3ENZ"
+
+    class Blind:
+        width, height = 320, 240
+
+        def show(self, image, sensitive=False):
+            pass
+
+    class NoRpc:
+        chain = "regtest"
+        wallet_dir = Path("/nonexistent")
+
+        def call(self, *a, **k):
+            return ""
+
+    def session():
+        return corky_main.Session(Blind(), hal.DevButtons("a"), NoRpc(),
+                                  animate=False)
+
+    seen = []
+    real = scr.result
+    scr.result = lambda w, h, **kw: seen.append(kw.get("detail", "")) or "r"
+    try:
+        for secret in (KEY, WIF):
+            funnels = {
+                "_hold":
+                    lambda s: session()._hold(f"import failed: {s}"),
+                "_show_core_error":
+                    lambda s: session()._show_core_error(
+                        RuntimeError(f"key '{s}' is not valid")),
+            }
+            for label, run in funnels.items():
+                seen.clear()
+                run(secret)
+                assert seen, f"{label} painted nothing"
+                assert secret not in seen[0], (
+                    f"{label} put a private key on the panel, and therefore "
+                    f"in the journal on the card: {seen[0][:60]}")
+                assert "<key redacted>" in seen[0], (
+                    f"{label} did not redact: {seen[0][:60]}")
+    finally:
+        scr.result = real
+    # And the redactor must leave an ordinary message alone, or this
+    # proves only that something was replaced.
+    plain = "no way to load a PSBT"
+    assert sg.redact(plain) == plain, "redact mangles an ordinary message"
+
+
 def prop_no_key_form_reaches_argv():
     """Drive the REAL Rpc.call: nothing redact() strips may reach argv.
 
@@ -593,6 +661,7 @@ def prop_a_failing_stick_does_not_lose_a_signature():
 def main():
     checks = [
         ("no key form reaches argv", prop_no_key_form_reaches_argv),
+        ("no key reaches the panel", prop_no_key_reaches_the_panel),
         ("qr feed no-crash fuzz", prop_qr_feed_no_crash),
         ("read_psbt no-crash fuzz", prop_read_psbt_no_crash),
         ("fee Decimal exact", prop_fee_decimal_exact),

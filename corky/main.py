@@ -530,8 +530,9 @@ class Session:
         """
         lines = [ln.strip() for ln in str(exc).splitlines() if ln.strip()]
         detail = lines[-1] if lines else str(exc)
+        # The other funnel, redacted for the same reason as _hold.
         self.display.show(screens.result(self.w, self.h, ok=False,
-                                         detail=detail))
+                                         detail=signer.redact(detail)))
         self.buttons.read()
 
     def state_home(self):
@@ -582,9 +583,17 @@ class Session:
 
         DONE, not SIGNED: this screen carries every message the device
         parks, and only one of them is a signature.
+
+        REDACTED HERE, because this is the funnel. Ten call sites put
+        `str(exc)` on this screen, and Rpc.call only redacts what Core
+        writes to STDERR: a failure Core reports in the JSON body, or any
+        future message built some other way, arrives unredacted.
+        Redacting per caller means ten places to remember and one to
+        forget. screens.result would be the better seam still, but
+        screens.py is Layer 3 and may not import the redactor.
         """
         self.display.show(screens.result(self.w, self.h, ok=ok,
-                                         detail=detail,
+                                         detail=signer.redact(detail),
                                          label="DONE" if ok else "FAILED"))
         self.buttons.read()
 
@@ -1877,10 +1886,11 @@ class Session:
                 self._show_qr_loop(frames)
             except qrchannel.QrChannelError as exc:
                 # Both channels gone. Nothing left but to say so.
-                self.display.show(screens.result(
-                    self.w, self.h, ok=False,
-                    detail=f"signed, but not shown: {exc}"))
-                self.buttons.read()
+                # Through _hold, not screens.result directly: _hold is
+                # where a message gets redacted, and this was the one
+                # exception on its way to the panel that went around it
+                # (two-axis review, 2026-09-08).
+                self._hold(f"signed, but not shown: {exc}")
                 return TO_HOME
             detail = f"shown as {len(frames)} QR frames"
         return self._state_signed(detail)
