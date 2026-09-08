@@ -30,6 +30,11 @@ what a reader should read instead.
 
 ---
 
+> **Superseded on 2026-09-07.** A9 kept the four closed maps and Ben
+> then had them archived out of the repository instead. They are in
+> `corky-closed-wayfinder-maps-2026-09-07.tar.gz` and in git before
+> `08b27b9`; paths to them below are ARCHIVED 2026-09-07.
+
 ## Answer (2026-09-06)
 
 **One of the four candidates was deleted. Three were kept, and the reason

@@ -321,7 +321,7 @@
   you.
 
   Reasoning and rejected options in full:
-  `docs/wayfinder/m1-qr-without-optics/tickets/09-zxing-cannot-read-some-frames.md`.
+  the m1-qr-without-optics map, ticket 09 (archived; see docs/wayfinder/README.md).
 
   **Mechanism (revised same day at Ben's direction: EXACTLY as a Core
   wallet, no shaping).** `signer.generate_wallet()` calls `createwallet`,
@@ -461,7 +461,8 @@
 
 - **A-23: the file backup is Core's own, and the SD-card rule is amended
   (Ben, 2026-09-04).** Charted with the e2e-before-testers map
-  (`docs/wayfinder/e2e-before-testers/`), where each decision has a ticket.
+  (the e2e-before-testers map (archived; see docs/wayfinder/README.md)), where each decision has a
+  ticket.
 
   **The file backup.** `encryptwallet` then `backupwallet`, Core's own
   commands, give a passphrase-encrypted wallet file that another Core

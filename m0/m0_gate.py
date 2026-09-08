@@ -66,7 +66,8 @@ def mem_available_mb():
 def swap_active_mb():
     """Active swap in MB. Under swap, peak RSS reads low and MemAvailable
     reads high, so no verdict is possible (ticket 01,
-    docs/wayfinder/zero2w-m0-fixes)."""
+    the zero2w-m0-fixes map, archived; see
+    docs/wayfinder/README.md)."""
     swaps = Path("/proc/swaps")
     if not swaps.exists():
         return 0  # not Linux: dev run, no verdict either way

@@ -21,7 +21,8 @@
 # Compute Modules and not for the Zero 2 W. Only removing the part is
 # physics. The radio on the Zero 2 W is a separate component beside the
 # processor, so removal is possible. See
-# docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md.
+# the e2e-before-testers map, research/pi-zero-radio.md (archived; see
+# docs/wayfinder/README.md).
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "run me as root"; exit 1; }
 

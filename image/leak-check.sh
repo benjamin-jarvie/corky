@@ -20,7 +20,8 @@
 #
 # The Zero 2 W's radio is a separate component beside the processor, not
 # inside it, so removal is possible. See
-# docs/wayfinder/e2e-before-testers/research/pi-zero-radio.md.
+# the e2e-before-testers map, research/pi-zero-radio.md (archived; see
+# docs/wayfinder/README.md).
 #
 # --porcelain prints one tab-separated record per check and nothing else:
 #     ok|FAIL <tab> what it is <tab> what it is doing

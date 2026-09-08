@@ -22,7 +22,7 @@ The coordinator chooser was removed from the export because the research
 says Sparrow, BlueWallet and Green all read the same plain descriptor QR
 for `wpkh` and `tr`, Bull Bitcoin reads `wpkh` only, and Core reads no QR
 at all and takes a file. The research is in
-`docs/wayfinder/e2e-before-testers/tickets/` 19, 20 and 21, and it was
+the e2e-before-testers map, tickets 19, 20 and 21 (archived; see docs/wayfinder/README.md), and it was
 read out of each project's source.
 
 **None of it is proven on a device.** Tickets 18 and 22 are the proofs,
