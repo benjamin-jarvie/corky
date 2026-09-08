@@ -302,6 +302,12 @@ def _next_kind(kind, key, order):
     ticket T0). `order` comes from signer.available_kinds, because a key
     that arrived by scan has fewer than a key Core generated.
     """
+    if not order:
+        # order[0] on an empty tuple is the same IndexError that ended
+        # the process in _page_addresses and _export. Its one caller is
+        # guarded now, so this is unreachable today and one line to keep
+        # unreachable tomorrow (2026-09-07).
+        return kind
     if kind not in order:
         return order[0]
     step = 1 if key == "r" else -1

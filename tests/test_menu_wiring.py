@@ -298,6 +298,16 @@ except hal.ScriptExhausted:
     bad(f"DOWN is still dead on the backup pages: {_pages - 1} "
         "presses did not reach the last one")
 
+# _next_kind indexes order[0] the same way _export and _page_addresses
+# did. Its only caller is guarded, so this is defence rather than a live
+# bug; three instances of one mistake is enough to stop finding a fourth
+# by accident.
+if corky_main._next_kind("wpkh", "r", ()) != "wpkh":
+    bad("_next_kind on an empty policy list does not return the kind it "
+        "was given")
+else:
+    ok("_next_kind survives an empty policy list")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)
