@@ -145,34 +145,32 @@ So every flow below is on the device itself, and these are recordings of
 the real screens, drawn by the real code, with real output from Bitcoin
 Core on regtest.
 
-**Watch the narrated versions.** The previews below play silently in the
-page and click through to the narrated MP4, which is where the security
-claims actually get made.
+These are the real screens, drawn by the real code, with real output from
+Bitcoin Core on regtest. They play silently here;
+`python3 tools/make_demo_videos.py` rebuilds them with narration, which
+is where the claims get spelled out.
 
 ### Generate a key
 
 Core makes the key with its own randomness, and names it by fingerprint.
 
-[![Generating a key](docs/demo/01-generate-a-key.gif)](docs/demo/01-generate-a-key.mp4)
+![Generating a key](docs/demo/01-generate-a-key.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/01-generate-a-key.mp4)** — the narration is where the claims are made.*
 
 ### Back it up on paper
 
 111 characters over three pages. There is no file and no encryption.
 
-[![Backing up on paper](docs/demo/02-back-it-up-on-paper.gif)](docs/demo/02-back-it-up-on-paper.mp4)
+![Backing up on paper](docs/demo/02-back-it-up-on-paper.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/02-back-it-up-on-paper.mp4)** — the narration is where the claims are made.*
 
 ### Verify the backup
 
 Type it back in. The wrong character is named rather than just refused,
 and at the end Core confirms the paper opens this key.
 
-[![Verifying the backup](docs/demo/03-verify-the-backup.gif)](docs/demo/03-verify-the-backup.mp4)
+![Verifying the backup](docs/demo/03-verify-the-backup.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/03-verify-the-backup.mp4)** — the narration is where the claims are made.*
 
 ### Export the public key
 
@@ -180,27 +178,24 @@ All four script policies, then a QR carrying the fingerprint, the policy
 and the derivation path, so the coordinator can be checked rather than
 trusted.
 
-[![Exporting the public key](docs/demo/04-export-the-public-key.gif)](docs/demo/04-export-the-public-key.mp4)
+![Exporting the public key](docs/demo/04-export-the-public-key.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/04-export-the-public-key.mp4)** — the narration is where the claims are made.*
 
 ### Check an address
 
 Whether the address on that other screen is really yours. Core answers,
 per loaded key.
 
-[![Checking an address](docs/demo/05-check-an-address.gif)](docs/demo/05-check-an-address.mp4)
+![Checking an address](docs/demo/05-check-an-address.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/05-check-an-address.mp4)** — the narration is where the claims are made.*
 
 ### Sign a transaction
 
 In by camera, reviewed with Core's numbers, out by camera. Nothing is
 ever plugged in.
 
-[![Signing a transaction](docs/demo/06-sign-a-transaction.gif)](docs/demo/06-sign-a-transaction.mp4)
+![Signing a transaction](docs/demo/06-sign-a-transaction.gif)
 
-*Silent preview. **[Play it narrated](docs/demo/06-sign-a-transaction.mp4)** — the narration is where the claims are made.*
 
 Rebuild them with `python3 tools/make_demo_videos.py`. Nothing in that
 script is a mockup, and nothing leaves the machine: narration is macOS
@@ -228,7 +223,7 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,339 lines** (4,472 with blanks/comments).
-**Test code: 5,449 lines**, none of which ships.
+**Test code: 5,448 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/):
 SeedSigner's display drivers and the BC-UR codec, unmodified.
 

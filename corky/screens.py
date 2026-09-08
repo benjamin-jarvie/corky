@@ -1068,10 +1068,10 @@ def text_pages(text):
 def splash(w, h):
     """The first frame the device paints, before bitcoind is up.
 
-    Two tones only (ink ground, cream mark) and every string measured, so it
-    survives a 1-bit render and both panel sizes. The mark is the Bitcoin
-    Butlers infinity-hourglass, stenciled from art/bb-logo-mask.png (a binary
-    silhouette extracted from the brand logo's alpha channel).
+    Two tones only (ink ground, cream text) and every string measured, so
+    it survives a 1-bit render and both panel sizes. It used to stencil a
+    mark from a brand PNG; it draws type only now, and the file went with
+    the rest of the branding on 2026-09-07.
     """
     img, d = _frame(w, h)
     cx = w // 2

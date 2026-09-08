@@ -93,7 +93,6 @@ def main():
     unwanted = {
         "tests/": "the suites",
         "docs/": "the wayfinder maps and tickets",
-        "articles/": "the articles",
         "art/": "the artwork",
         "tools/": "the dev scripts",
         "PLAN.md": "the planning record",
