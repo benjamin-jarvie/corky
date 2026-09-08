@@ -4,7 +4,7 @@
 
 A stateless, air-gapped Bitcoin signer built from general-purpose
 hardware, in the tradition of SeedSigner. One difference is the whole
-point: **the wallet is Bitcoin Core itself**, running wallet-only and
+point: **the wallet software is Bitcoin Core itself**, running wallet-only and
 offline. Corky draws screens, reads buttons and carries bytes. It never
 computes anything on a key.
 
