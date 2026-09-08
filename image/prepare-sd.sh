@@ -42,6 +42,16 @@ git -C "$REPO" archive --format=tar.gz -o "$BOOT/corky.tar.gz" HEAD \
 # does not match; without this the signer's OWN CODE was the one thing
 # provisioning never verified, while Bitcoin Core was verified twice
 # (audit of image/, 2026-09-08).
+#
+# BE PRECISE ABOUT WHAT THIS CATCHES. The hash and the tarball it
+# describes are written by this script, in the same breath, to the same
+# unsigned FAT partition. Anybody who can rewrite one can rewrite the
+# other. So it catches a card written twice, a half-finished copy, a bad
+# reader and a bit that rotted. It does NOT catch an attacker with the
+# card in hand, and no self-certifying file can. What does catch that is
+# CORE_SHA256 and CORKY_COMMIT, which come from the repo and can be read
+# against a checkout that never touched this card (two-axis review,
+# 2026-09-08).
 TARBALL_SHA="$(shasum -a 256 "$BOOT/corky.tar.gz" 2>/dev/null \
                  || sha256sum "$BOOT/corky.tar.gz")"
 TARBALL_SHA="${TARBALL_SHA%% *}"

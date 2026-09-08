@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
+import main as corky_main  # noqa: E402
 import signer  # noqa: E402
 
 # The key every other suite uses (the old "abandon x11 about" on regtest).
@@ -177,6 +178,60 @@ def main():
             ok("generated key is Core's depth-0 master, listed by its fingerprint")
         else:
             bad(f"generated key {xprv_c[:16]}… xfp {after[2].xfp}")
+
+        # 5b. How far `ismine` reaches, which is what "Check an address"
+        #     can see. main.ADDRESS_CHECK_DEPTH is printed on the panel,
+        #     so a wrong number tells the operator their key owns nothing
+        #     beyond an index it does own.
+        #
+        #     Both wallet shapes are measured, because they are bounded by
+        #     DIFFERENT things and only agree at Core's defaults: a
+        #     generated wallet reaches keypool - 1, an imported one
+        #     reaches the larger of that and its declared range end. At
+        #     -keypool=50 they read 49 and 200. The comment on the
+        #     constant named one of the two until 2026-09-08.
+        def owns(wallet, desc, i):
+            addr = rpc.call("deriveaddresses", desc, [i, i])[0]
+            return bool(rpc.call("getaddressinfo", addr,
+                                 wallet=wallet).get("ismine"))
+
+        def last_owned(wallet):
+            desc = signer.export_descriptor(rpc, wallet, "wpkh")
+            lo, hi = 0, 1
+            while owns(wallet, desc, hi) and hi < 1 << 16:
+                lo, hi = hi, hi * 2
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                lo, hi = (mid, hi) if owns(wallet, desc, mid) else (lo, mid)
+            return lo
+
+        want = corky_main.ADDRESS_CHECK_DEPTH - 1
+        fresh = signer.open_session_xprv(rpc, fresh_xprv(rpc))
+        for shape, wallet in (("freshly imported", fresh),
+                              ("freshly generated", name_c)):
+            got = last_owned(wallet)
+            if got == want:
+                ok(f"a {shape} key: ismine reaches index {got}, which is "
+                   f"ADDRESS_CHECK_DEPTH - 1")
+            else:
+                bad(f"a {shape} key: ismine reaches index {got}, but the "
+                    f"panel says Core checked the first {want + 1}")
+
+        # The reach GROWS as a wallet is used: Core tops the keypool up
+        # ahead of the highest index that has been handed out, so a key
+        # that has signed reaches further than one just loaded. Wallet `a`
+        # has been through the whole PSBT flow above. So the constant is a
+        # FLOOR, and the panel is right to say "not in the first 1000"
+        # rather than "your key does not own this". Measured 2026-09-08:
+        # this is what took the constant's comment from wrong to true.
+        used = last_owned(a.name)
+        if used >= want:
+            ok(f"a used key reaches index {used}, at or past the floor "
+               f"the panel quotes")
+        else:
+            bad(f"a used key reaches index {used}, SHORT of the {want + 1} "
+                f"addresses the panel says were checked")
+        signer._drop_wallet(rpc, fresh)
 
         # 6. close_session drops every slot and every directory.
         signer.close_session(rpc)

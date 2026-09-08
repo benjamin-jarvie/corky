@@ -259,11 +259,31 @@ MAX_SIGNABLE_INPUTS = 150
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
 #: How far Bitcoin Core's `ismine` reaches, and therefore how far "Check
-#: an address" can see. Core answers from the addresses it has derived,
-#: which is its keypool: measured against v31.1 on 2026-09-07, index 0 to
-#: 999 of each descriptor answer True and 1000 answers False for an
-#: address the key demonstrably owns. The screen quotes this number
-#: rather than claiming the key owns nothing beyond it.
+#: an address" can see. A FLOOR, not a ceiling: index 0 to 999 of a
+#: freshly loaded key answer True. Measured against v31.1 by binary
+#: search on 2026-09-08, at the default keypool and again at
+#: `-keypool=50`:
+#:
+#:   freshly generated (createwallet)     keypool - 1        999, then 49
+#:   freshly imported (importdescriptors) the LARGER of that
+#:                                        and the declared
+#:                                        range end          999, then 200
+#:   the same imported key, after it
+#:   has signed                                             1000
+#:
+#: Three facts fall out of that. The declared `range` in
+#: signer._desc_entry is [0, 200] and does not bind, because Corky sets
+#: no keypool and Core's default is 1000. The two ways in are bounded by
+#: different things and agree only at those defaults. And the reach GROWS
+#: with use, because Core tops the keypool up ahead of the highest index
+#: handed out, so no single number is exact for a wallet with a history.
+#:
+#: A floor is the honest thing to quote, and the screen quotes it: "not
+#: in the first 1000 addresses", never "this key does not own that". A
+#: verification tool that says a mistaken no is worse than one that says
+#: what it checked. tests/test_keys.py measures all three rows and fails
+#: if the floor moves. The comment here used to name the keypool alone,
+#: which is right for one of the two paths (two-axis review, 2026-09-08).
 ADDRESS_CHECK_DEPTH = 1000
 
 #: A channel loader returns this when B was pressed: go back to the
@@ -655,11 +675,12 @@ class Session:
                 self.buttons.read()
                 return None
         # NOT "no loaded key owns that address". Core answers ismine from
-        # the addresses it has DERIVED, and measured against v31.1 that is
-        # index 0 to 999 of each descriptor: 1000 and beyond come back
-        # False for an address the key really does own (2026-09-07). A
-        # verification tool that says a mistaken no is worse than one that
-        # says what it checked, so it says what it checked.
+        # the addresses it has DERIVED, which for a freshly loaded key is
+        # index 0 to 999: beyond that an address the key really does own
+        # comes back False. A verification tool that says a mistaken no is
+        # worse than one that says what it checked, so it says what it
+        # checked. See ADDRESS_CHECK_DEPTH for why that is a floor and how
+        # it was measured.
         self._hold(f"not in the first {ADDRESS_CHECK_DEPTH} addresses "
                    f"of any loaded key")
         return None
