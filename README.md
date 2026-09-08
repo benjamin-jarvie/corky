@@ -153,6 +153,8 @@ claims actually get made.
 
 Core makes the key with its own randomness, and names it by fingerprint.
 
+<video src="https://raw.githubusercontent.com/benjamin-jarvie/corky/main/docs/demo/01-generate-a-key.mp4" controls width="640"></video>
+
 [![Generating a key](docs/demo/01-generate-a-key.gif)](docs/demo/01-generate-a-key.mp4)
 
 *Silent preview. **[Play it narrated](docs/demo/01-generate-a-key.mp4)** — the narration is where the claims are made.*
