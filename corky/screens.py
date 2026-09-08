@@ -188,6 +188,35 @@ def _width(d, text, size, anchor, xy):
     return box[2] - box[0]
 
 
+def _row(d, left, right, y, lhs, rhs, lhs_size, rhs_size, lhs_fill,
+         rhs_fill, gap):
+    """Two strings on one line, one left-anchored and one right-anchored,
+    that cannot collide.
+
+    The review screen drew both with a bare `d.text`, so neither was
+    bounded by the other. On the 240x240 pocket panel the address and the
+    amount overlapped from about 100,000 BTC, and FEE and the fee did the
+    same: two strings painted on top of each other on the screen the user
+    signs from (measured 2026-09-08). Everything else that renders content
+    the device did not choose goes through `_fit`; these two did not.
+
+    THE RIGHT-HAND STRING WINS. It shrinks only to keep off the left edge,
+    and the left-hand string then fits whatever is left. On a signing
+    screen the amount is the thing that must stay readable; an address is
+    already shortened to thirteen characters and shortens further without
+    losing its ends.
+    """
+    span = right - left
+    while (rhs_size > 6
+           and _width(d, rhs, rhs_size, "rm", (right, y)) > span - gap):
+        rhs_size -= 1
+    d.text((right, y), rhs, font=_font(rhs_size), fill=rhs_fill, anchor="rm")
+    rhs_left = d.textbbox((right, y), rhs, font=_font(rhs_size),
+                          anchor="rm")[0]
+    _fit(d, (left, y), lhs, lhs_size, lhs_fill, "lm",
+         max(1, rhs_left - left - gap))
+
+
 def _actions(d, w, h, labels, selected=1):
     """The bottom action bar (Ben, 2026-09-01): actions are visible,
     d-pad-toggleable options in one place, never key legends in corners.
@@ -349,7 +378,16 @@ SETTINGS_OPTIONS = ["Power off", "About"]
 def review(w, h, outputs, fee_btc, input_total_btc=None,
            page=0, unseen_pages=False, actions_sel=1):
     """The screen that matters. outputs: [(address, amount_btc), ...]
-    Two outputs per page (Ben, 2026-09-01): less going on per frame."""
+    Two outputs per page (Ben, 2026-09-01): less going on per frame.
+
+    `fee_btc` must not be None. A PSBT whose fee Core could not compute is
+    one this device refuses, and `main.state_review` refuses it before
+    reaching here; passing None raises a TypeError out of the format
+    string, which Session.HANDLED does not catch. That is deliberate and
+    it is the safe direction: a fee this screen cannot state must never
+    become a screen with a SIGN button on it. The coupling lived in
+    main.py alone until 2026-09-08, the way find_unsigned's symlink
+    argument lived in one file before audit A1."""
     pages = max(1, (len(outputs) + 1) // 2)
     title = ("REVIEW  TRANSACTION" if pages == 1
              else f"REVIEW  ·  OUTPUTS {page + 1}/{pages}")
@@ -357,28 +395,25 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
     # screen with no bar on it (two-axis review, 2026-09-05).
     img, d = _frame(w, h, title)
     y = int(h * 0.20)
+    left, right, gap = int(w * 0.06), int(w * 0.94), int(w * 0.03)
     for addr, amt in outputs[page * 2:page * 2 + 2]:
         # SeedSigner-style short truncation so address and amount share
         # one line: first 8, ellipsis, last 4.
         short = addr[:8] + "…" + addr[-4:] if len(addr) > 13 else addr
-        d.text((int(w * 0.06), y), short, font=_font(int(h * 0.055)),
-               fill=CREAM, anchor="lm")
-        d.text((int(w * 0.94), y), f"{amt:.8f}", font=_font(int(h * 0.055)),
-               fill=CREAM, anchor="rm")
+        _row(d, left, right, y, short, f"{amt:.8f}",
+             int(h * 0.055), int(h * 0.055), CREAM, CREAM, gap)
         y += int(h * 0.115)
     if pages > 1:
         d.text((w // 2, y + int(h * 0.01)), "UP/DOWN · more outputs",
                font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
     ky = int(h * 0.58)
-    d.line([(int(w * 0.06), ky), (int(w * 0.94), ky)], fill=GREY, width=1)
-    d.text((int(w * 0.06), ky + int(h * 0.075)), "FEE",
-           font=_font(int(h * 0.06)), fill=GREY, anchor="lm")
-    d.text((int(w * 0.94), ky + int(h * 0.075)), f"{fee_btc:.8f} BTC",
-           font=_font(int(h * 0.075)), fill=RED, anchor="rm")
+    d.line([(left, ky), (right, ky)], fill=GREY, width=1)
+    _row(d, left, right, ky + int(h * 0.075), "FEE", f"{fee_btc:.8f} BTC",
+         int(h * 0.06), int(h * 0.075), GREY, RED, gap)
     if input_total_btc is not None:
-        d.text((int(w * 0.94), ky + int(h * 0.17)),
-               f"inputs {input_total_btc:.8f} BTC",
-               font=_font(int(h * 0.045)), fill=GREY, anchor="rm")
+        _fit(d, (right, ky + int(h * 0.17)),
+             f"inputs {input_total_btc:.8f} BTC",
+             int(h * 0.045), GREY, "rm", right - left)
     if unseen_pages:
         _fit(d, (w // 2, int(h * 0.80)), "see every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))

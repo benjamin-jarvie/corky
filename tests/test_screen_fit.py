@@ -9,6 +9,7 @@ bounding box outside the canvas.
 Run: python3 tests/test_screen_fit.py
 """
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +30,7 @@ def bad(m):
 
 
 _orig_text = ImageDraw.ImageDraw.text
-_ctx = {"w": 0, "h": 0, "name": "", "over": []}
+_ctx = {"w": 0, "h": 0, "name": "", "over": [], "drawn": []}
 
 
 def _measured_text(self, xy, text, *a, **kw):
@@ -38,7 +39,37 @@ def _measured_text(self, xy, text, *a, **kw):
     w, h = _ctx["w"], _ctx["h"]
     if box[0] < 0 or box[1] < 0 or box[2] > w or box[3] > h:
         _ctx["over"].append((text, [int(v) for v in box]))
+    _ctx["drawn"].append((str(text), tuple(int(v) for v in box)))
     return _orig_text(self, xy, text, *a, **kw)
+
+
+def collisions(drawn):
+    """Pairs of DIFFERENT strings whose boxes intersect.
+
+    Escaping the panel was checked; two strings painted on top of each
+    other inside it was not. The review screen drew its address and its
+    amount with a bare d.text, neither bounded by the other, and on the
+    240x240 pocket panel they overlapped from about 100,000 BTC: two
+    unreadable strings on the screen the user signs from (found reading
+    screens.py, 2026-09-08).
+
+    Two exclusions, both real rather than convenient:
+
+      the same string twice is `_fit(bold=True)`, which draws a word a
+      second time one pixel right to thicken its stems;
+
+      two SINGLE characters are `_tracked`, which draws letter by letter
+      and lets adjacent glyph boxes share a pixel of bearing.
+
+    A single character against a longer string is still a collision, so
+    neither exclusion opens a hole.
+    """
+    def hits(a, b):
+        return not (a[2] <= b[0] or b[2] <= a[0]
+                    or a[3] <= b[1] or b[3] <= a[1])
+
+    return [(x, y) for i, x in enumerate(drawn) for y in drawn[i + 1:]
+            if x[0] != y[0] and len(x[0]) + len(y[0]) > 2 and hits(x[1], y[1])]
 
 
 ImageDraw.ImageDraw.text = _measured_text
@@ -60,6 +91,16 @@ CASES = {
     "review-refused": lambda w, h: screens.review(w, h, OUTPUTS, 0.0000851,
                                                   input_total_btc=21.3,
                                                   unseen_pages=True),
+    # The widest string the format can produce. 21,000,000.00000000 is
+    # every bitcoin there will ever be, so no real transaction is wider,
+    # and the pocket panel had the address and the amount overlapping from
+    # about a twentieth of that (2026-09-08). The fixture above tops out
+    # at 21.21212121, which is why nothing saw it.
+    "review-whole-supply": lambda w, h: screens.review(
+        w, h, [(ADDR, Decimal("20999999.99999999")),
+               (ADDR, Decimal("21000000"))],
+        Decimal("20999999.99999999"),
+        input_total_btc=Decimal("21000000")),
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
@@ -167,13 +208,19 @@ for w, h in [(320, 240), (240, 240)]:
 
 for w, h in [(320, 240), (240, 240)]:
     for name, render in CASES.items():
-        _ctx.update(w=w, h=h, name=name, over=[])
+        _ctx.update(w=w, h=h, name=name, over=[], drawn=[])
         render(w, h)
+        clashes = collisions(_ctx["drawn"])
         if _ctx["over"]:
             for text, box in _ctx["over"]:
                 bad(f"{w}x{h} {name}: {text[:40]!r} at {box} escapes {w}x{h}")
+        elif clashes:
+            for x, y in clashes:
+                bad(f"{w}x{h} {name}: {x[0][:28]!r} at {x[1]} is painted "
+                    f"over {y[0][:28]!r} at {y[1]}")
         else:
-            ok(f"{w}x{h} {name} fits")
+            ok(f"{w}x{h} {name} fits, and nothing is painted over "
+               f"anything else")
 
 # Branding must survive a one-bit or inverted panel without depending on
 # colour. Capture the requested drawing colours rather than antialiased pixel
