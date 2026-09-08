@@ -558,7 +558,11 @@ def scrollbar(d, w, top, track_h, position, total, visible=1):
     list is a lie told in pixels.
     """
     d.rectangle([w - 4, top, w - 3, top + track_h], fill="#3A352E")
-    if total is None:
+    # `not total` and not `total is None`: 0 divides by zero two lines
+    # below, and a list of no items has no position to show anyway. No
+    # caller passes 0 today, and this is a shared drawing helper, so the
+    # question is what it does when one eventually does.
+    if not total:
         bar_h = max(int(track_h * 0.18), 6)
         # Asymptotic: fills the top nine tenths of the track and stops.
         span = track_h - bar_h

@@ -8,6 +8,8 @@ bounding box outside the canvas.
 
 Run: python3 tests/test_screen_fit.py
 """
+import ast
+import inspect
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -16,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 from PIL import ImageDraw  # noqa: E402
 import screens  # noqa: E402
+import qrchannel  # noqa: E402
 
 fails = []
 
@@ -101,6 +104,33 @@ CASES = {
                (ADDR, Decimal("21000000"))],
         Decimal("20999999.99999999"),
         input_total_btc=Decimal("21000000")),
+    # Six screens had no case at all until 2026-09-08, so neither the fit
+    # check nor the collision check had ever rendered them. The guard
+    # below fails if a seventh appears.
+    "about": lambda w, h: screens.about(w, h),
+    # These two were in MENUS below, which checks menu GEOMETRY and does
+    # not run the fit or collision checks. Rendered for one purpose and
+    # never for the other, which reads as covered and is not.
+    "settings-menu": lambda w, h: screens.settings_menu(w, h, 1),
+    "channel-menu": lambda w, h: screens.channel_menu(w, h, 1),
+    "scanning": lambda w, h: screens.scanning(
+        w, h, None, "hold the QR in view", 0.42),
+    "scanning-advisory": lambda w, h: screens.scanning(
+        w, h, None, "large frames: set Sparrow to Low density", 0.0),
+    "qr-export": lambda w, h: screens.qr_export(
+        w, h, qrchannel.text_to_image(
+            "wpkh([73c5da0a/84h/0h/0h]" + "x" * 90 + "/0/*)#kwx0dvhr",
+            panel=(w, min(h, screens.QR_MAX_PX))),
+        "73c5da0a", "wpkh", "m/84h/0h/0h"),
+    "text-entry": lambda w, h: screens.text_entry(
+        w, h, "BIP32  EXTENDED  PRIVATE  KEY", "tprv8ZgxMBicQKsPe", 7,
+        secret=True, caret=17),
+    "check-result-pass": lambda w, h: screens.check_result(
+        w, h, XPRV[:48], set(), "KEY  D2B7E45C", page=0, pages=3),
+    "check-result-fail": lambda w, h: screens.check_result(
+        w, h, XPRV[:48], {3, 11, 40}, "KEY  D2B7E45C", page=1, pages=3),
+    "verified": lambda w, h: screens.verified(
+        w, h, "key 73C5DA0A\nowns this address"),
     "result-ok": lambda w, h: screens.result(w, h),
     "result-fail": lambda w, h: screens.result(
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
@@ -206,6 +236,39 @@ for w, h in [(320, 240), (240, 240)]:
         bad(f"{w}x{h}: menus start at different heights: {tops}")
 
 
+# EVERY screen must have a case, or the two checks above are reporting on
+# whatever somebody remembered to add. Six had none until 2026-09-08:
+# about, scanning, qr_export, text_entry, check_result and verified,
+# which between them are the export card, the viewfinder, the keyboard a
+# key is typed into and the screen that says a paper backup is good.
+#
+# A screen is a public function in screens.py whose first two parameters
+# are w and h. That leaves out scrollbar (which draws onto a canvas it is
+# handed), and charset_pages, echo_window and text_pages, which return
+# data rather than a frame.
+_tree = ast.parse((ROOT / "corky" / "screens.py").read_text())
+_screens = [n.name for n in _tree.body
+            if isinstance(n, ast.FunctionDef)
+            and not n.name.startswith("_")
+            and [a.arg for a in n.args.args][:2] == ["w", "h"]]
+#: Screens checked by a loop of their own further down rather than by a
+#: CASES entry, and why. Named here rather than found by searching the
+#: whole file, because MENUS renders two screens for a geometry check that
+#: runs neither of the checks above: a mention is not a check.
+CHECKED_ELSEWHERE = {
+    "backup_page": "paginated per page in the text_pages loop below",
+}
+_source_of_cases = "".join(
+    inspect.getsource(fn) for fn in CASES.values())
+_uncovered = [n for n in _screens
+              if f"screens.{n}(" not in _source_of_cases
+              and n not in CHECKED_ELSEWHERE]
+if _uncovered:
+    bad(f"{len(_uncovered)} screen(s) that no case renders, so nothing "
+        f"checks whether they fit or overlap: {_uncovered}")
+else:
+    ok(f"all {len(_screens)} screens have a case in this file")
+
 for w, h in [(320, 240), (240, 240)]:
     for name, render in CASES.items():
         _ctx.update(w=w, h=h, name=name, over=[], drawn=[])
@@ -265,11 +328,18 @@ for w, h in [(320, 240), (240, 240)]:
             bad(f"{label}: text_pages loses or reorders characters")
             continue
         for i, page in enumerate(pages):
-            _ctx.update(w=w, h=h, name=f"backup-{label}-{i}", over=[])
+            _ctx.update(w=w, h=h, name=f"backup-{label}-{i}", over=[],
+                        drawn=[])
             screens.backup_page(w, h, page, "KEY  D2B7E45C",
                                 page=i, pages=len(pages))
             for text, box in _ctx["over"]:
                 bad(f"{w}x{h} backup {label} page {i}: {text[:32]!r} at {box}")
+            # This loop checked the panel edge and not the overlap, which
+            # is how backup_page reached 2026-09-08 half-checked while
+            # reading as covered. It carries the key a user writes down.
+            for x, y in collisions(_ctx["drawn"]):
+                bad(f"{w}x{h} backup {label} page {i}: {x[0][:20]!r} at "
+                    f"{x[1]} is painted over {y[0][:20]!r} at {y[1]}")
         ok(f"{w}x{h} {label} paginates into {len(pages)} pages that fit")
 
 print(f"\n{len(fails)} failure(s)")
