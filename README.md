@@ -10,9 +10,16 @@ computes anything on a key.
 
 ## Why Bitcoin Core's wallet, and not another one
 
-Corky reimplements no wallet logic. Key derivation, PSBT parsing, fee
-computation and signing are done by Bitcoin Core, running wallet-only and
-offline, driven over its own RPC.
+Corky reimplements no wallet logic. It does not build transactions and it
+does not choose fees: your coordinator does that, whether that is
+Sparrow, Bull Bitcoin or Core on a laptop. Corky makes and backs up keys,
+and it signs. Key derivation, PSBT parsing and signing are all done by
+Bitcoin Core, running wallet-only and offline, driven over its own RPC.
+
+The fee on the review screen is not Corky's arithmetic either. Core reads
+it out of the transaction the coordinator built, from input amounts the
+coordinator supplied, and an offline device cannot check those against
+the chain. The screen says so.
 
 That shape is not a workaround.
 [@instagibbs](https://x.com/theinstagibbs/status/2096565881048269263), a
