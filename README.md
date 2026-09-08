@@ -214,7 +214,7 @@ The code is in three layers, and the first one is the claim that matters:
 **Layer 1 transforms secret material. 0 lines.** Nothing in this
 repository computes on a key.
 
-**Layer 2 sees secrets, computes nothing with them. 2098 lines.**
+**Layer 2 sees secrets, computes nothing with them. 2102 lines.**
 [`main.py`](corky/main.py), [`signer.py`](corky/signer.py),
 [`screens.py`](corky/screens.py): they carry the key as a string to Core
 and draw it on the panel.
@@ -222,8 +222,8 @@ and draw it on the panel.
 **Layer 3 never touches secrets at all. 258 lines.** The channels, the
 panel driver and the buttons.
 
-**Total functional code: 2,356 lines** (4,527 with blanks/comments).
-**Test code: 5,679 lines**, none of which ships.
+**Total functional code: 2,360 lines** (4,541 with blanks/comments).
+**Test code: 5,720 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which

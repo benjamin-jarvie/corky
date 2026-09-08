@@ -171,6 +171,67 @@ pin("TOOLS", screens.TOOLS_OPTIONS, run_tools, {
 })
 
 
+# An EMPTY menu must not crash. _pick divided by count on the first
+# d-pad press, and ZeroDivisionError is not in Session.HANDLED, so it
+# ended the process instead of painting an error. _export reaches it: a
+# wallet imported as a bare descriptor need not hold any of the four
+# script policies, and signer.available_kinds says so in its own
+# docstring (found reading main.py, 2026-09-07).
+sess = corky_main.Session(NullDisplay(), hal.DevButtons("dudua"),
+                          rpc=NullRpc())
+try:
+    got = sess._pick(lambda sel: None, 0)
+    ok("an empty menu returns at once instead of dividing by zero") \
+        if got is None else bad(f"an empty menu chose row {got}")
+except ZeroDivisionError:
+    bad("an empty menu still divides by zero, which HANDLED cannot catch "
+        "and which therefore ends the process")
+except hal.ScriptExhausted:
+    bad("_pick waited for input on a menu with no rows")
+
+# And the export flow says so rather than opening that menu.
+class NoPolicies:
+    chain = "regtest"
+
+    def call(self, method, *a, **k):
+        if method == "listdescriptors":
+            return {"descriptors": []}
+        return ""
+
+
+class Painted:
+    width, height = 320, 240
+
+    def __init__(self):
+        self.shown = []
+
+    def show(self, image, sensitive=False):
+        self.shown.append(image)
+
+
+disp2 = Painted()
+sess2 = corky_main.Session(disp2, hal.DevButtons("a"), rpc=NoPolicies())
+try:
+    sess2._export("corky-x")
+except ZeroDivisionError:
+    bad("_export still reaches the empty menu")
+except hal.ScriptExhausted:
+    bad("_export opened a menu with no rows and waited for a press")
+else:
+    # Assert the WORDS, not merely that nothing exploded. With _pick made
+    # safe, an unguarded _export returns quietly and the user is dropped
+    # back with no idea why, which passed this check until the message
+    # was asserted (2026-09-07).
+    want = screens.result(320, 240, ok=False,
+                          detail="this key has no policies to export",
+                          label="FAILED").tobytes()
+    if any(f.tobytes() == want for f in disp2.shown):
+        ok("a key with no exportable policy is told so, not shown a "
+           "blank menu")
+    else:
+        bad("_export returned silently on a key with no policies; the "
+            "user is sent back with nothing said")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)

@@ -720,8 +720,19 @@ class Session:
         Load a key, Settings, the key chooser, export and its sub-menus.
         Ten copies of this loop used to sit beside it (review, 2026-09-05).
         `start` lets a menu reopen on the row the user was on.
+
+        An EMPTY menu returns at once. It used to set sel to 0 and wait
+        for a press, and the first d-pad key divided by count: a
+        ZeroDivisionError, which is not in HANDLED, so it ended the
+        process rather than painting an error. `_export` can reach it,
+        because `available_kinds` returns only the policies a wallet
+        actually holds and `signer` documents that a wallet imported as a
+        bare descriptor need not hold any (found reading main.py,
+        2026-09-07).
         """
-        sel = start % count if count else 0
+        if not count:
+            return None
+        sel = start % count
         while True:
             self.display.show(render(sel))
             key = self.buttons.read()
@@ -796,6 +807,9 @@ class Session:
         genuinely different things.
         """
         order = signer.available_kinds(self.rpc, name)
+        if not order:
+            # Nothing to offer. Saying so beats a menu with no rows.
+            return self._hold("this key has no policies to export")
         selected = 0
         while True:
             selected = self._pick(
