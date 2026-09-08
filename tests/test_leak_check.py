@@ -18,9 +18,11 @@ Audited 2026-09-08 and four ways to produce one were found:
 
 Run: python3 tests/test_leak_check.py   (no board, no bitcoind)
 """
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +30,39 @@ SCRIPT = ROOT / "image" / "leak-check.sh"
 SRC = SCRIPT.read_text()
 
 fails = []
+
+
+def shim(**cmds):
+    """A PATH directory that answers `id -u` with 0, plus what you name.
+
+    Three of the checks below used to read the script's source and look
+    for a string. TESTING.md rule 2 asks for the round trip, and the
+    reason is in this file's own history: check 3 looked for the literal
+    "exit $((FAIL + UNKNOWN))" and would have passed just as happily if
+    that line were inside a comment, or in a branch nothing reaches.
+
+    The script refuses to run for a non-root caller, which is the whole
+    point of check 1, so the only way to exercise the rest of it on a
+    dev machine is to answer `id -u` with 0.
+    """
+    d = Path(tempfile.mkdtemp(prefix="corky-leakshim-"))
+    (d / "id").write_text('#!/bin/sh\n'
+                          'if [ "$1" = "-u" ]; then echo 0\n'
+                          'else exec /usr/bin/id "$@"; fi\n')
+    for name, body in cmds.items():
+        (d / name).write_text(f"#!/bin/sh\n{body}\n")
+    for f in d.iterdir():
+        f.chmod(0o755)
+    return d
+
+
+def run_as_root(shimdir):
+    """Run the real script with that shim first on PATH."""
+    env = dict(os.environ, PATH=f"{shimdir}{os.pathsep}{os.environ['PATH']}")
+    r = subprocess.run(["bash", str(SCRIPT), "--porcelain"],
+                       capture_output=True, text=True, timeout=120, env=env)
+    rows = [ln.split("\t") for ln in r.stdout.splitlines() if "\t" in ln]
+    return r.returncode, [row for row in rows if row[0] != "TOTAL"]
 
 
 def ok(m):
@@ -54,20 +89,39 @@ else:
 
 # 2. No check may be wrapped in a test for a tool being installed. A row
 #    that disappears is worse than one that fails: the reader counts rows.
-for m in re.finditer(r"if command -v (\w+)", SRC):
-    bad(f"a check is conditional on {m.group(1)} existing, so it vanishes "
+#    Both halves ask ONE pattern. They used to ask two that differed by
+#    a `^\s*` anchor, so a mid-line `; if command -v foo` was reported as
+#    a failure and as a pass in the same run (two-axis review,
+#    2026-09-08).
+conditional = re.findall(r"if\s+command -v (\w+)", SRC)
+for tool in conditional:
+    bad(f"a check is conditional on {tool} existing, so it vanishes "
         "on an image without it instead of reporting")
-if not re.search(r"^\s*if command -v", SRC, re.M):
+if not conditional:
     ok("no check disappears when a tool is missing")
 
 # 3. An unanswerable check must not exit 0 or count as a pass.
-if "UNKNOWN" not in SRC:
-    bad("there is no way to report a check that could not be answered")
-elif "exit $((FAIL + UNKNOWN))" not in SRC:
-    bad("an unanswerable check does not affect the exit code, so a caller "
-        "cannot tell it apart from a clean run")
+#    Run the script twice against the same machine, changing one thing:
+#    whether dmesg answers. Everything else stays constant, so the
+#    difference between the two exit codes is what one UNKNOWN row is
+#    worth. Reading the source for the literal "exit $((FAIL + UNKNOWN))"
+#    proved only that the string was present somewhere.
+blind_rc, blind = run_as_root(shim(dmesg="exit 0"))
+seen_rc, seen = run_as_root(shim(dmesg='echo "[    0.000000] Linux version"'))
+huhs = [r for r in blind if r[0] == "huh"]
+if not huhs:
+    bad("an unreadable dmesg produced no 'huh' row, so a check that could "
+        "not look reported something else")
+elif [r for r in seen if r[0] == "huh"]:
+    bad("a readable dmesg still produced a 'huh' row, so the shim proves "
+        "nothing about which input caused it")
+elif blind_rc - seen_rc != len(huhs):
+    bad(f"one unanswerable check moved the exit code by "
+        f"{blind_rc - seen_rc}, not {len(huhs)}: a caller cannot tell "
+        f"'I could not look' from 'clean'")
 else:
-    ok("a check that cannot be answered exits non-zero, like a failing one")
+    ok(f"one check that could not be answered raised the exit code "
+       f"{seen_rc} -> {blind_rc}, so it never reads as clean")
 
 # 4. Wireless interfaces come from the kernel's own marker, not from
 #    guessing at names.
@@ -82,29 +136,82 @@ else:
 
 # 5. `A && ok ... || bad ...` reports a row BOTH ways if ok's printf ever
 #    fails. Not one may remain in the file whose output is trusted.
-both = re.findall(r"&&\s+ok\s+.*\|\|\s+bad", SRC)
+#    The first version of this check read `&& ok ... || bad` on ONE line,
+#    which missed the reverse order and every row split over several
+#    lines. leak-check.sh writes most of its rows across three or four
+#    (two-axis review, 2026-09-08). Flatten the continuations first, then
+#    look for any reporter on both sides.
+flat = re.sub(r"\\\n\s*", " ", SRC)              # backslash continuation
+flat = re.sub(r"\n\s*(&&|\|\|)", r" \1", flat)     # leading && or ||
+REPORTER = r"(?:ok|bad|huh|note)"
+both = re.findall(rf"&&\s+{REPORTER}\s[^\n]*?\|\|\s+{REPORTER}\b", flat)
 if both:
-    bad(f"{len(both)} row(s) still use A && ok || bad, which can report "
-        "the same check as passing and failing at once")
+    bad(f"{len(both)} row(s) still use A && x || y, which can report "
+        f"the same check two ways: {both[0][:60]!r}")
 else:
     ok("no row can be reported as both passing and failing")
 
 # 6. Whatever it prints, the device must be able to read it. main.py
 #    drops any verdict it does not recognise, silently.
-main_src = (ROOT / "corky" / "main.py").read_text()
-handled = set(re.findall(r'verdict in \(([^)]*)\)', main_src))
-known = {v for grp in handled for v in re.findall(r'"(\w+)"', grp)}
-emitted = set(re.findall(r'printf "(\w+)\\t%s\\t%s', SRC))
-# TOTAL is the summary line, not a check, and main.py is right to ignore
-# it: three fields, but the first is a count and not a verdict.
-emitted -= {"TOTAL"}
-lost = emitted - known
-if lost:
-    bad(f"leak-check emits verdicts main.py never renders: {sorted(lost)}. "
-        "The row is dropped and the panel shows nothing.")
+#    Drive the real screen, with the real script behind it. The earlier
+#    version compared a regex over leak-check.sh against a regex over
+#    main.py: two readings of two files, agreeing with each other while
+#    neither had run. A verdict can also be lost AFTER the parser, and
+#    reading `verdict in (...)` could never see that.
+sys.path.insert(0, str(ROOT / "corky"))
+import hal                          # noqa: E402
+import main as corky_main           # noqa: E402
+import screens                      # noqa: E402
+
+
+class NullDisplay:
+    width, height = 320, 240
+
+    def show(self, image, sensitive=False):
+        pass
+
+
+class NullRpc:
+    chain = "regtest"
+    wallet_dir = Path("/nonexistent")
+
+    def call(self, method, *a, **k):
+        return ""
+
+
+# dmesg silent, so the run carries a `huh` row as well as ok, FAIL and
+# note. A round trip that only ever sees two of the four verdicts would
+# not notice the other two being dropped.
+d = shim(dmesg="exit 0")
+rc, emitted_rows = run_as_root(d)
+painted = []
+real_report = screens.leak_report
+screens.leak_report = lambda w, h, rows, cursor: (painted.append(rows),
+                                                  real_report(w, h, rows,
+                                                              cursor))[1]
+os.environ["PATH"] = f"{d}{os.pathsep}{os.environ['PATH']}"
+try:
+    corky_main.Session(NullDisplay(), hal.DevButtons("a"), NullRpc(),
+                       animate=False)._tool_leak_check()
+finally:
+    screens.leak_report = real_report
+
+emitted = {r[0] for r in emitted_rows}
+if not painted:
+    bad("the leak report screen was never painted, so nothing the script "
+        "said reached the panel")
 else:
-    ok(f"every verdict it emits ({', '.join(sorted(emitted))}) reaches "
-       "the panel")
+    on_panel = {(lbl, state) for lbl, state, _ in painted[0]}
+    lost = [r for r in emitted_rows if (r[1], r[2]) not in on_panel]
+    if lost:
+        bad(f"{len(lost)} row(s) the script printed never reached the "
+            f"panel, first: {lost[0]}")
+    elif len(emitted) < 4:
+        bad(f"the run only produced {sorted(emitted)}, so this check did "
+            "not exercise every verdict the script can emit")
+    else:
+        ok(f"all {len(emitted_rows)} rows reach the panel, across "
+           f"{', '.join(sorted(emitted))}")
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

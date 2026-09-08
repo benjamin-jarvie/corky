@@ -10,6 +10,24 @@ PY="arch -arm64 python3"
 SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_buttons.py tests/test_keyscan.py tests/test_menu_wiring.py tests/test_scroll.py tests/test_splash.py tests/test_backup_check.py tests/test_channels.py tests/test_key_persistence.py tests/test_harden_reversible.py tests/test_vendor_pinned.py tests/test_leak_check.py"
 SUITES_NODE="tests/test_addresses.py tests/e2e_regtest.py tests/e2e_filechannel.py tests/e2e_session.py tests/test_generate.py tests/test_matrix.py tests/test_adversarial.py tests/test_keys.py tests/e2e_keys.py tests/test_no_persistence.py tests/test_export.py"
 FAILED=0
+# The two lists above are typed by hand, so a suite can exist and never
+# run. That is the same defect as the shellcheck line below: a check that
+# reads a hand-written file list reports on the list, not on the repo.
+# tests/m1 and tests/sparrow are excluded because they have their own
+# gates further down.
+UNWIRED=""
+for f in tests/test_*.py tests/e2e_*.py; do
+  case " $SUITES_FAST $SUITES_NODE " in
+    *" $f "*) ;;
+    *) UNWIRED="$UNWIRED $f" ;;
+  esac
+done
+if [ -n "$UNWIRED" ]; then
+  echo "FAIL suite wiring:$UNWIRED exists but no list names it"
+  FAILED=1
+else
+  echo "PASS suite wiring"
+fi
 # Static checks first, because they are seconds and the suites are minutes.
 # They come from requirements-dev.txt, never from the signer's own package
 # list; when they are not installed the run says so instead of pretending.
@@ -26,11 +44,27 @@ fi
 # Static analysis for the 753 lines that run as ROOT on the board, which
 # is what shellcheck is for. It found a loop that ran once, an ls|grep,
 # and sixteen A && B || C rows in the one report a hardened device is
-# trusted on (audit of image/, 2026-09-08). NOTE: a comment starting with
-# the tool's own name is read as a DIRECTIVE, which is how this comment
-# first broke the very check it introduces.
+# trusted on (audit of image/, 2026-09-08).
+#
+# Two things about that sentence were false until 2026-09-08. The line
+# read `-S warning`, and those sixteen rows are SC2015, which shellcheck
+# rates INFO: run against the old leak-check.sh, -S warning printed 1 of
+# the 17 findings. The comment credited the check with fifteen it could
+# not see. Default severity now, because nothing in the repo sits at info
+# level any more, so strict costs nothing.
+#
+# The file list is found, not typed. The old one named image/*.sh and
+# this file, so a warning-level SC2010 in tests/sparrow/setup.sh went
+# unprinted for as long as it existed.
+#
+# NOTE: a comment starting with the tool's own name is read as a
+# DIRECTIVE, which is how this comment first broke the very check it
+# introduces.
 if command -v shellcheck >/dev/null 2>&1; then
-  if shellcheck -S warning image/*.sh run_tests.sh >/dev/null 2>&1; then echo "PASS shellcheck"; else echo "FAIL shellcheck"; shellcheck -S warning image/*.sh run_tests.sh 2>&1 | head -12; FAILED=1; fi
+  SHOUT=$(find . -name '*.sh' -not -path './.git/*' -not -path '*/.build/*' \
+            -print0 | xargs -0 shellcheck 2>&1); SHRC=$?
+  if [ $SHRC -eq 0 ] && [ -z "$SHOUT" ]; then echo "PASS shellcheck"
+  else echo "FAIL shellcheck"; printf '%s\n' "$SHOUT" | head -12; FAILED=1; fi
 else
   echo "(not run: shellcheck. brew install shellcheck, on the DEV machine only.)"
 fi

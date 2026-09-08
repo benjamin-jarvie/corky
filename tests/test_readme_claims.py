@@ -112,6 +112,34 @@ if c is not None:
     ok(f"vendored: {c} == {vend}") if c == vend else \
         bad(f"vendored: README {c}, actual {vend}")
 
+# ...and the split between what runs and what does not. The README said
+# "every one of these lines runs on the device" while 383 of them were a
+# driver nothing imports (two-axis review, 2026-09-08). A count nobody
+# recomputes goes stale in one direction only: the flattering one.
+#
+# A vendored top-level name counts as reached when corky/ imports it. ur2
+# is a package, so every file in it rides on the one import. That rule is
+# coarse, and it is coarse in the safe direction: it can call a file
+# reached that is not, never the reverse, so the README can only ever
+# understate what is dead.
+VEND = ROOT / "hw" / "vendor"
+corky_src = "\n".join(f.read_text() for f in sorted((ROOT / "corky").glob("*.py")))
+imported = {n for n in (p.name for p in VEND.iterdir())
+            if re.search(rf"^\s*(from|import) {re.escape(n.removesuffix('.py'))}\b",
+                         corky_src, re.M)}
+dead = [f for f in sorted(VEND.rglob("*.py"))
+        if f.relative_to(VEND).parts[0] not in imported]
+live = vend - sum(len(f.read_text().splitlines()) for f in dead)
+c = claimed(r"\*\*([\d,]+) of those lines run on the device", "vendored live")
+if c is not None:
+    ok(f"vendored live: {c} == {live}") if c == live else \
+        bad(f"vendored live: README {c}, actual {live}"
+            f" (dead: {[str(f.relative_to(ROOT)) for f in dead]})")
+for f in dead:
+    rel = str(f.relative_to(ROOT))
+    ok(f"README names the dead driver {rel}") if rel in README else \
+        bad(f"{rel} is imported nowhere and the README does not say so")
+
 # Every file the README links must exist
 broken = [link for link in set(re.findall(r"\]\((?!http)([^)#]+)\)", README))
           if not (ROOT / link).exists()]

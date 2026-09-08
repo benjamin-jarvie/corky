@@ -222,15 +222,24 @@ and draw it on the panel.
 **Layer 3 never touches secrets at all. 258 lines.** The channels, the
 panel driver and the buttons.
 
-**Total functional code: 2,370 lines** (4,586 with blanks/comments).
-**Test code: 5,908 lines**, none of which ships.
+**Total functional code: 2,370 lines** (4,598 with blanks/comments).
+**Test code: 5,952 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
-are **modified** to stand alone without their base class. Each file says
-which it is at the top. Every one of these lines runs on the device, and
-`tests/test_vendor_pinned.py` records the sha256 of each, so a change to
-any of them is a failing test rather than a surprise.
+are **modified** to stand alone without their base class. The two
+drivers name their source in the file. The codec names its source once
+for the whole directory, in
+[`hw/vendor/ur2/VENDORED.md`](hw/vendor/ur2/VENDORED.md), because a
+header line in each file would change the very hash that proves the file
+unmodified.
+
+**1,868 of those lines run on the device.** The other 383 are
+[`hw/vendor/ili9341.py`](hw/vendor/ili9341.py), a driver for a panel no
+code can select: `hal.py` imports `st7789` and nothing else. It is
+carried for a 2.4" board Corky does not ship.
+`tests/test_vendor_pinned.py` records the sha256 of each file, so a
+change to any of them is a failing test rather than a surprise.
 
 Layer 1 being empty is enforced, not asserted.
 [`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped

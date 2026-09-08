@@ -54,8 +54,13 @@ if [ ! -d "$B/ext" ]; then
 fi
 
 # every Sparrow module, none of the JDK's own
-ls -d "$B/ext"/*/ | grep -v -E '/(java|jdk|javafx)\.[^/]*/$' | tr '\n' ':' | sed 's/:$//' > "$B/cp.txt"
-printf ':%s' "$B/res" >> "$B/cp.txt"
+for m in "$B/ext"/*/; do
+  [ -d "$m" ] || continue
+  n=${m%/}; n=${n##*/}
+  case $n in java.*|jdk.*|javafx.*) continue ;; esac
+  printf '%s:' "$m"
+done > "$B/cp.txt"
+printf '%s' "$B/res" >> "$B/cp.txt"
 
 mkdir -p "$B/out"
 "$JH/bin/javac" -nowarn -cp "$(cat "$B/cp.txt")" -d "$B/out" "$DIR/SparrowGen.java" "$DIR/SparrowQr.java" "$DIR/SparrowDesc.java"

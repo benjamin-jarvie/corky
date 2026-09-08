@@ -82,11 +82,14 @@ echo "== the ramdisk holds no log"
 DATADIR=/run/corky
 if [ -d "$DATADIR" ]; then
     # `0` is the file debuglogfile=0 produces. Anything ending .log too.
-    strays=$(find "$DATADIR" -maxdepth 1 \( -name 0 -o -name '*.log' \) 2>/dev/null)
+    # ls -ld runs INSIDE find, so a name with a space stays one argument.
+    # The older form fed find's output back to a bare `ls $strays`, which
+    # word-split it and needed an SC2086 disable to stay quiet.
+    strays=$(find "$DATADIR" -maxdepth 1 \( -name 0 -o -name '*.log' \) \
+                  -exec ls -ld {} + 2>/dev/null)
     if [ -n "$strays" ]; then
         bad "Core is writing a log into the ramdisk:"
-        # shellcheck disable=SC2086
-        ls -la $strays | sed 's/^/       /'
+        printf '%s\n' "$strays" | sed 's/^/       /'
         echo "       Core's own first log line warns it may hold private data."
         echo "       The fix is nodebuglogfile=1 in /etc/corky-bitcoin.conf."
     else
