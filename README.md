@@ -223,7 +223,7 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,339 lines** (4,472 with blanks/comments).
-**Test code: 5,448 lines**, none of which ships.
+**Test code: 5,475 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/):
 SeedSigner's display drivers and the BC-UR codec, unmodified.
 

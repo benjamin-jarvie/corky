@@ -163,7 +163,10 @@ if c is not None:
 # how the shim looked alive for two days after A-22 removed it.
 import ast                                            # noqa: E402
 
-DOCS = ["README.md", "TESTING.md", "CONTEXT.md", "hw/HARDWARE.md"]
+# ISSUES.md joined this list on 2026-09-07: it named a path into a map
+# that had just been archived, and nothing noticed.
+DOCS = ["README.md", "TESTING.md", "CONTEXT.md", "hw/HARDWARE.md",
+        "ISSUES.md"]
 SHIPPED = ("signer", "screens", "hal", "qrchannel", "filechannel",
            "main", "splash")
 
@@ -186,7 +189,12 @@ for py in sorted(ROOT.rglob("*.py")):
 
 EXCUSED = ("superseded", "post-v1", "not written", "deleted", "removed")
 SYM = re.compile(r"`([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)`")
-FILE = re.compile(r"`([\w./-]+\.(?:py|sh|service|rules|conf))`")
+# Markdown was NOT in this list until 2026-09-07, so six dead .md paths
+# sat green across PLAN.md, ISSUES.md, m0_gate.py, harden.sh and
+# leak-check.sh when the closed maps were archived. A path is a path
+# whatever it points at.
+FILE = re.compile(
+    r"`([\w./-]+\.(?:py|sh|md|service|rules|conf|json|txt|toml|dat))`")
 ghost_paths, ghost_syms = [], []
 for doc in DOCS + ["PLAN.md"]:
     lines = (ROOT / doc).read_text().splitlines()
@@ -219,6 +227,40 @@ if ghost_paths:
         + "; ".join(ghost_paths))
 else:
     ok("every file the documents name exists")
+# The same rule for paths named in CODE. Three of the six dead paths
+# found on 2026-09-07 were in comments and docstrings, not in documents:
+# m0/m0_gate.py, image/harden.sh and image/leak-check.sh all pointed at a
+# map that had been archived. A comment that names a file is a promise
+# about the tree exactly like a document's is.
+CODE = [f for f in sorted(ROOT.rglob("*.py")) + sorted(ROOT.rglob("*.sh"))
+        if not any(part in {".git", "vendor", ".build", "tmp"}
+                   for part in f.relative_to(ROOT).parts)]
+IN_CODE = re.compile(
+    r"(?<![\w/.-])((?:docs|tests|image|corky|hw|m0|tools)"
+    r"/[\w./@-]+\.(?:py|sh|md|service|rules|conf|json|txt|toml|dat))")
+# A line that says a path is GONE is allowed to name it: test_integrity
+# asserts exactly that, file by file, and it is the check that keeps
+# Layer 1 empty. Same excusing words the PLAN uses.
+ABSENT_WORDS = ("absent", "gone", "removed", "deleted", "no longer",
+                "used to", "went with", "must not exist")
+ghost_code = []
+for f in CODE:
+    rel = f.relative_to(ROOT)
+    lines = f.read_text().splitlines()
+    for n, line in enumerate(lines, 1):
+        window = " ".join(lines[max(0, n - 3):n + 2]).lower()
+        if any(w in window for w in ABSENT_WORDS):
+            continue
+        for m in IN_CODE.finditer(line):
+            named = m.group(1)
+            if not (ROOT / named).exists():
+                ghost_code.append(f"{rel}:{n} {named}")
+if ghost_code:
+    bad(f"code names {len(ghost_code)} path(s) that do not exist: "
+        + "; ".join(ghost_code[:6]))
+else:
+    ok(f"every path named in {len(CODE)} code files exists")
+
 if ghost_syms:
     bad(f"documents name {len(ghost_syms)} symbol(s) that do not exist: "
         + "; ".join(ghost_syms))

@@ -16,9 +16,9 @@ Matrix axes
   inputs    : 1, 2, 10 UTXOs, all spent
   outputs   : single+change, two+change, single no-change (subtract fee)
 
-SeedQR entry reduces to the same words path (SeedQR decodes to a mnemonic,
-then open_session), so it is not re-tested here; the QR pixels are covered
-by tests/test_seedqr.py.
+There is no SeedQR and no words path any more. PLAN A-22 removed both,
+along with the suite that covered the QR pixels, so the two entry modes
+above are the whole matrix.
 
 Sighash assertion
 -----------------
