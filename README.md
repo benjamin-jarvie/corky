@@ -222,8 +222,8 @@ and draw it on the panel.
 **Layer 3 never touches secrets at all. 258 lines.** The channels, the
 panel driver and the buttons.
 
-**Total functional code: 2,356 lines** (4,518 with blanks/comments).
-**Test code: 5,646 lines**, none of which ships.
+**Total functional code: 2,356 lines** (4,527 with blanks/comments).
+**Test code: 5,679 lines**, none of which ships.
 **Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which

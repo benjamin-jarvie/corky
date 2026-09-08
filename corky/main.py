@@ -1246,6 +1246,13 @@ class Session:
             out = subprocess.run(["bash", str(self.LEAK_CHECK), "--porcelain"],
                                  capture_output=True, text=True, timeout=120)
         except (OSError, subprocess.SubprocessError) as exc:
+            # stop() HERE as well as in the finally, and it is not
+            # redundant: finally runs after this handler, and _hold paints
+            # a screen and then blocks on a button. Without this call the
+            # spinner thread is still alive and repaints over the error
+            # every 150ms, so the operator waits on a busy screen that
+            # will never finish. Measured 2026-09-07 while trying to
+            # delete it as duplication.
             stop()
             return self._hold(f"leak check did not run: {str(exc)[:38]}")
         finally:
@@ -1341,9 +1348,11 @@ class Session:
         Page by page, because a page is what the writer copied and a
         mistake should cost one page and not all 111 characters. The
         per-character comparison is Corky's, because only Corky is holding
-        both strings; the verdict on the WHOLE key is Core's, from
-        `getdescriptorinfo`, which reads the typed key and says what it is.
-        Both must agree before this says the paper is good.
+        both strings; the verdict on the WHOLE key is Core's, and it is
+        put as "do the addresses this key derives match the ones this
+        wallet hands out". Both must agree before this says the paper is
+        good. (It cited `getdescriptorinfo` until 2026-09-07, which audit
+        A6 had already replaced.)
 
         Returns True when the paper is proven, False when the user leaves.
         """
@@ -1374,7 +1383,7 @@ class Session:
         try:
             same = signer.opens_wallet(self.rpc, name, typed)
         except RuntimeError as exc:
-            stop()
+            stop()          # before _hold blocks; see _tool_leak_check
             self._hold(str(exc)[:60])
             return False
         finally:

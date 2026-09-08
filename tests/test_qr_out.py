@@ -290,5 +290,67 @@ else:
     ok("every animated frame is panel-sized and letterboxed")
 
 
+# The busy spinner must be stopped BEFORE a screen that blocks.
+# _tool_leak_check and _confirm_typed_key both call stop() in their
+# except block AND in a finally. That looks like duplication and is not:
+# finally runs after the handler, and _hold paints then waits on a
+# button, so without the early call the animation repaints over the
+# error every 150ms and the operator waits on a busy screen for ever.
+# Deleting the "redundant" call on 2026-09-07 reproduced exactly that.
+import screens                                          # noqa: E402
+
+_painted = []
+
+
+class _Disp:
+    width, height = 320, 240
+
+    def show(self, image, sensitive=False):
+        _painted.append(image)
+
+
+# Driven through the REAL _confirm_typed_key, not a copy of its shape. A
+# first version rebuilt the try/except here and passed with the early
+# stop() deleted from main.py, which pinned the rule and not the code
+# (2026-09-07).
+import signer                                           # noqa: E402
+
+
+def _panel_after_core_refuses():
+    """Make Core refuse, then read what the panel is left showing.
+
+    _hold blocks on a button, and DevButtons answers at once, so the
+    spinner needs a moment to paint over the error if it is going to.
+    """
+    real_opens = signer.opens_wallet
+    real_read = hal.DevButtons.read
+    signer.opens_wallet = lambda *a, **k: (_ for _ in ()).throw(
+        RuntimeError("Core says no"))
+
+    def slow_read(self):
+        time.sleep(0.35)        # the operator is reading the screen
+        return real_read(self)
+
+    hal.DevButtons.read = slow_read
+    _painted.clear()
+    sess = corky_main.Session(_Disp(), hal.DevButtons("aa"), rpc=object(),
+                              animate=True)
+    try:
+        sess._confirm_typed_key("tprvWHATEVER", "corky-x", "73c5da0a")
+    finally:
+        signer.opens_wallet = real_opens
+        hal.DevButtons.read = real_read
+    return _painted[-1]
+
+
+_last = _panel_after_core_refuses()
+_busy_frames = {screens.busy(320, 240, "Bitcoin Core is reading what you "
+                             "typed…", ph).tobytes() for ph in range(12)}
+if _last.tobytes() in _busy_frames:
+    bad("the spinner painted over the error: the panel is left showing a "
+        "busy screen that will never finish")
+else:
+    ok("Core's refusal is what the panel is left showing, not the spinner")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)
