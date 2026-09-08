@@ -223,9 +223,14 @@ and draw it on the panel.
 panel driver and the buttons.
 
 **Total functional code: 2,356 lines** (4,518 with blanks/comments).
-**Test code: 5,584 lines**, none of which ships.
-**Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/):
-SeedSigner's display drivers and the BC-UR codec, unmodified.
+**Test code: 5,646 lines**, none of which ships.
+**Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
+BC-UR animated-QR codec, which is Blockchain Commons' by way of
+SeedSigner and is unmodified, and SeedSigner's two display drivers, which
+are **modified** to stand alone without their base class. Each file says
+which it is at the top. Every one of these lines runs on the device, and
+`tests/test_vendor_pinned.py` records the sha256 of each, so a change to
+any of them is a failing test rather than a surprise.
 
 Layer 1 being empty is enforced, not asserted.
 [`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped
