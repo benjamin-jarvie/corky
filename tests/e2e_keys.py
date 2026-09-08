@@ -516,6 +516,31 @@ def main():
         except RuntimeError as exc:
             assert XPRV_A[:20] not in str(exc) and typo not in str(exc)[:8], \
                 f"K9: the refusal leaked key material: {exc}"
+        # K9b: a wallet with no recognised policy. opens_wallet took
+        # available_kinds(...)[0] without guarding the empty tuple, and
+        # IndexError is not in Session.HANDLED, so the backup-check
+        # screen ended the process instead of saying it could not check
+        # (found reading signer.py, 2026-09-08).
+        bare = signer.open_session_descriptors(
+            rpc, [f"pk({XPRV_A}/0/*)"])
+        try:
+            signer.opens_wallet(rpc, bare, XPRV_A)
+        except RuntimeError as exc:
+            assert "no addresses" in str(exc), \
+                f"K9b: refused, but with a message the panel cannot use: {exc}"
+            print("ok   K9b: a key with no recognised policy is refused "
+                  "with a message, not an IndexError")
+        except IndexError:
+            raise AssertionError(
+                "K9b: opens_wallet raised IndexError on a wallet with no "
+                "recognised policy; HANDLED cannot catch it, so the "
+                "process ends on the backup-check screen") from None
+        else:
+            raise AssertionError(
+                "K9b: opens_wallet answered for a wallet that derives no "
+                "addresses it knows how to check")
+        signer._drop_wallet(rpc, bare)
+
         signer.close_session(rpc)
         print("ok   K9: VERIFY types the backup back, names the wrong "
               "character, and Core confirms the key")

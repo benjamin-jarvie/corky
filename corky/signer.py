@@ -450,9 +450,17 @@ def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
       main._next_kind      returns the current policy unchanged
       main._export         "this key has no policies to export"
       main._page_addresses "this key derives no addresses"
+      signer.opens_wallet  "this key derives no addresses to check
+                            against"
 
     A fourth caller needs a fourth answer. There is no shared one to
     inherit, which is why this note is here and not in a wrapper.
+
+    The fourth was found by writing that sentence. `opens_wallet` was
+    already doing `available_kinds(...)[0]` and had been since it was
+    written; the note said a fourth caller would need an answer, and then
+    the next line of the file was the fourth caller with no answer
+    (2026-09-08).
     """
     have = export_descriptors(rpc, wallet=wallet)
     return tuple(k for k in EXPORT_ORDER
@@ -505,7 +513,12 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
     The file is named by the key's fingerprint. Returns its path.
     """
     xfp = master_fingerprint(rpc, wallet=wallet) or "unknown"
-    descs = [_desc_entry(d, internal="/1/*" in d)
+    # _is_change, not a second reading of the same question. This said
+    # `"/1/*" in d`, which happens to agree on every shape Core writes,
+    # and that is the whole trouble with a second reading: it agrees
+    # until it does not, and nothing says which one is the definition
+    # (two-axis review, 2026-09-08).
+    descs = [_desc_entry(d, internal=_is_change(d))
              for d in export_descriptors(rpc, wallet=wallet)]
     scratch = f"{wallet}-watch"
     _drop_wallet(rpc, scratch)
@@ -662,8 +675,18 @@ def generate_wallet(rpc: "Rpc") -> str:
 def master_xprv(rpc: "Rpc", wallet: str = WALLET) -> str:
     """The wallet's master xprv, read verbatim from the private descriptors
     Core wrote. This is the paper backup (ticket 07): Core's own string,
-    nothing of ours between Core and the page. Raises if the descriptors
-    do not share one master key."""
+    nothing of ours between Core and the page.
+
+    THE ONE-MASTER CHECK IS WHAT MAKES THE PARSE SAFE. "After the last
+    `(`" finds the innermost key, which is right for `wpkh(k/...)` and for
+    `sh(wpkh(k/...))`, and would find the wrong key in a descriptor whose
+    innermost `(` belonged to a script leaf rather than to the key, such
+    as `tr(k,pk(other))`. Core 31.1 refuses every such shape with a
+    private key, tested 2026-09-08, so Corky cannot hold one. If a future
+    Core accepted one, the eight descriptors would disagree about the
+    master and this raises. It shows the right key or no key; there is no
+    shape that makes it show a wrong one silently.
+    """
     descs = rpc.call("listdescriptors", True, wallet=wallet)["descriptors"]
     masters = set()
     for d in descs:
@@ -706,7 +729,17 @@ def opens_wallet(rpc: "Rpc", wallet: str, key: str, count: int = 2) -> bool:
     checksum, long before anything cryptographic happens, and Rpc.call
     redacts the key out of that error before it reaches a screen.
     """
-    kind = available_kinds(rpc, wallet)[0]
+    # The fourth caller of available_kinds, and the one that did not
+    # guard the empty tuple. `[0]` on one is an IndexError, which is not
+    # in Session.HANDLED, so a bare-descriptor wallet with no recognised
+    # policy ended the process on the backup-check screen instead of
+    # saying it could not check (found reading signer.py, 2026-09-08,
+    # after writing the note above that says a fourth caller needs a
+    # fourth answer).
+    kinds = available_kinds(rpc, wallet)
+    if not kinds:
+        raise RuntimeError("this key derives no addresses to check against")
+    kind = kinds[0]
     shapes = {shape.split("(")[0]: shape for _purpose, shape in PURPOSE_FUNCS}
     if kind not in shapes:
         raise RuntimeError(f"no descriptor shape for {kind}")
