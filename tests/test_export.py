@@ -183,6 +183,35 @@ def main():
                    "total and no fee, which is what makes the device "
                    "refuse it")
 
+        # 1e. HOW FAR "Check an address" can actually see. Core answers
+        #     ismine from the addresses it has DERIVED, not from the key,
+        #     so an address the wallet really owns comes back False once
+        #     the index passes Core's keypool. The screen used to say "no
+        #     loaded key owns that address", which is a claim the device
+        #     cannot support (found reading main.py, 2026-09-07).
+        #
+        #     This pins the boundary against Core itself, so the day a
+        #     Core release moves it, the number on the screen is wrong
+        #     and this fails rather than the user being misled.
+        depth = corky_main.ADDRESS_CHECK_DEPTH
+        inside = signer.receive_addresses(rpc, gen_name, "wpkh", 1,
+                                          depth - 1)[0]
+        beyond = signer.receive_addresses(rpc, gen_name, "wpkh", 1, depth)[0]
+        in_mine = rpc.call("getaddressinfo", inside,
+                           wallet=gen_name).get("ismine")
+        out_mine = rpc.call("getaddressinfo", beyond,
+                            wallet=gen_name).get("ismine")
+        if not in_mine:
+            bad(f"1e: Core does not recognise its own address at index "
+                f"{depth - 1}, so ADDRESS_CHECK_DEPTH is too high")
+        elif out_mine:
+            bad(f"1e: Core still recognises index {depth}, so "
+                f"ADDRESS_CHECK_DEPTH is lower than it needs to be and "
+                f"the screen understates what was checked")
+        else:
+            ok(f"1e: ismine reaches exactly the first {depth} addresses, "
+               f"which is the number the screen quotes")
+
         # Whatever it presents, nothing exported may carry a private key.
         leaked = [d for d in signer.export_descriptors(rpc, gen_name)
                   if any(p in d for p in signer.XPRV_PREFIXES)]

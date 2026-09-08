@@ -258,6 +258,14 @@ MAX_SIGNABLE_INPUTS = 150
 # What a PSBT run reports back to the home screen.
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
+#: How far Bitcoin Core's `ismine` reaches, and therefore how far "Check
+#: an address" can see. Core answers from the addresses it has derived,
+#: which is its keypool: measured against v31.1 on 2026-09-07, index 0 to
+#: 999 of each descriptor answer True and 1000 answers False for an
+#: address the key demonstrably owns. The screen quotes this number
+#: rather than claiming the key owns nothing beyond it.
+ADDRESS_CHECK_DEPTH = 1000
+
 #: A channel loader returns this when B was pressed: go back to the
 #: channel menu. It used to `return self.state_load()`, which is mutual
 #: recursion, and the stack grew by a frame every time somebody pressed
@@ -640,7 +648,14 @@ class Session:
                     f"key {(key.xfp or '').upper()}\nowns this address"))
                 self.buttons.read()
                 return None
-        self._hold("no loaded key owns that address")
+        # NOT "no loaded key owns that address". Core answers ismine from
+        # the addresses it has DERIVED, and measured against v31.1 that is
+        # index 0 to 999 of each descriptor: 1000 and beyond come back
+        # False for an address the key really does own (2026-09-07). A
+        # verification tool that says a mistaken no is worse than one that
+        # says what it checked, so it says what it checked.
+        self._hold(f"not in the first {ADDRESS_CHECK_DEPTH} addresses "
+                   f"of any loaded key")
         return None
 
     def state_keys(self):

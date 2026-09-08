@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 import signer  # noqa: E402
+import main as corky_main  # noqa: E402
 import screens as scr  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -617,7 +618,8 @@ def main():
                 scr.verified, f"key {xfp_a.upper()}\nowns this address"))
             refused = _has(fr11, _render(
                 scr.result, ok=False, label="FAILED",
-                detail="no loaded key owns that address"))
+                detail=f"not in the first {corky_main.ADDRESS_CHECK_DEPTH} "
+                       f"addresses of any loaded key"))
             if want == "owned":
                 assert owned and not refused, \
                     f"K11: {label} was not recognised as owned"
