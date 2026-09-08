@@ -139,3 +139,45 @@ The classifier lists the rest region by region. The largest remaining
 group is `main.py`'s cancel and back keys inside the entry screens
 (`1041-1063`, `1408-1436`), which `tests/test_ui_cost.py` models but no
 session presses.
+
+---
+
+## Re-measured 2026-09-08
+
+The answer above is left as it was written. Its line numbers are of the
+tree measured on 2026-09-06, and `main.py` has been restructured since,
+so quoting them at today's file would be wrong in a way that reads as
+right.
+
+The classifier itself carried that defect. It pinned line numbers, and
+two of its pins had slid: `main.py:266` onto a comment, `main.py:1138`
+onto a blank line. It asserted that every uncovered line falls in a
+range, which catches a line arriving. It never asked whether a range
+still holds a line, which is what catches one leaving. So the pile
+totals could only ever shrink, silently, and the table above is the
+number they shrank from.
+
+It keys on **function names** now. A name survives every edit inside the
+function and breaks loudly on a rename, which is the alarm that was
+missing. Both directions are asserted, and `run_tests.sh` checks the
+cheap half (that every named function exists) on every run.
+
+Today's figures, from the same two-architecture run:
+
+**86%** of statements in `corky/`, **222 never executed out of 2,028**,
+across **61 functions**.
+
+| pile | statements | what it is |
+|---|---|---|
+| 1 | 202 | reachable in a test, simply untested |
+| 2 | 19 | reachable only on the device |
+| 3 | **1** | unreachable at all |
+
+By file: `main.py` 146/12/1, `screens.py` 31/0/0, `signer.py` 13/0/0,
+`qrchannel.py` 12/0/0, `hal.py` 0/7/0, `filechannel.py` and `splash.py`
+at 100%.
+
+Pile 3 is still the single `raise NotImplementedError` in
+`ImageQrSource.images`, for the reason given above. Pile 2 gained one
+statement, `hal.py`'s stuck-key `break`, which needs GPIO. The
+conclusions of the 2026-09-06 answer stand; only the arithmetic moved.

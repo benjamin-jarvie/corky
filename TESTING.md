@@ -97,6 +97,15 @@ be reproduced. `tools/coverage_piles.py` sorts what is left into A5's
 three piles and **exits non-zero when a line falls in no pile**, because a
 classification with a hole in it is an opinion.
 
+It also exits non-zero when a pile holds no line, which is the same rule
+read backwards and was missing until 2026-09-08. The classifier pinned
+LINE numbers, and by the time a reviewer read it two of them had slid:
+one onto a comment, one onto a blank line. A pinned line that has slid
+claims nothing, quietly, and the totals shrink with no alarm. **A pin
+that can only lose its subject in silence is not a pin.** It keys on
+FUNCTION names now, which survive every edit inside the function, and
+`run_tests.sh` checks on every run that each name still exists.
+
 ## Rule 5: run the two-axis review, because the suite cannot find these
 
 The suite is written by whoever wrote the code, so it inherits their blind

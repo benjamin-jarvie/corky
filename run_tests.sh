@@ -28,6 +28,16 @@ if [ -n "$UNWIRED" ]; then
 else
   echo "PASS suite wiring"
 fi
+# The same defect one level along: tools/coverage_piles.py classifies the
+# uncovered code by function name, and a rename leaves a row pointing at
+# nothing. It pinned LINE numbers until 2026-09-08, and two of them had
+# drifted onto a comment and a blank line with no alarm. The full check
+# needs a coverage run and lives in the tool; this half needs nothing.
+if $PY tools/coverage_piles.py --names-only; then
+  echo "PASS coverage piles name real functions"
+else
+  echo "FAIL coverage piles name real functions"; FAILED=1
+fi
 # Static checks first, because they are seconds and the suites are minutes.
 # They come from requirements-dev.txt, never from the signer's own package
 # list; when they are not installed the run says so instead of pretending.
