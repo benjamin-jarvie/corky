@@ -73,18 +73,12 @@ for files, pat, label in [
     else:
         bad(f"{label}: README says {c}, actual {actual}")
 
-# Per-file counts in the layer-1 table and layer-2/3 inline figures
-for f in LAYER1 + LAYER2 + LAYER3:
-    name = f.split("/")[-1]
-    actual = code_lines(ROOT / f)
-    hits = re.findall(rf"{re.escape(name)}\)[^|\n]*[|(] ?([\d,]+)", README)
-    if not hits:
-        bad(f"{name}: no line count found in README")
-        continue
-    if any(int(h.replace(",", "")) == actual for h in hits):
-        ok(f"{name}: README count matches actual {actual}")
-    else:
-        bad(f"{name}: README says {hits}, actual {actual}")
+# Per-file counts were dropped from the README on 2026-09-07: seven
+# numbers that had to be corrected on almost every commit and that no
+# reader was checking. The three LAYER TOTALS stay, because "layer 1 is
+# zero lines" is the security claim this project rests on, and a total
+# that drifts is the claim quietly becoming false. This test's job is to
+# keep stated claims true, not to force claims to be stated.
 
 # Total functional
 # The raw total was unpinned until 2026-09-02 and had drifted by 95 lines
