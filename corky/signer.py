@@ -344,12 +344,40 @@ def open_session_descriptors(rpc: "Rpc", descriptors: list[str]) -> str:
         # Re-checksum via Core (accepts descriptors with or without one).
         info = rpc.call("getdescriptorinfo", desc, stdin=True)
         bare = desc.split("#")[0]
-        # Heuristic: a trailing /1/* branch is the change chain. Documented
-        # limitation: multipath/nonstandard descriptors may need explicit
-        # marking; Core accepts either labeling for signing purposes.
         imports.append(_desc_entry(f"{bare}#{info['checksum']}",
-                                   internal=bare.endswith("/1/*)")))
+                                   internal=_is_change(bare)))
     return _import(rpc, imports)
+
+
+#: The change branch of a ranged descriptor: the last numeric path step
+#: before the `/*`.
+#:
+#: This was `bare.endswith("/1/*)")`, which counts closing parens. Three
+#: of the four policies end in exactly one, so it worked for wpkh, tr and
+#: pkh and failed for the fourth: `sh(wpkh(.../1/*))` ends in TWO, so a
+#: scanned nested-segwit pair arrived as two RECEIVE descriptors.
+#:
+#: Measured on Core 31.1, 2026-09-08, importing such a pair: Core does not
+#: refuse it. It deactivates the first and keeps the second, so the wallet
+#: ends up with the CHANGE chain active and marked external, and the
+#: receive chain inactive. Nothing is lost, because `ismine` still answers
+#: True on both. But `public_descriptors` filters on `active`, so the
+#: public key handed to a coordinator would have described the change
+#: chain as the receive chain, and Corky's address screen would have shown
+#: the change chain.
+#:
+#: Corky's own keys were never affected: `build_descriptors` sets internal
+#: explicitly. This is the scanned-descriptor path only.
+#:
+#: Multipath (`/<0;1>/*`) still returns False, as it did before. Core
+#: expands one such descriptor into both chains itself, so the flag is not
+#: the thing that decides it.
+_CHANGE_BRANCH = re.compile(r"/(\d+)/\*")
+
+
+def _is_change(bare: str) -> bool:
+    m = _CHANGE_BRANCH.search(bare)
+    return m is not None and m.group(1) == "1"
 
 
 def public_descriptors(rpc: "Rpc", wallet: str = WALLET) -> list[str]:

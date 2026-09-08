@@ -51,12 +51,44 @@ LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
           "corky/hal.py", "corky/signer.py"]
 LAYER3 = ["corky/filechannel.py", "corky/qrchannel.py"]
 
+#: Rewrite the numbers instead of reporting them. Every commit that
+#: touches a line of code or a line of test moves four of these, and
+#: hand-editing four numbers per commit is how a suite starts getting run
+#: with one of them already known-red. tests/test_vendor_pinned.py has the
+#: same switch for the same reason.
+#:
+#: It rewrites only a number this file computes from the tree, and only
+#: when the pattern already matches, so it can correct a figure and never
+#: invent a claim. Every non-numeric check stays a check: --update cannot
+#: make the apt table, the vendored split or a broken link pass.
+UPDATE = "--update" in sys.argv
+rewrites = []
+
+
 def claimed(pattern, label):
     m = re.search(pattern, README)
     if not m:
         bad(f"README no longer states {label} (pattern missing)")
         return None
     return int(m.group(1).replace(",", ""))
+
+
+def pin(pattern, label, actual, fmt="{:,}"):
+    """Compare, and under --update rewrite the README to match."""
+    c = claimed(pattern, label)
+    if c is None or c == actual:
+        if c is not None:
+            ok(f"{label}: {c} == {actual}")
+        return
+    if not UPDATE:
+        bad(f"{label}: README {c}, actual {actual}")
+        return
+    m = re.search(pattern, README)
+    was = m.group(1)
+    now = fmt.format(actual) if "," in was else str(actual)
+    rewrites.append((label, was, now,
+                     m.group(0).replace(was, now), m.group(0)))
+    ok(f"{label}: {c} -> {actual} (rewritten)")
 
 # Layer totals
 for files, pat, label in [
@@ -65,13 +97,7 @@ for files, pat, label in [
     (LAYER3, r"never touches secrets at all\. ([\d,]+) lines", "layer 3 total"),
 ]:
     actual = sum(code_lines(ROOT / f) for f in files)
-    c = claimed(pat, label)
-    if c is None:
-        continue
-    if c == actual:
-        ok(f"{label}: README {c} == actual {actual}")
-    else:
-        bad(f"{label}: README says {c}, actual {actual}")
+    pin(pat, label, actual)
 
 # Per-file counts were dropped from the README on 2026-09-07: seven
 # numbers that had to be corrected on almost every commit and that no
@@ -85,32 +111,21 @@ for files, pat, label in [
 # while the functional total stayed exact (TESTING.md rule 4).
 raw = sum(len((ROOT / f).read_text().splitlines())
           for f in LAYER1 + LAYER2 + LAYER3)
-rc = claimed(r"\(([\d,]+) with blanks/comments\)", "raw total")
-if rc is not None:
-    ok(f"raw total: {rc} == {raw}") if rc == raw else \
-        bad(f"raw total: README {rc}, actual {raw}")
+pin(r"\(([\d,]+) with blanks/comments\)", "raw total", raw)
 
 total = sum(code_lines(ROOT / f) for f in LAYER1 + LAYER2 + LAYER3)
-c = claimed(r"\*\*Total functional code: ([\d,]+) lines\*\*", "total functional")
-if c is not None:
-    ok(f"total functional: {c} == {total}") if c == total else \
-        bad(f"total functional: README {c}, actual {total}")
+pin(r"\*\*Total functional code: ([\d,]+) lines\*\*", "total functional",
+    total)
 
 # Test lines
 tests = sorted((ROOT / "tests").glob("*.py"))
 tl = sum(code_lines(f) for f in tests)
-c = claimed(r"\*\*Test code: ([\d,]+) lines", "test code")
-if c is not None:
-    ok(f"test code: {c} == {tl}") if c == tl else \
-        bad(f"test code: README {c}, actual {tl}")
+pin(r"\*\*Test code: ([\d,]+) lines", "test code", tl)
 
 # Vendored lines (total incl. comments, as the README states them)
 vend = sum(len(f.read_text().splitlines())
            for f in (ROOT / "hw" / "vendor").rglob("*.py"))
-c = claimed(r"Vendored, not ours: ([\d,]+) lines", "vendored")
-if c is not None:
-    ok(f"vendored: {c} == {vend}") if c == vend else \
-        bad(f"vendored: README {c}, actual {vend}")
+pin(r"Vendored, not ours: ([\d,]+) lines", "vendored", vend)
 
 # ...and the split between what runs and what does not. The README said
 # "every one of these lines runs on the device" while 383 of them were a
@@ -130,11 +145,8 @@ imported = {n for n in (p.name for p in VEND.iterdir())
 dead = [f for f in sorted(VEND.rglob("*.py"))
         if f.relative_to(VEND).parts[0] not in imported]
 live = vend - sum(len(f.read_text().splitlines()) for f in dead)
-c = claimed(r"\*\*([\d,]+) of those lines run on the device", "vendored live")
-if c is not None:
-    ok(f"vendored live: {c} == {live}") if c == live else \
-        bad(f"vendored live: README {c}, actual {live}"
-            f" (dead: {[str(f.relative_to(ROOT)) for f in dead]})")
+pin(r"\*\*([\d,]+) of those lines run on the device", "vendored live",
+    live)
 for f in dead:
     rel = str(f.relative_to(ROOT))
     ok(f"README names the dead driver {rel}") if rel in README else \
@@ -250,10 +262,7 @@ if not broken:
 # the same defect as the label pattern, one level up.
 sess = sum(len(re.findall(r"^\s*# ---- Session ", p.read_text(), re.M))
            for p in sorted((ROOT / "tests").glob("*.py")))
-c = claimed(r"([\d]+) scripted device sessions", "device sessions")
-if c is not None:
-    ok(f"device sessions: {c} == {sess}") if c == sess else \
-        bad(f"device sessions: README {c}, actual {sess}")
+pin(r"([\d]+) scripted device sessions", "device sessions", sess)
 # The attacks, counted from the one marker that cannot drift: their own
 # def line. The previous pattern looked for "# 1." or "ATTACK" headings
 # that no longer exist, matched exactly one thing, and reported the
@@ -261,10 +270,8 @@ if c is not None:
 # can fail is decoration (TESTING.md rule 4).
 adv = (ROOT / "tests" / "test_adversarial.py").read_text()
 n_attacks = len(re.findall(r"^def attack_", adv, re.M))
-c = claimed(r"([\d]+) adversarial attack scenarios", "adversarial attacks")
-if c is not None:
-    ok(f"adversarial attacks: {c} == {n_attacks}") if c == n_attacks else \
-        bad(f"adversarial attacks: README {c}, actual {n_attacks}")
+pin(r"([\d]+) adversarial attack scenarios", "adversarial attacks",
+    n_attacks)
 # Every file and every module.symbol the documents NAME must exist.
 #
 # Audit A8 (2026-09-06) found the security argument citing
@@ -415,6 +422,27 @@ elif wrong:
         + ", ".join(f"{n} at {w}" for w, n in wrong))
 else:
     ok(f"all {len(said)} statements of the icon count say {real_icons}")
+
+if rewrites:
+    # Written once, at the end, and only if every OTHER check passed.
+    # A --update run that also broke the apt table or a link should not
+    # quietly hand back a README that now reads as correct.
+    if fails:
+        print("\n--update made no change: the run has failures that "
+              "rewriting a number cannot fix.")
+    else:
+        text = (ROOT / "README.md").read_text()
+        for label, _was, _now, new_span, old_span in rewrites:
+            if text.count(old_span) != 1:
+                bad(f"--update found {text.count(old_span)} places to "
+                    f"rewrite {label}; refusing to guess")
+                break
+            text = text.replace(old_span, new_span, 1)
+        else:
+            (ROOT / "README.md").write_text(text)
+            print(f"\nupdated {len(rewrites)} number(s) in README.md: "
+                  + ", ".join(f"{lbl} {was}->{now}"
+                              for lbl, was, now, _, _ in rewrites))
 
 if fails:
     print("\n" + "\n".join(fails))

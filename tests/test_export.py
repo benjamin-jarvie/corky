@@ -305,6 +305,47 @@ def main():
         else:
             bad(f"{out.name} does not name the key {xfp}")
 
+        # 6. A SCANNED pair, all four policies, exports the receive chain
+        #    as the receive chain.
+        #
+        #    open_session_descriptors decides internal= from the
+        #    descriptor's own text, and it used to do it by counting
+        #    closing parens: `endswith("/1/*)")`. Three policies end in one
+        #    paren and sh(wpkh(...)) ends in two, so a nested-segwit pair
+        #    arrived as two RECEIVE descriptors. Core does not refuse that.
+        #    It deactivates the first and keeps the second, so the wallet
+        #    kept the CHANGE chain active and marked external, and the
+        #    public key a coordinator was handed described the change
+        #    chain as the receive chain (2026-09-08).
+        #    A key of its own, because XPRV_A is loaded above and _import
+        #    refuses a duplicate by fingerprint.
+        donor = signer.generate_wallet(rpc)
+        scanned_key = signer.master_xprv(rpc, wallet=donor)
+        signer._drop_wallet(rpc, donor)
+        for label, shape in (("wpkh", "wpkh({k}/84h/1h/0h/{c}/*)"),
+                             ("tr", "tr({k}/86h/1h/0h/{c}/*)"),
+                             ("pkh", "pkh({k}/44h/1h/0h/{c}/*)"),
+                             ("sh(wpkh)", "sh(wpkh({k}/49h/1h/0h/{c}/*))")):
+            pair = [shape.format(k=scanned_key, c=c) for c in (0, 1)]
+            slot = signer.open_session_descriptors(rpc, pair)
+            listed = rpc.call("listdescriptors", wallet=slot)["descriptors"]
+            chains = {bool(x.get("internal")): x for x in listed
+                      if x["active"]}
+            exported = signer.export_descriptors(rpc, wallet=slot)
+            recv = [d for d in exported if "/0/*" in d]
+            if len(chains) != 2:
+                bad(f"a scanned {label} pair left {len(chains)} active "
+                    f"chain(s), not a receive and a change: "
+                    f"{[(x.get('internal'), x['active']) for x in listed]}")
+            elif not recv:
+                bad(f"a scanned {label} pair exports no receive chain, so "
+                    f"a coordinator would watch the change chain: "
+                    f"{[d[:40] for d in exported]}")
+            else:
+                ok(f"a scanned {label} pair keeps both chains and exports "
+                   f"the receive one")
+            signer._drop_wallet(rpc, slot)
+
         # 5. Exporting must not disturb the session: the key still signs and
         #    no extra wallet is left behind.
         left = [w for w in rpc.call("listwallets") if w in signer.SLOTS]

@@ -106,6 +106,13 @@ that can only lose its subject in silence is not a pin.** It keys on
 FUNCTION names now, which survive every edit inside the function, and
 `run_tests.sh` checks on every run that each name still exists.
 
+`tests/test_readme_claims.py --update` rewrites the numbers it computes
+instead of reporting them, because four of them move on any commit that
+touches a line of code or a line of test, and hand-editing four figures
+per commit is how a suite starts being run with one check already
+known-red. It refuses to write anything if any OTHER check failed, so it
+can correct a figure and can never make a broken claim pass.
+
 ## Rule 5: run the two-axis review, because the suite cannot find these
 
 The suite is written by whoever wrote the code, so it inherits their blind
