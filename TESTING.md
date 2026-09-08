@@ -220,6 +220,30 @@ The rule: **when a limit belongs to the target's kernel, the dev machine is
 not evidence.** Name the limit, encode it as an assertion, and get on real
 hardware sooner.
 
+## Rule 12: a flake is a defect that has not been read yet
+
+`tests/sparrow` failed twice, months apart, and passed on every retry.
+Both times the runner sent its output to `/dev/null`, so the failure was
+a name and nothing else, and there was nothing to do but shrug.
+
+The cause was one line: `self.port = random.randint(20000, 60000)`, with
+nothing checking whether anything was already listening there. On a
+collision bitcoind exited at once, the wait loop spun the full forty
+seconds, and the suite died somewhere else entirely with no mention of a
+port. The kernel will hand out a free port if asked, and the wait loop
+now notices a daemon that has already exited instead of waiting out the
+clock on a corpse.
+
+Two rules came out of it, and Rule 8's twin already said the first:
+
+- **Keep the output.** A suite whose failure prints only its own name
+  cannot be diagnosed, and the next person to see it will retry and move
+  on, exactly as happened here twice.
+- **Randomness in a harness needs a check.** A random port, a random
+  temp name or a random key is a collision waiting for a busy machine.
+  Ask the operating system instead, and where the window cannot be
+  closed, make the remaining case say so.
+
 ## Rule 11: a menu is two lists, and nothing joins them
 
 `screens.py` holds the labels a menu draws. `main.py` holds the
