@@ -1,16 +1,11 @@
 {
   "_source": {
     "commit": "85cd9a0211eeb22962a5e65ba349ef6efa91bb57",
-    "note": "byte-for-byte comparison of every file below against this exact commit; see test_vendor_pinned.py --verify-upstream",
+    "note": "byte-for-byte comparison of every file below against this exact commit; see test_vendor_pinned.py --verify-upstream hw/vendor/ili9341.py was recorded here on 2026-09-08 and deleted the same day: it drove a 2.4\" panel no code path could select.",
     "repo": "https://github.com/SeedSigner/seedsigner.git",
     "verified": "2026-09-08"
   },
   "files": {
-    "hw/vendor/ili9341.py": {
-      "identical": false,
-      "upstream_path": "src/seedsigner/hardware/displays/ili9341.py",
-      "upstream_sha256": "c73eb77327bb882ecc78e7e5af355af969ce09d22435d981168cdab017fad998"
-    },
     "hw/vendor/st7789.py": {
       "identical": false,
       "upstream_path": "src/seedsigner/hardware/displays/ST7789.py",

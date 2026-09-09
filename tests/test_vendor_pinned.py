@@ -22,8 +22,11 @@ recorded in `vendor-upstream.json` against the exact commit rather than
 against a branch that moves:
 
     SeedSigner dev @ 85cd9a0211ee (2026-09-04)
-    15 of 17 files byte-identical
-    st7789.py and ili9341.py differ, and say so at the top
+    15 of 16 files byte-identical
+    st7789.py differs, and says so at the top
+
+(It was 15 of 17 until ili9341.py went, hours later: a driver for a 2.4"
+panel no code path could select, kept for a board Corky does not ship.)
 
 Anybody who does not want to take that on trust can repeat it:
     python3 tests/test_vendor_pinned.py --verify-upstream

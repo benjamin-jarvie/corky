@@ -27,8 +27,11 @@ and a camera on the carrier's CSI port. Parts list: ../ORDER.md.
   for menus and animated QRs at a few FPS.
 - SeedSigner's display factory also supports st7789 320×240, ili9341 and
   ili9486. **Corky v1's primary display is Ben's SeedSigner+ hat: 2.8" ST7789
-  at 320×240 (A-13b/A-15)**; the 1.3" 240×240 remains the pocket build. The
-  ili9341 driver stays vendored for Plus-class 2.4" boards.
+  at 320×240 (A-13b/A-15)**; the 1.3" 240×240 remains the pocket build.
+  Corky vendors the ST7789 driver and nothing else. The ili9341 driver was
+  vendored too, for 2.4" boards, until 2026-09-08: no code path could
+  select it, so it was 383 lines an auditor had to read that could never
+  run. Git holds it if such a board ever arrives.
 - **Measured on the board, 2026-09-06:** the Zero 2 W on Ben's desk answers
   320×240, not the 240×240 the pocket build is described with above. Panel
   and compute module are chosen separately, and the documents read as

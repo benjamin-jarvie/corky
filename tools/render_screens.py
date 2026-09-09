@@ -15,7 +15,10 @@ DEMO_OUTPUTS = [
     ("bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", 0.03444556),
 ]
 
-for w, h, tag in [(320, 240, "ili9341"), (240, 240, "st7789")]:
+# Both panels are ST7789. The 320x240 set was tagged "ili9341" until
+# 2026-09-08, which named a controller Corky has never driven: the
+# primary build is the 2.8" ST7789 Plus hat (HARDWARE.md, PLAN A-13b).
+for w, h, tag in [(320, 240, "st7789-320"), (240, 240, "st7789-240")]:
     for name, img in {
         "0-splash": screens.splash(w, h),
         "1-home": screens.home(w, h),

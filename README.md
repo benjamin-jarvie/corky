@@ -225,8 +225,8 @@ Scan-a-key flow IS the key.
 panel driver and the buttons.
 
 **Total functional code: 2,406 lines** (4,895 with blanks/comments).
-**Test code: 6,549 lines**, none of which ships.
-**Vendored, not ours: 2,251 lines** in [`hw/vendor/`](hw/vendor/): the
+**Test code: 6,551 lines**, none of which ships.
+**Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
 are **modified** to stand alone without their base class. The two
@@ -236,10 +236,12 @@ for the whole directory, in
 header line in each file would change the very hash that proves the file
 unmodified.
 
-**1,868 of those lines run on the device.** The other 383 are
-[`hw/vendor/ili9341.py`](hw/vendor/ili9341.py), a driver for a panel no
-code can select: `hal.py` imports `st7789` and nothing else. It is
-carried for a 2.4" board Corky does not ship.
+**Every one of those lines runs on the device.** That sentence was false
+until 2026-09-08: a second SeedSigner display driver was vendored for a
+2.4" panel no code path could select, and 383 lines an auditor had to
+read could never run. It is deleted. `tests/test_readme_claims.py` works
+out which vendored files are reachable rather than trusting this
+paragraph, and fails the moment one stops being.
 `tests/test_vendor_pinned.py` records the sha256 of each file, so a
 change to any of them is a failing test rather than a surprise.
 

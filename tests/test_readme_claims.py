@@ -151,12 +151,21 @@ imported = {n for n in (p.name for p in VEND.iterdir())
 dead = [f for f in sorted(VEND.rglob("*.py"))
         if f.relative_to(VEND).parts[0] not in imported]
 live = vend - sum(len(f.read_text().splitlines()) for f in dead)
-pin(r"\*\*([\d,]+) of those lines run on the device", "vendored live",
-    live)
-for f in dead:
-    rel = str(f.relative_to(ROOT))
-    ok(f"README names the dead driver {rel}") if rel in README else \
-        bad(f"{rel} is imported nowhere and the README does not say so")
+# The rule is stronger than a count now: NOTHING vendored may be
+# unreachable. The README used to state how many of the lines ran and how
+# many did not, which made carrying dead third-party code a thing you
+# could declare and then keep. Corky vendors only what it runs, so an
+# unreachable vendored file is a defect and not a footnote (2026-09-08,
+# when SeedSigner's second display driver went: 383 lines, imported by
+# nothing, kept for a 2.4" board Corky does not ship).
+if dead:
+    bad(f"{len(dead)} vendored file(s) that no shipped module imports: "
+        f"{[str(f.relative_to(ROOT)) for f in dead]}. Corky vendors only "
+        f"what it runs; delete them or import them.")
+elif live != vend:
+    bad(f"the reachability sum does not add up: {live} live of {vend}")
+else:
+    ok(f"all {vend} vendored lines are reachable from a shipped module")
 
 # The README calls the drivers modified and the codec unmodified. That
 # split is a claim about what a reader must audit, and nothing checked it

@@ -2,10 +2,10 @@
 machine. The device backend drives the vendored ST7789 driver and GPIO; the
 dev backends save frames as PNGs and read keys from a script string.
 
-ST7789 and nothing else. This said "the vendored ST7789/ILI9341 drivers",
-and hw/vendor/ili9341.py is imported by no line in this repository
-(two-axis review, 2026-09-08). The README made the same claim about the
-same file and has been corrected too."""
+ST7789 and nothing else. This said "the vendored ST7789/ILI9341 drivers"
+until 2026-09-08, when the review asked which line imported the second
+one and the answer was none. The file is gone; git holds it if a 2.4"
+board ever arrives."""
 
 from pathlib import Path
 
