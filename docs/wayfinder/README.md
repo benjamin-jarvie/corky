@@ -6,6 +6,11 @@ tickets, worked one at a time.
 - **beta-audit** — **open, and the current one.** An evidenced go or
   no-go on a private beta: eleven tickets, every finding weighed as
   blocking or not blocking. Charted 2026-09-06.
+- **multisig-cosigner** — **open.** A Core key as one cosigner in a
+  multivendor quorum, signed for on the device. Five tickets. Charted
+  2026-09-09, after charting found that Core signs a quorum share with
+  only the BIP48 branch imported, so Corky never needs the quorum
+  descriptor and the map is a fifth of the size it looked.
 
 ## The closed maps are archived, not lost
 
