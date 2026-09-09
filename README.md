@@ -106,10 +106,29 @@ Core contributors. Core has never implemented BIP39.
 **And a seed phrase does not carry enough.** It holds the key and nothing
 else: not the script policy, not the derivation path, not whether the
 wallet is single-signature or one key of a multisig quorum. Restoring
-from words alone is a guess about which addresses were yours. A
-descriptor carries all of it, which is why Corky's backup is Core's own
-master key and its export is Core's own descriptor string, checksum
-included.
+from words alone is a guess about which addresses were yours.
+
+**Corky's paper backup is a key too, and has the same gap.** It is
+Core's master xprv, and an xprv is a key with no path in it either.
+Being straight about that matters more than the argument above does.
+What closes the gap is not the backup, it is what happens when you type
+it back in: Corky asks Core to rebuild all four of the standard
+policies, which is exactly the set `createwallet` makes.
+
+| restored from the paper alone |
+|---|
+| `pkh(xprv/44h/0h/0h/{0,1}/*)` |
+| `sh(wpkh(xprv/49h/0h/0h/{0,1}/*))` |
+| `wpkh(xprv/84h/0h/0h/{0,1}/*)` |
+| `tr(xprv/86h/0h/0h/{0,1}/*)` |
+
+So a key Corky made comes back whole, because those four are what Corky
+made. **The account number is `0h` and it is not read from anywhere.** A
+key you loaded as a bare descriptor on some other path is not recoverable
+from the paper on its own; keep that descriptor with it. That is the
+honest edge of this, and it is the reason the export is a descriptor and
+not just a key: a descriptor carries the policy and the path, checksum
+included, and the paper does not.
 
 Greg Maxwell, on the BIPs repository's own comments page for BIP39
 ([source](https://github.com/bitcoin/bips/wiki/Comments:BIP-0039)):
@@ -160,10 +179,13 @@ So every flow below is on the device itself, and these are recordings of
 the real screens, drawn by the real code, with real output from Bitcoin
 Core on regtest.
 
-These are the real screens, drawn by the real code, with real output from
-Bitcoin Core on regtest. They play silently here;
-`python3 tools/make_demo_videos.py` rebuilds them with narration, which
-is where the claims get spelled out.
+**They are silent, and that is all there is.** `make_demo_videos.py`
+also writes narrated `.mp4` files, and nobody can play them from this
+page: GitHub strips a `<video>` tag out of a rendered README, and serves
+a raw or release `.mp4` as `application/octet-stream`, which a browser
+downloads rather than plays. So the narration is not a second, fuller
+version of this page that a reader is missing. Anything worth saying is
+said in the text under each recording.
 
 ### Generate a key
 
@@ -212,9 +234,11 @@ ever plugged in.
 ![Signing a transaction](docs/demo/06-sign-a-transaction.gif)
 
 
-Rebuild them with `python3 tools/make_demo_videos.py`. Nothing in that
-script is a mockup, and nothing leaves the machine: narration is macOS
-`say`.
+Rebuild them with `python3 tools/make_demo_videos.py`, which needs
+`bitcoind`, `ffmpeg` and a Mac. Nothing in that script is a mockup: it
+asks Core for a real key and a real transaction and photographs the
+screens Corky draws. Nothing leaves the machine either, because the
+narration is macOS `say`.
 
 ## What you are trusting
 
@@ -226,26 +250,83 @@ Bitcoin Core and in a ramdisk, and power-off ends both.
 
 The code is in three layers, and the first one is the claim that matters:
 
-**Layer 1 transforms secret material. 0 lines.** Nothing in this
-repository computes on a key.
+**Layer 1 transforms secret material. 0 lines of Corky.** Nothing in
+this repository computes on a key. Every derivation, every signature and
+every byte of BIP32 arithmetic happens inside two binaries that are not
+ours:
+
+| | |
+|---|---|
+| `bitcoind` 31.1, aarch64, stripped | 16.4MB |
+| `bitcoin-cli` | 2.6MB |
+
+Both are the official builds, pinned by sha256 in
+[`image/PINS`](image/PINS), checked against 11 GPG signatures on
+`SHA256SUMS` taken out of band from the guix.sigs repository rather than
+from the server that served the binary, and re-verified from a fresh
+download on 2026-09-08. That is the layer that does the cryptography,
+and the reason this project exists is that it has thousands of readers
+and Corky's 2,407 lines do not.
+
+Layer 1 being empty is enforced, not asserted.
+[`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped
+module imports `hashlib`, `hmac`, `secrets`, `random` or any curve
+library, if `os.urandom` appears anywhere, or if key-derivation
+vocabulary comes back.
 
 **Layer 2 sees secrets, computes nothing with them. 2143 lines.**
 [`main.py`](corky/main.py), [`signer.py`](corky/signer.py),
-[`screens.py`](corky/screens.py), [`qrsource.py`](corky/qrsource.py):
-they carry the key as a string to Core and draw it on the panel. A QR
-source is layer 2 rather than 3 because what the camera decodes on the
-Scan-a-key flow IS the key.
+[`screens.py`](corky/screens.py), [`qrsource.py`](corky/qrsource.py).
 
-**Layer 3 never touches secrets at all. 264 lines.** The channels, the
-panel driver and the buttons.
+**Yes, this is Corky's own code, and yes it holds your actual private
+key.** Not a hash of it, not a handle to it: the xprv itself, in plain
+text, as an ordinary Python string. Four things happen to it and they
+are the whole list:
+
+| | |
+|---|---|
+| `qrsource.py` | hands over what the camera decoded, which on Scan-a-key is the key |
+| `main.py` | holds that string, or the one you typed, and passes it on |
+| `signer.py` | writes it to `bitcoin-cli`'s **stdin**, never its arguments |
+| `screens.py` | draws it on the panel, which is the paper backup |
+
+What "computes nothing with them" means precisely: no line in any of
+those four derives a child key, hashes it, checks it, or turns it into
+anything. They move it and they draw it. The one place a key is
+inspected at all is a check on the first four characters to decide which
+screen to open, which is why `XPRV_PREFIXES` is one list used by both
+the redactor and the argument guard.
+
+**The known exposure**, said plainly: while a key is loaded, a copy of
+it exists in Corky's Python memory as well as in Core's. Python strings
+cannot be reliably wiped. What bounds it is that the board has no swap,
+the datadir is a ramdisk, and power-off ends the session, so the copy
+lives as long as the session and not one second longer.
+[`tests/test_no_persistence.py`](tests/test_no_persistence.py) is the
+suite that keeps that true.
+
+**Layer 3 never touches secrets at all. 264 lines.** Also Corky's own
+code: [`filechannel.py`](corky/filechannel.py) and
+[`qrchannel.py`](corky/qrchannel.py), plus the panel driver and the
+buttons.
+
+These handle only transactions and public keys. A PSBT is not a secret,
+and neither is a descriptor with an xpub in it. The risk here is a
+different one and worth naming: this is the layer that parses bytes a
+stranger chose. A hostile QR frame or a malformed file arrives here
+first. So it never parses a PSBT, it only detects the encoding and hands
+Core an opaque string, and the one exception is documented at the top of
+`qrchannel.py`: the UR container has to be unwrapped to get at the
+payload, which is bounded by a length cap and a charset check before any
+container code runs.
 
 **Total functional code: 2,407 lines** (4,922 with blanks/comments).
 **Test code: 6,602 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
-SeedSigner and is unmodified, and SeedSigner's two display drivers, which
-are **modified** to stand alone without their base class. The two
-drivers name their source in the file. The codec names its source once
+SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,
+which is **modified** to stand alone without its base class. The driver
+names its source in the file. The codec names its source once
 for the whole directory, in
 [`hw/vendor/ur2/VENDORED.md`](hw/vendor/ur2/VENDORED.md), because a
 header line in each file would change the very hash that proves the file
@@ -263,8 +344,8 @@ change to any of them is a failing test rather than a surprise.
 **"Audit upstream" is a fact here, not a phrase.** Every vendored file
 was compared byte for byte with SeedSigner at commit `85cd9a0211ee` on
 2026-09-08, and the result is in
-[`tests/vendor-upstream.json`](tests/vendor-upstream.json): 15 of 17
-identical, the two display drivers modified and saying so at the top.
+[`tests/vendor-upstream.json`](tests/vendor-upstream.json): 15 of 16
+identical, the one display driver modified and saying so at the top.
 The pin is a commit and not a branch, so it does not move. Repeat it
 with `python3 tests/test_vendor_pinned.py --verify-upstream`, which
 fetches that same commit and re-derives every hash.
@@ -274,12 +355,6 @@ SeedSigner's `SetWindows` hardcodes the high octet of every coordinate to
 zero, which is right only below 256 pixels; on Corky's 320-wide primary
 panel it addresses a 64-column window. That belongs upstream and we will
 send it.
-
-Layer 1 being empty is enforced, not asserted.
-[`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped
-module imports `hashlib`, `hmac`, `secrets`, `random` or any curve
-library, if `os.urandom` appears anywhere, or if key-derivation
-vocabulary comes back.
 
 ## Where the key comes from
 
@@ -302,10 +377,35 @@ Said before critics find it:
   wallet, and the backup is 111 characters written by hand.
 - **No multisig** in v1. Single signature only.
 - **Python on the signing path.** Nothing about the language protects
-  memory. What protects the key is that Python never holds it for longer
-  than the hop into Core, and never computes on it.
-- **The radio chip on a Zero 2 W still has power** after hardening.
-  Software can only say it is unused.
+  memory. A Python string cannot be reliably wiped, so while a key is
+  loaded there is a copy of it in Corky's memory that nothing can
+  scrub. What protects it is not the language: the board has no swap,
+  the datadir is a ramdisk, and power-off ends the session.
+
+  *Would Rust fix this?* It would fix one quarter of it, and the
+  smallest quarter. While a key is loaded it exists in four places:
+  Corky's Python, the pipe into `bitcoin-cli`, **bitcoind's own
+  memory**, and the wallet file on the ramdisk. Rust would let Corky
+  zero the first. The third is the one that matters, because Core is
+  where the wallet actually lives and it holds the key for the whole
+  session rather than for one hop, and no rewrite of Corky touches it.
+
+  The cost is the argument itself. What makes "0 lines transform a key"
+  worth anything is that a person can read all 2,407 lines in an
+  afternoon and check it. A rewrite spends that to harden the shortest
+  lived of four copies. So: no, and the honest mitigation is the one
+  already here, which is that the whole machine forgets at power-off
+  and [a test proves it](tests/test_no_persistence.py).
+- **The radio chip on a Zero 2 W still has power** after hardening. The
+  overlays unbind the driver and the firmware never loads, so nothing
+  can drive it, and every check Corky runs is a check on the operating
+  system. No script can prove a chip is unpowered, because the thing
+  doing the proving is running on the same board. Raspberry Pi documents
+  a hardware disable pin for the Compute Modules and not for the Zero
+  2 W. **What settles it is removing the part.** On a Zero 2 W the radio
+  is a separate component beside the processor rather than inside it, so
+  it can be desoldered, and then the answer stops depending on software
+  at all.
 - **150 inputs**, and the device refuses more. That is this board's
   memory, measured, not a policy.
 
