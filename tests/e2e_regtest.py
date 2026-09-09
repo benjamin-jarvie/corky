@@ -64,6 +64,26 @@ def main():
              f"{signer.EXPORT_ORDER}, got {len(pubs)}")
         print(f"ok   session open; {len(pubs)} public descriptors exported")
 
+        # The README's reason for refusing seed words is that CORE cannot
+        # take them, so accepting them would mean Corky running a key
+        # derivation function itself, which is the one thing this
+        # repository does not do. That is a claim about a named
+        # counterpart, so TESTING.md rule 8 says run the counterpart
+        # (2026-09-09).
+        helptext = rpc.call("help")
+        wordy = [c for c in ("sethdseed", "importmnemonic", "importseed",
+                             "importwords")
+                 if c in helptext]
+        assert not wordy, \
+            (f"Core {rpc.call('getnetworkinfo')['subversion']} offers "
+             f"{wordy}, so the README is wrong that seed words would have "
+             "to be turned into a key by Corky")
+        assert "importdescriptors" in helptext, \
+            "Core no longer offers importdescriptors, which is the only "\
+            "way Corky puts a key in"
+        print("ok   Core takes descriptors and has no way in for seed "
+              "words, which is why Corky has no BIP39")
+
         # 2. Coordinator: watch-only wallet from public descriptors
         rpc.call("createwallet", WATCH, True, True, "", False, True)
         imports = [{"desc": d, "active": True, "timestamp": "now",

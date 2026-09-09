@@ -103,10 +103,75 @@ written by SatoshiLabs, a hardware wallet vendor. Output descriptors
 (BIPs 380 to 386) were written by Pieter Wuille and Ava Chow, Bitcoin
 Core contributors. Core has never implemented BIP39.
 
-**And a seed phrase can hide a second secret.** BIP39 allows a
-passphrase, mixed into the key and written nowhere. The same twelve
-words with and without one are two different wallets, and nothing in the
-words says whether one was used:
+**The usual argument against seed phrases is aimed wrong**, and this page
+made it for months. "Words do not carry the derivation path" is true, and
+just as true of an xprv: both are a key and nothing else. The real
+comparison is not one key format against another. It is **a key alone
+against a descriptor**, and a mnemonic and an xprv lose to a descriptor
+in exactly the same way.
+
+For single signature it barely bites, because the four paths are a
+convention every wallet already shares. For multisig it bites hard:
+nothing recovers a quorum, each cosigner's xpub, their script types and
+their paths, so a key alone is useless whichever form it is in. Corky is
+single signature in v1 and does not meet that problem at all.
+
+**The reason Corky takes an xprv is none of that.** Core has no BIP39
+and never has. Checked against 31.1: no `sethdseed`, no `importmnemonic`,
+no `importseed`. Twelve words are not a thing Core can be handed, so
+supporting them would mean Corky doing PBKDF2-HMAC-SHA512 and
+HMAC-SHA512 itself, to turn words into a key. That is a cryptographic
+primitive operating on secret material, which is the one thing this
+repository does not contain and
+[`tests/test_integrity.py`](tests/test_integrity.py) fails on. Seed words
+are not refused here because they are bad. They are refused because
+accepting them costs the property the whole design is built on.
+
+### Why that matters more than it sounds
+
+If you are going to concentrate your trust in one piece of software,
+Bitcoin Core is the one to concentrate it in: for the node, for the
+wallet, for signing, and for generating the key in the first place. It
+has the most review, the slowest change process, and the most people
+trying to break it.
+
+Multivendor multisig exists so that no single vendor's mistake can lose
+your coins. Different hardware, different firmware, different teams, and
+a quorum that survives any one of them being wrong. **Bitcoin Core is
+missing from that story, and it is the most reviewed implementation
+there is.** Not because anyone excluded it. Because everybody else's key
+is a BIP39 seed phrase, and Core cannot make one or read one.
+
+A key Corky generates is a Core key, so it can go in the quorum. Proven
+with Sparrow's own library, 2 of 3, P2WSH:
+
+```
+cosigner  Bitcoin Core    563e21ec  m/48'/1'/0'/2'
+cosigner  BIP39 vendor 1  73c5da0a  m/48'/1'/0'/2'
+cosigner  BIP39 vendor 2  b8688df1  m/48'/1'/0'/2'
+```
+
+Real addresses, a real `wsh(sortedmulti(2,…))` descriptor. Sparrow takes
+a Core master key as a cosigner beside two ordinary seed phrases.
+
+That is the case for this project stated plainly. If a vendor's key
+generation turns out to be wrong, and vendors differ enormously in how
+carefully they review a change, a quorum holds as long as the others are
+sound. Today none of those others can be Bitcoin Core.
+
+**What Corky does not do yet.** Corky is single signature in v1: it does
+not sign for a quorum, and it does not export a cosigner key. To put a
+Corky key in a quorum today you type the paper backup into Sparrow,
+which means the private key goes into a hot wallet once. Core can derive
+the cosigner branch without the key leaving, so exporting it is a real
+and small piece of work rather than a limitation of the idea. It is not
+done, and until it is, the paragraph above is an argument for the key
+format rather than a feature you can use.
+
+**One difference between the two forms is real: a seed phrase can hide a
+second secret.** BIP39 allows a passphrase, mixed into the key and
+written nowhere. The same twelve words with and without one are two
+different wallets, and nothing in the words says whether one was used:
 
 | | |
 |---|---|
@@ -114,11 +179,19 @@ words says whether one was used:
 | the same twelve words, passphrase `hunter2` | wallet `ca2c62d2` |
 
 Forget it and the words are worth nothing. Corky's backup cannot have
-one: the key is the key. Two smaller things follow from the same
-self-description. Words do not say which SYSTEM made them, and Electrum's
-look identical to BIP39's while deriving something else; `tprv` says
-exactly what it is. Words do not say which NETWORK either, and the
-version bytes do: `xprv` is real money, `tprv` is not.
+one: the key is the key.
+
+**That is a trade, not a win.** A passphrase is also a feature. It is a
+second factor, it gives plausible deniability, and it means paper found
+in a drawer is not enough on its own. Corky removes the footgun and the
+capability together, and anyone who wants the capability should know
+that is what they are giving up.
+
+Two smaller things follow from the same self-description. Words do not
+say which SYSTEM made them, and Electrum's look identical to BIP39's
+while deriving something else; `tprv` says exactly what it is. Words do
+not say which NETWORK either, and the version bytes do: `xprv` is real
+money, `tprv` is not.
 
 ### What you actually write down
 
@@ -137,9 +210,19 @@ no derivation path, no script policy, no wallet name.
 pretend otherwise.** The argument for descriptors is not that words lose
 your paths, because our own backup loses them in exactly the same way.
 
-Paths do not need writing down because they were never secret. Every
-wallet checks the same four, and you pick the script type when you
-import:
+**Write down the policy, the path and the fingerprint with it anyway.**
+The conventions below will usually recover you without them, and "usually"
+is a poor thing to hold a backup together with. Four extra words on the
+same page remove the guess:
+
+```
+KEY  173E6FC2      <- the fingerprint, shown above the backup
+Native segwit      <- the policy
+m/84'/0'/0'        <- the path
+```
+
+The conventions are why it works when you do not. Every wallet checks the
+same four, and you pick the script type when you import:
 
 | | |
 |---|---|
@@ -370,7 +453,7 @@ payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
 **Total functional code: 2,432 lines** (4,990 with blanks/comments).
-**Test code: 6,656 lines**, none of which ships.
+**Test code: 6,669 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,
