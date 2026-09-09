@@ -20,6 +20,10 @@ CORE_SHA256="dcf1873f2208ba4f962f3398d47e154c39c0084be8f4553e05c940d0ace3d004"
 # one moment nobody is watching.
 CORE_BIN_SHA256="1b279e038691c10e30d9c99a071ff967439020c4352e8ea3b156fb6b03751f83"
 CLI_BIN_SHA256="815c0969dabe4b67d180f3e0c597c995ca03fd3a65ff2b2d1b1223109f6df589"
+# Re-verified 2026-09-08 by downloading CORE_URL again on the dev machine:
+# the tarball and both extracted binaries matched all three hashes above.
+# bitcoind is 16,451,368 bytes and bitcoin-cli 2,561,232, both already
+# stripped. Those two figures are what PLAN A-12b's arithmetic rests on.
 CORKY_COMMIT="HEAD"                             # pin to a tag for release images
 # pip's packages live in image/requirements.txt since 2026-09-08, pinned
 # by sha256 and installed with --require-hashes. A version alone stops an

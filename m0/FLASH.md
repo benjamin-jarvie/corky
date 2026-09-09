@@ -102,10 +102,12 @@ rather than wishing for later:
 - **Boot time**, power to Corky's own splash. Never recorded. This flash
   adds `boot_delay=0` and `disable_splash=1`, both taken from SeedSigner
   OS's config for this same board, so the number is worth having.
-- **The size of `bitcoind` and `bitcoin-cli`, stripped.**
-  `ls -l /usr/local/bin/bitcoind /usr/local/bin/bitcoin-cli` will do.
-  PLAN A-12b explains why: it is the one figure the whole
-  RAM-resident-image question turns on, and nobody has written it down.
+- **MemAvailable with nothing running.** `free -m` before you start
+  bitcoind, after a clean boot. PLAN A-12b works out that Raspberry Pi OS
+  Lite costs about 168MB resident, by subtracting the M0 numbers from the
+  480MB the board has after `gpu_mem=32`. That subtraction decides
+  whether the RAM-resident image of A-12 saves memory or spends it, and
+  one `free -m` measures it directly instead of deriving it.
 
 Temperature is in the report because ORDER.md drops the heatsink to save
 7.5mm of case. Throttling costs sign time and nothing else, so it does not

@@ -61,14 +61,40 @@
   true. `tests/test_no_persistence.py` and `image/leak-check.sh` exist
   because ours needs proving on every run; theirs would not.
 
-  What this changes about the A-12 risk: the size question is answerable
-  now rather than feared. Their whole OS image is 50MB and carries Python,
-  numpy, picamera, pyzbar and embit. Corky must add bitcoind, and the size
-  of that binary alone is **the number M3 turns on and nobody has written
-  down**. Measure it before any buildroot work starts: extract the pinned
-  31.1 aarch64 tarball and record the stripped size of `bitcoind` and
-  `bitcoin-cli`. Everything else in A-12 is guessing until that figure
-  exists.
+  What this changes about the A-12 risk: **it is smaller than the
+  amendment feared, and the arithmetic now exists.** Measured 2026-09-08,
+  all of it from the shipped artefacts rather than from estimates.
+
+  | | |
+  |---|---|
+  | SeedSigner 0.8.7 pi02w, whole card | 33MB (29.5MB `zImage`, 3.7MB firmware) |
+  | that `zImage`, decompressed (kernel **and** initramfs) | 36.7MB |
+  | `bitcoind` 31.1 aarch64, stripped | **16.4MB** |
+  | `bitcoin-cli` | 2.6MB |
+  | Raspberry Pi OS Lite, resident, on the board today | **~168MB** |
+
+  That last figure is the one that decides it, and it was already in
+  FLASH.md waiting to be subtracted. At 250 ordinary inputs the board
+  reports bitcoind 65MB, Corky 21MB and 226MB MemAvailable, against
+  480MB after `gpu_mem=32`. So 254MB is genuinely resident and 168MB of
+  it is the operating system.
+
+  **A RAM-resident image is very likely to use LESS memory than what we
+  run now, and the mechanism is the opposite of the intuition.** An
+  initramfs is unpacked into a tmpfs that is held for ever and cannot be
+  reclaimed without swap, which we do not have. A disk rootfs is read
+  through the page cache, which the kernel CAN evict. Per byte, the
+  initramfs is the expensive one. It wins anyway, because a
+  purpose-built image at 40 to 90MB resident beats a general-purpose
+  distribution's 168MB working set by more than the reclaim advantage is
+  worth. SeedSigner already carries Python, numpy, picamera and pyzbar,
+  which is most of what Corky needs; adding 19MB of Core binaries to
+  their 37MB is not what breaks a 512MB board.
+
+  What would confirm it: build once and read MemAvailable on the same
+  250-input run. Until then this is arithmetic on measured parts, which
+  is better than the guess A-12 recorded and is still not a measurement
+  of the thing itself.
 - **A-12c: their reproducibility traps, taken rather than re-paid
   (2026-09-08).** M3 requires an image hash reproducible on a second
   machine. Their build carries a list of things that break that, each of
