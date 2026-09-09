@@ -43,6 +43,54 @@
   transfer if 512MB cannot hold the RAM image; microSD hot-swap then waits
   for a 1GB-class board). Side benefit if it lands: statelessness becomes
   structural — the OS itself is immutable and nothing can persist anywhere.
+- **A-12b: how SeedSigner actually does it, read from their build
+  (2026-09-08).** `seedsigner-os` at `c4cb767`, target `pi02w`, which is
+  the same board. The mechanism is not a read-only mount and not an
+  overlayfs. It is `BR2_TARGET_ROOTFS_INITRAMFS=y`: the whole root
+  filesystem is a gzipped cpio inside the kernel image, and the card
+  carries **one 50MB FAT partition** holding firmware, kernel and
+  overlays. Their `/etc/fstab` mounts `/dev/root` `noauto`. So there is no
+  writable filesystem on the card at all, and the hot-swap in A-12 works
+  because after boot the card is not holding anything.
+
+  That is the difference between Corky's statelessness and theirs, and it
+  is worth stating plainly before M3 starts. **Ours is a policy: a tmpfs
+  datadir, `harden.sh`, no swap, and a leak check that says so. Theirs is
+  a property of the medium.** A policy is a set of things that must all
+  keep being true. A medium with nowhere to write is one thing that is
+  true. `tests/test_no_persistence.py` and `image/leak-check.sh` exist
+  because ours needs proving on every run; theirs would not.
+
+  What this changes about the A-12 risk: the size question is answerable
+  now rather than feared. Their whole OS image is 50MB and carries Python,
+  numpy, picamera, pyzbar and embit. Corky must add bitcoind, and the size
+  of that binary alone is **the number M3 turns on and nobody has written
+  down**. Measure it before any buildroot work starts: extract the pinned
+  31.1 aarch64 tarball and record the stripped size of `bitcoind` and
+  `bitcoin-cli`. Everything else in A-12 is guessing until that figure
+  exists.
+- **A-12c: their reproducibility traps, taken rather than re-paid
+  (2026-09-08).** M3 requires an image hash reproducible on a second
+  machine. Their build carries a list of things that break that, each of
+  which cost somebody a failed diff:
+
+  - `BR2_REPRODUCIBLE=y`, then `SOURCE_DATE_EPOCH=1 PYTHONHASHSEED=0`
+    with `compileall --invalidation-mode=checked-hash` for every `.pyc`.
+  - `mkfs.vfat --invariant -i ba5eba11` and a fixed partition
+    `label-id`, because both default to something derived from the clock.
+  - `touch -d` a fixed timestamp across every boot file.
+  - Sorted shell globbing instead of copying a directory, because
+    "mcopy doesn't copy directories deterministically" (their comment).
+  - **Deleting files that record the BUILD HOST rather than the target.**
+    Two of them: Python's `_sysconfigdata`, which embeds the configure
+    triplet, and `libstdc++`, whose `.text` differs between an x86_64 and
+    an aarch64 build host because GCC 13.3 orders two spill slots in
+    `from_chars` differently. Nothing in their image links against it, so
+    they remove it.
+
+  That last one is the shape of trap that a first attempt at a
+  reproducible build always hits and never predicts: the artefact is
+  byte-identical everywhere except one library nothing uses.
 - **A-13: bigger display in v1 (Ben, second pass).** Target is the
   SeedSigner-Plus-class 2.4" ILI9341 at 320×240 (driver vendored from
   SeedSigner at `hw/vendor/ili9341.py`; the 3.5" ILI9486 is named in

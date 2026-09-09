@@ -95,6 +95,18 @@ The script prints `M0 PASS` or `M0 FAIL` with the numbers. Record:
 - peak SoC temperature (C), and any `!!` throttle line
 - the three timings (bitcoind start, session open, stress sign)
 
+**Two more, while the board is in front of you.** Neither is part of the
+gate and both are unmeasured, which is why they are worth taking now
+rather than wishing for later:
+
+- **Boot time**, power to Corky's own splash. Never recorded. This flash
+  adds `boot_delay=0` and `disable_splash=1`, both taken from SeedSigner
+  OS's config for this same board, so the number is worth having.
+- **The size of `bitcoind` and `bitcoin-cli`, stripped.**
+  `ls -l /usr/local/bin/bitcoind /usr/local/bin/bitcoin-cli` will do.
+  PLAN A-12b explains why: it is the one figure the whole
+  RAM-resident-image question turns on, and nobody has written it down.
+
 Temperature is in the report because ORDER.md drops the heatsink to save
 7.5mm of case. Throttling costs sign time and nothing else, so it does not
 fail the gate. An `under-voltage` line is different: it means the supply is

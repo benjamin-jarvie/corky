@@ -225,6 +225,21 @@ if ! grep -q "^gpu_mem=" "$CFG"; then
     echo "   gpu_mem=32, +32MB of RAM (takes effect on reboot)"
 fi
 
+# Boot straight to the splash. Both of these are in SeedSigner OS's own
+# config.txt for this exact board (seedsigner-os, opt/pi02w/board/
+# boot_config.txt, read 2026-09-08), so they are proven on a Zero 2 W
+# rather than guessed at. boot_delay defaults to 1 second and buys
+# nothing on a board with one boot device; disable_splash removes the
+# firmware rainbow, which on Corky is a frame of somebody else's branding
+# before splash.py paints ours.
+#
+# NOT MEASURED HERE. Corky's boot time has never been recorded, so the
+# saving is "one second plus the rainbow" by arithmetic and not by a
+# stopwatch. Record it on the first hardened boot.
+for kv in "boot_delay=0" "disable_splash=1"; do
+    grep -q "^${kv%%=*}=" "$CFG" || printf '%s\n' "$kv" >> "$CFG"
+done
+
 echo
 echo "PROVISION DONE (dev image). Sanity check:"
 echo "  the suites do not ship; run them from a clone on the dev machine"
