@@ -287,6 +287,36 @@ adv = (ROOT / "tests" / "test_adversarial.py").read_text()
 n_attacks = len(re.findall(r"^def attack_", adv, re.M))
 pin(r"([\d]+) adversarial attack scenarios", "adversarial attacks",
     n_attacks)
+# The warning at the top of the README is the first thing anybody reads,
+# and it counts gates. A count in prose goes stale the moment a gate
+# passes, and this one goes stale in the flattering direction: nobody
+# edits a warning down to be more alarming (2026-09-08).
+#
+# The gate table is the source. A row is measured when its last column
+# does not begin "no".
+gates = re.findall(r"^\| (M\d) \|[^|]+\|([^|]*)\|\s*$", README, re.M)
+if len(gates) < 3:
+    bad(f"the gate table no longer parses; found {len(gates)} rows, so the "
+        "warning at the top of the page is unchecked")
+else:
+    measured = [g for g, state in gates if not state.strip().startswith("no")]
+    unproven = [g for g, state in gates if state.strip().startswith("no")]
+    WORDS = {"none": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+    m = re.search(r"(\w+) of the five gates below are measured", README)
+    said = WORDS.get(m.group(1).lower()) if m else None
+    if said is None:
+        bad("the top warning no longer states how many gates are measured")
+    elif said != len(measured):
+        bad(f"the top warning says {m.group(1)} of five gates are measured; "
+            f"the table says {len(measured)}: {measured} measured, "
+            f"{unproven} not")
+    elif len(gates) != 5:
+        bad(f"the warning says five gates and the table has {len(gates)}")
+    else:
+        ok(f"the top warning and the gate table agree: {len(measured)} "
+           f"measured ({', '.join(measured)}), "
+           f"{len(unproven)} not ({', '.join(unproven)})")
+
 # Every file and every module.symbol the documents NAME must exist.
 #
 # Audit A8 (2026-09-06) found the security argument citing

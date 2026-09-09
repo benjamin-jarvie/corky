@@ -1,5 +1,20 @@
 # Corky
 
+> ### Experimental. Do not put money on it.
+>
+> No Corky has ever signed a mainnet transaction on hardware, and no
+> hardened image has been flashed.
+> **Two of the five gates below are measured on a board.**
+> Three are not, including the one that proves a power cycle wipes the
+> key and the one that proves the radios are off.
+> The mainnet signing run of 2026-08-19 happened on a laptop, not on a
+> device.
+>
+> This is a private beta, published so it can be read before it is
+> trusted. [Status](#status) says what is measured and what is not, and
+> [ISSUES.md](ISSUES.md) is the open list. Use a burner key, on testnet,
+> and expect to lose whatever you put on it.
+
 **Core's keys, nothing kept.**
 
 A stateless, air-gapped Bitcoin signer built from general-purpose
@@ -225,7 +240,7 @@ Scan-a-key flow IS the key.
 panel driver and the buttons.
 
 **Total functional code: 2,406 lines** (4,895 with blanks/comments).
-**Test code: 6,551 lines**, none of which ships.
+**Test code: 6,573 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's two display drivers, which
@@ -357,10 +372,13 @@ image with the radios actually off, and a reproducible build. The
 [beta audit](docs/wayfinder/beta-audit/map.md) records all of it, and
 [ISSUES.md](ISSUES.md) is the open list.
 
-| gate | question |
-|---|---|
-| M0 | does wallet-only bitcoind fit in 512MB |
-| M1 | camera QR capture, both directions |
-| M2 | stateless UI on the panel, power cycle provably wipes |
-| M3 | hardened reproducible image, radios dead |
-| M4 | mainnet trial on hardware |
+| gate | question | measured on a board |
+|---|---|---|
+| M0 | does wallet-only bitcoind fit in 512MB | yes, 2026-09-06 |
+| M1 | camera QR capture, both directions | yes, except the optics |
+| M2 | stateless UI on the panel, power cycle provably wipes | no |
+| M3 | hardened reproducible image, radios dead | no |
+| M4 | mainnet trial on hardware | no |
+
+The warning at the top of this page counts that last column, and
+`tests/test_readme_claims.py` counts it too, so the two cannot drift.
