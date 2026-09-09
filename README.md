@@ -274,7 +274,7 @@ module imports `hashlib`, `hmac`, `secrets`, `random` or any curve
 library, if `os.urandom` appears anywhere, or if key-derivation
 vocabulary comes back.
 
-**Layer 2 sees secrets, computes nothing with them. 2143 lines.**
+**Layer 2 sees secrets, computes nothing with them. 2164 lines.**
 [`main.py`](corky/main.py), [`signer.py`](corky/signer.py),
 [`screens.py`](corky/screens.py), [`qrsource.py`](corky/qrsource.py).
 
@@ -305,7 +305,7 @@ lives as long as the session and not one second longer.
 [`tests/test_no_persistence.py`](tests/test_no_persistence.py) is the
 suite that keeps that true.
 
-**Layer 3 never touches secrets at all. 264 lines.** Also Corky's own
+**Layer 3 never touches secrets at all. 268 lines.** Also Corky's own
 code: [`filechannel.py`](corky/filechannel.py) and
 [`qrchannel.py`](corky/qrchannel.py), plus the panel driver and the
 buttons.
@@ -320,8 +320,8 @@ Core an opaque string, and the one exception is documented at the top of
 payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
-**Total functional code: 2,407 lines** (4,922 with blanks/comments).
-**Test code: 6,602 lines**, none of which ships.
+**Total functional code: 2,432 lines** (4,990 with blanks/comments).
+**Test code: 6,624 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,
@@ -380,22 +380,8 @@ Said before critics find it:
   memory. A Python string cannot be reliably wiped, so while a key is
   loaded there is a copy of it in Corky's memory that nothing can
   scrub. What protects it is not the language: the board has no swap,
-  the datadir is a ramdisk, and power-off ends the session.
-
-  *Would Rust fix this?* It would fix one quarter of it, and the
-  smallest quarter. While a key is loaded it exists in four places:
-  Corky's Python, the pipe into `bitcoin-cli`, **bitcoind's own
-  memory**, and the wallet file on the ramdisk. Rust would let Corky
-  zero the first. The third is the one that matters, because Core is
-  where the wallet actually lives and it holds the key for the whole
-  session rather than for one hop, and no rewrite of Corky touches it.
-
-  The cost is the argument itself. What makes "0 lines transform a key"
-  worth anything is that a person can read all 2,407 lines in an
-  afternoon and check it. A rewrite spends that to harden the shortest
-  lived of four copies. So: no, and the honest mitigation is the one
-  already here, which is that the whole machine forgets at power-off
-  and [a test proves it](tests/test_no_persistence.py).
+  the datadir is a ramdisk, and power-off ends the session, which
+  [a test proves](tests/test_no_persistence.py).
 - **The radio chip on a Zero 2 W still has power** after hardening. The
   overlays unbind the driver and the firmware never loads, so nothing
   can drive it, and every check Corky runs is a check on the operating
@@ -408,14 +394,6 @@ Said before critics find it:
   at all.
 - **150 inputs**, and the device refuses more. That is this board's
   memory, measured, not a policy.
-- **About 1 export QR in 100 cannot be read by Sparrow's scanner.**
-  Measured against Sparrow's own zxing, 4 of 440. It is a property of
-  the QR mask the encoder picks, it is deterministic for a given key,
-  and it cannot be tuned away: more pixels, less error correction and
-  every fixed mask were all tried and none is the cause. The same
-  descriptor is also offered as text to type and as a wallet file, so it
-  is an annoyance rather than a way to lose anything. [E-5 in
-  ISSUES.md](ISSUES.md) has the numbers and the two real fixes.
 
 ## How it is tested
 

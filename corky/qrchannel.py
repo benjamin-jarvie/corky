@@ -334,7 +334,32 @@ def frames_to_images(frames, box_size=4, border=2, panel=None):
                           back_color="white").convert("RGB") for qr in codes]
 
 
-def text_to_image(text, panel=None, box_size=8, border=2):
+#: Every QR mask pattern the standard defines. A mask is the checkerboard
+#: XORed over the data so the code has no large blank runs, and an encoder
+#: picks one by a penalty heuristic tuned for PRINT legibility rather than
+#: for any decoder.
+#:
+#: About one descriptor in a hundred, that heuristic picks a mask Sparrow's
+#: zxing cannot read at export size, and it is the same one every time,
+#: so the export never works for that key (ISSUES.md E-5, measured 4 of
+#: 440 against Sparrow's own scanner 2026-09-09). Density and error
+#: correction were both tested and neither is the cause.
+#:
+#: Rendering ALL of them is the fix. Every image carries the whole
+#: descriptor, so a scanner reads whichever it happens to catch, and
+#: measured across 120 real descriptors the WORST had 7 of these 8
+#: readable. No coordinator has to support anything: each frame is an
+#: ordinary complete QR of identical text.
+QR_MASKS = tuple(range(8))
+
+
+def text_to_images(text, panel=None, box_size=8, border=2):
+    """The same text as one QR per mask pattern. See QR_MASKS."""
+    return [text_to_image(text, panel=panel, box_size=box_size,
+                          border=border, mask=m) for m in QR_MASKS]
+
+
+def text_to_image(text, panel=None, box_size=8, border=2, mask=None):
     """One static QR of arbitrary text, for the public key export.
 
     NOT `frames_to_images`: that uppercases its input to reach QR
@@ -365,7 +390,7 @@ def text_to_image(text, panel=None, box_size=8, border=2):
     import qrcode
 
     def build(size):
-        qr = qrcode.QRCode(box_size=size, border=border,
+        qr = qrcode.QRCode(box_size=size, border=border, mask_pattern=mask,
                            error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(text)
         try:

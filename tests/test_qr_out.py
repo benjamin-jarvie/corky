@@ -454,5 +454,40 @@ for _W, _H in ((320, 240), (240, 240)):
         ok(f"{_W}x{_H}: the outbound QR is {_carded}px on the card, the same "
            "as it was on the bare white panel")
 
+# --- the export screen must offer EVERY mask, not one -------------------
+#
+# Driven through the real _export_qr, because the whole point is what
+# main.py paints. tests/sparrow checks that the eight renders decode; this
+# checks that the device shows them. Between them a regression to one
+# static render cannot pass: rebuilding text_to_images as a single
+# text_to_image leaves this at 1 painted frame.
+#
+# One descriptor in a hundred gets a mask Sparrow's zxing cannot read, the
+# same mask every time, so that key's export never worked (ISSUES.md E-5).
+# The worst descriptor of 120 had 7 of 8 masks readable, which is why
+# showing all eight is the fix.
+_painted.clear()
+_sess = corky_main.Session(_Disp(), hal.DevButtons("a"), rpc=object(),
+                           animate=False)
+_DESC = ("wpkh([73c5da0a/84h/1h/0h]tpubDC3Amaq5HtW8qxGoTwyDBaD12LoZ6xXuHGKo3"
+         "34cLm2yJAze7kU9fmKkfYgMy6jvCRUxQxQ9FruBfEytY5sQE5RBex8X4nEY8W26B9"
+         "KYvzF/0/*)#85lfyknl")
+_took = _sess._export_qr("corky", _DESC, "wpkh")
+_distinct = {i.tobytes() for i in _painted}
+if len(_painted) != len(qrchannel.QR_MASKS):
+    bad(f"the export screen painted {len(_painted)} frame(s), not one per "
+        f"mask ({len(qrchannel.QR_MASKS)}). A single render is unreadable "
+        "for about one descriptor in a hundred and always the same one.")
+elif len(_distinct) != len(_painted):
+    bad(f"the export painted {len(_painted)} frames but only "
+        f"{len(_distinct)} are different, so some masks are duplicates and "
+        "the cycle covers less than it claims")
+elif _took is not True:
+    bad(f"the export returned {_took!r} after A, so the animated screen "
+        "lost the key that accepts it")
+else:
+    ok(f"the export screen shows all {len(_painted)} masks, every one a "
+       "different image, and still answers the button")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

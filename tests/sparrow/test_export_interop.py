@@ -140,18 +140,33 @@ def main():
             desc = signer.export_descriptor(net.rpc, made, kind)
             core_addrs = signer.receive_addresses(net.rpc, made, kind, 3)
             for panel_name, panel in PANELS:
-                img = qrchannel.text_to_image(
-                    desc, panel=(panel[0], min(panel[1], screens.QR_MAX_PX)))
-                png = work / f"gen-{kind}-{panel[0]}.png"
+                # EVERY mask, because the screen shows every mask. One
+                # static render fails for about one descriptor in a
+                # hundred (ISSUES.md E-5) and this suite used to render
+                # exactly that one, so it failed roughly one run in
+                # sixty and read as a flake. What matters now is not
+                # whether a particular render decodes; it is how many of
+                # the eight do, because a scanner reads whichever frame
+                # it catches.
                 xfp, path = signer.origin_of(desc)
-                screens.qr_export(panel[0], panel[1], img,
-                                  xfp, kind, path).save(png)
-                decoded = java("SparrowQr", "qrdecode", str(png))[0]
+                read = 0
+                for m, img in enumerate(qrchannel.text_to_images(
+                        desc, panel=(panel[0],
+                                     min(panel[1], screens.QR_MAX_PX)))):
+                    png = work / f"gen-{kind}-{panel[0]}-m{m}.png"
+                    screens.qr_export(panel[0], panel[1], img,
+                                      xfp, kind, path).save(png)
+                    try:
+                        if java("SparrowQr", "qrdecode", str(png))[0] == desc:
+                            read += 1
+                    except Exception:
+                        pass
                 r.record(f"{kind}: zxing reads the {panel_name} export screen "
                          "of a Core-generated key",
-                         decoded == desc,
-                         "byte-identical" if decoded == desc
-                         else f"got {decoded[:40]!r}")
+                         read >= 6,
+                         f"{read} of 8 masks readable"
+                         + ("" if read >= 6 else "  TOO FEW: a scanner can "
+                            "miss a whole cycle"))
             out = java("SparrowDesc", "REGTEST", desc, 3, tags=("INFO", "OUT"))
             sparrow_addrs = [line.split("\t")[1] for line in out["OUT"]]
             r.record(f"{kind}: Sparrow derives Core's first three addresses",

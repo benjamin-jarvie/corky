@@ -764,26 +764,69 @@ class Session:
         self._page_addresses(name, kind, limit=3)
         return True
 
+    #: How long each masked render of the export QR is held. Slow enough
+    #: that a scanner locks on one frame rather than straddling two, and
+    #: an eighth of the cycle, so the whole set is offered in 2.4s.
+    EXPORT_MASK_DELAY = 0.3
+
     def _export_qr(self, _name, desc, kind):
         """The code, with the fingerprint, the policy and the path on it.
 
         All three identify what a coordinator is being handed, and Ben
         asked for all three on the screen with the code. They sit in the
         letterbox above and below, so the code itself is untouched.
+
+        **The code cycles through the eight QR mask patterns.** Every
+        frame carries this same descriptor whole, so a coordinator reads
+        whichever one it catches and needs no support for anything: each
+        is an ordinary static QR of identical text.
+
+        It is here because a single static render fails. Roughly one
+        descriptor in a hundred gets a mask Sparrow's zxing cannot read
+        at this size, and it is the same mask every time, so that key's
+        export never worked (ISSUES.md E-5: 4 of 440 measured against
+        Sparrow's own scanner). Pixel density, error correction and every
+        fixed mask were tested and none of them is the cause. Across 120
+        real descriptors the worst had **7 of 8 masks readable**, so
+        showing all eight is what takes the failure to nothing.
         """
         xfp, path = signer.origin_of(desc)
         # Sized against QR_MAX_PX, not the panel, so the light card and the
         # line underneath both have room. screens.qr_export does the rest.
-        code = qrchannel.text_to_image(
+        codes = qrchannel.text_to_images(
             desc, panel=(self.w, min(self.h, screens.QR_MAX_PX)))
-        framed = screens.qr_export(self.w, self.h, code, xfp, kind, path)
-        while True:
-            self.display.show(framed)
-            key = self.buttons.read()
-            if key in ("b", "c"):
-                return False
-            if key in ("a", "p"):
-                return True
+        frames = [screens.qr_export(self.w, self.h, c, xfp, kind, path)
+                  for c in codes]
+        if not self.animate:
+            # Scripted runs paint one deterministic pass and then read,
+            # the way _show_qr_loop does, so a session stays reproducible.
+            for img in frames:
+                self.display.show(img)
+            while True:
+                key = self.buttons.read()
+                if key in ("b", "c"):
+                    return False
+                if key in ("a", "p"):
+                    return True
+        answer = {}
+        stop = threading.Event()
+
+        def wait_for_key():
+            while True:
+                key = self.buttons.read()
+                if key in ("a", "p", "b", "c"):
+                    answer["key"] = key
+                    stop.set()
+                    return
+
+        threading.Thread(target=wait_for_key, daemon=True).start()
+        while not stop.is_set():
+            for img in frames:
+                if stop.is_set():
+                    break
+                self.display.show(img)
+                stop.wait(self.EXPORT_MASK_DELAY)
+        return answer.get("key") in ("a", "p")
 
     def _export_text(self, _name, desc, kind):
         """The same descriptor as text, for typing into a coordinator."""
