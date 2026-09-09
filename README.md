@@ -103,32 +103,81 @@ written by SatoshiLabs, a hardware wallet vendor. Output descriptors
 (BIPs 380 to 386) were written by Pieter Wuille and Ava Chow, Bitcoin
 Core contributors. Core has never implemented BIP39.
 
-**And a seed phrase does not carry enough.** It holds the key and nothing
-else: not the script policy, not the derivation path, not whether the
-wallet is single-signature or one key of a multisig quorum. Restoring
-from words alone is a guess about which addresses were yours.
+**And a seed phrase can hide a second secret.** BIP39 allows a
+passphrase, mixed into the key and written nowhere. The same twelve
+words with and without one are two different wallets, and nothing in the
+words says whether one was used:
 
-**Corky's paper backup is a key too, and has the same gap.** It is
-Core's master xprv, and an xprv is a key with no path in it either.
-Being straight about that matters more than the argument above does.
-What closes the gap is not the backup, it is what happens when you type
-it back in: Corky asks Core to rebuild all four of the standard
-policies, which is exactly the set `createwallet` makes.
+| | |
+|---|---|
+| twelve words, no passphrase | wallet `73c5da0a` |
+| the same twelve words, passphrase `hunter2` | wallet `ca2c62d2` |
 
-| restored from the paper alone |
-|---|
-| `pkh(xprv/44h/0h/0h/{0,1}/*)` |
-| `sh(wpkh(xprv/49h/0h/0h/{0,1}/*))` |
-| `wpkh(xprv/84h/0h/0h/{0,1}/*)` |
-| `tr(xprv/86h/0h/0h/{0,1}/*)` |
+Forget it and the words are worth nothing. Corky's backup cannot have
+one: the key is the key. Two smaller things follow from the same
+self-description. Words do not say which SYSTEM made them, and Electrum's
+look identical to BIP39's while deriving something else; `tprv` says
+exactly what it is. Words do not say which NETWORK either, and the
+version bytes do: `xprv` is real money, `tprv` is not.
 
-So a key Corky made comes back whole, because those four are what Corky
-made. **The account number is `0h` and it is not read from anywhere.** A
-key you loaded as a bare descriptor on some other path is not recoverable
-from the paper on its own; keep that descriptor with it. That is the
-honest edge of this, and it is the reason the export is a descriptor and
-not just a key: a descriptor carries the policy and the path, checksum
-included, and the paper does not.
+### What you actually write down
+
+111 characters, on three screens, and nothing else.
+
+```
+tprv8ZgxMBicQKsPeLf4pJhcwYLxWGUchL9xcPHZpf66vpnC
+dEE3PbqXk99fFsqmMFqs6GFXR5uXbuDSBS7oQ9ryFGwpnTRC
+dFa7AJJwYrCFMF4
+```
+
+That is Core's master extended private key. It is a key and only a key:
+no derivation path, no script policy, no wallet name.
+
+**A seed phrase is a key and only a key too, and this page used to
+pretend otherwise.** The argument for descriptors is not that words lose
+your paths, because our own backup loses them in exactly the same way.
+
+Paths do not need writing down because they were never secret. Every
+wallet checks the same four, and you pick the script type when you
+import:
+
+| | |
+|---|---|
+| Legacy | `m/44'/0'/0'` |
+| Nested segwit | `m/49'/0'/0'` |
+| Native segwit | `m/84'/0'/0'` |
+| Taproot | `m/86'/0'/0'` |
+
+That is Sparrow's own table, and Corky rebuilds exactly that set on
+restore. **Tested rather than argued**:
+[`tests/sparrow/test_recovery.py`](tests/sparrow/test_recovery.py) hands
+those 111 characters to Sparrow's own library, out of its verified 2.5.4
+release, with no Corky code involved in the recovery at all. For all
+four policies Sparrow finds the addresses, signs a real spend, and
+Bitcoin Core confirms the network would accept it.
+
+**The edge, because there is one.** The account number is hardcoded
+`0h`. A key you loaded as a bare descriptor on some other account is not
+recoverable from the paper alone, so keep that descriptor with it. A key
+Corky generated cannot land there.
+
+### Nothing private leaves except on paper
+
+The backup is the only private thing that ever goes anywhere, and it
+goes by hand. What a coordinator gets is public:
+
+```
+wpkh([3bd22c95/84h/1h/0h]tpubDC3Amaq5HtW8qxGoTwyDB…/0/*)#85lfyknl
+```
+
+An xpub, its origin and a checksum. `tests/e2e_regtest.py` fails if any
+exported descriptor carries a private prefix, which is the loudest thing
+that check could ever say.
+
+Note the asymmetry: the EXPORT carries the path, because a coordinator
+has to know which addresses to watch. The BACKUP does not, because it is
+just a key. That is the whole reason a descriptor is worth having and a
+key alone is not enough to hand to somebody else.
 
 Greg Maxwell, on the BIPs repository's own comments page for BIP39
 ([source](https://github.com/bitcoin/bips/wiki/Comments:BIP-0039)):
@@ -321,7 +370,7 @@ payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
 **Total functional code: 2,432 lines** (4,990 with blanks/comments).
-**Test code: 6,624 lines**, none of which ships.
+**Test code: 6,656 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,

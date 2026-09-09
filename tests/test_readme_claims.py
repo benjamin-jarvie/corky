@@ -317,6 +317,50 @@ else:
            f"measured ({', '.join(measured)}), "
            f"{len(unproven)} not ({', '.join(unproven)})")
 
+# The backup section makes four checkable claims. It got the ARGUMENT
+# wrong for a long time (it attacked seed phrases for losing the
+# derivation path, which Corky's own xprv backup loses in exactly the
+# same way), so the facts under the new argument are pinned rather than
+# trusted (2026-09-09).
+sys.path.insert(0, str(ROOT / "corky"))
+import screens                                          # noqa: E402
+import signer as _signer                                # noqa: E402
+
+# 1. the four purposes the page lists are the four the code rebuilds
+listed = {int(m) for m in re.findall(r"`m/(\d+)'/0'/0'`", README)}
+built = {purpose for purpose, _shape in _signer.PURPOSE_FUNCS}
+if listed != built:
+    bad(f"the README lists derivation purposes {sorted(listed)} and "
+        f"signer.PURPOSE_FUNCS rebuilds {sorted(built)}")
+else:
+    ok(f"the README's {len(listed)} derivation paths are the ones "
+       "build_descriptors actually rebuilds")
+
+# 2. the account really is hardcoded, which is the stated edge
+_src = (ROOT / "corky" / "signer.py").read_text()
+if not re.search(r'f"\{xprv\}/\{purpose\}h/\{coin\}h/0h/', _src):
+    bad("build_descriptors no longer hardcodes account 0h, so the "
+        "README's stated recovery edge is wrong")
+elif "hardcoded" not in README and "hardcode" not in README:
+    bad("the README stopped saying the account is hardcoded, which is "
+        "the one thing a paper backup cannot recover from")
+else:
+    ok("the account is hardcoded 0h and the README says so")
+
+# 3. the backup really is that long
+c = claimed(r"(\d+) characters, on three screens", "backup length")
+KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssv"
+       "pAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
+if c is not None:
+    if c != len(KEY):
+        bad(f"the README says the backup is {c} characters; a real master "
+            f"key is {len(KEY)}")
+    elif len(screens.text_pages(KEY)) != 3:
+        bad(f"the backup is {len(screens.text_pages(KEY))} screens, "
+            "not the three the README describes")
+    else:
+        ok(f"the backup is {c} characters across three screens")
+
 # Every file and every module.symbol the documents NAME must exist.
 #
 # Audit A8 (2026-09-06) found the security argument citing
