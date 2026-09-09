@@ -408,6 +408,14 @@ Said before critics find it:
   at all.
 - **150 inputs**, and the device refuses more. That is this board's
   memory, measured, not a policy.
+- **About 1 export QR in 100 cannot be read by Sparrow's scanner.**
+  Measured against Sparrow's own zxing, 4 of 440. It is a property of
+  the QR mask the encoder picks, it is deterministic for a given key,
+  and it cannot be tuned away: more pixels, less error correction and
+  every fixed mask were all tried and none is the cause. The same
+  descriptor is also offered as text to type and as a wallet file, so it
+  is an annoyance rather than a way to lose anything. [E-5 in
+  ISSUES.md](ISSUES.md) has the numbers and the two real fixes.
 
 ## How it is tested
 

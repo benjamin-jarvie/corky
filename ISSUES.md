@@ -16,6 +16,59 @@ the source on that date.
 
 ## Open
 
+### E-5 About 1% of export QRs are unreadable by Sparrow's own scanner
+
+Found 2026-09-09, chasing what looked like a flake in
+`tests/sparrow/test_export_interop.py`. It is not a flake. Measured
+against Sparrow's own zxing, on descriptors Core really generated,
+rendered exactly as `_export_qr` renders them:
+
+| | |
+|---|---|
+| today's setting | **4 of 440 (0.9%)** |
+
+It is **deterministic per descriptor**, not random. The same key fails on
+both panels, because the code is the same 159px image either way. If your
+key is one of the unlucky ones, that export QR never reads, however many
+times you try.
+
+**It cannot be tuned away.** Three things were tested and none of them is
+the cause:
+
+| tried | result |
+|---|---|
+| more pixels per module (3 to 4) | still ~1%, ECC M fails at both |
+| lower error correction (M to L) | 5 of 440, no better |
+| forcing each of the 8 mask patterns | every mask fails somewhere: 0,1,2,3,5,6,7 all failed in 180, and the encoder's own choice beat six of them |
+
+The mechanism is the mask. For a failing descriptor, zxing reads **six of
+the eight** mask patterns; the encoder picked one of the two it cannot.
+Encoders choose a mask on a penalty heuristic tuned for print legibility,
+not for any decoder, so roughly one time in a hundred it picks one zxing
+will not take. No fixed mask is safer: mask 4 read 180 of 180, and so did
+the encoder's own choice in that same sample, which we know fails ~1% on
+a larger one.
+
+The measurement is a lower bound. It decodes a perfect PNG. A coordinator
+photographs a lit panel through a lens, which is strictly harder.
+
+**Two fixes, both real work and both after the flash:**
+
+1. Animate the descriptor as BC-UR, the way the PSBT path already goes
+   out. Fountain redundancy means the coordinator sees several different
+   codes and one bad mask stops mattering. This is the same answer ticket
+   09 reached for the signing path after measuring the same class of
+   failure at 4px per module.
+2. Cheaper: let the user re-render. Six masks of eight work for any given
+   descriptor, so one key press that re-rolls the mask fixes it, and the
+   user already knows it failed because their coordinator did not scan.
+
+**Not urgent, because the QR is one of three export routes.** Text to
+type and wallet file both carry the same descriptor, so a user who hits
+this is inconvenienced rather than stuck. That is the difference between
+this and the signing path, where the frames are the only way out and are
+animated for exactly this reason.
+
 ### E-4 The five coordinators are unproven on a device
 
 The coordinator chooser was removed from the export because the research
