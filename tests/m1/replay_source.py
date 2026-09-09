@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
 import qrchannel  # noqa: E402
+import screens     # noqa: E402
 
 
 class ReplaySource:
@@ -160,7 +161,7 @@ def _selftest():
     paths = []
     for i, img in enumerate(images):
         q = tmp / f"{i:03d}.png"
-        qrchannel.fit_to_panel(img, 320, 240).save(q)
+        screens.qr_frame(320, 240, img).save(q)
         paths.append(q)
     src = ImageReplaySource(paths)
     got, err, n = assemble(src)

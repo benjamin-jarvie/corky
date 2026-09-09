@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import qrchannel  # noqa: E402
+import screens     # noqa: E402
 from replay_source import (ReplaySource, ImageReplaySource, scan_psbt,  # noqa: E402
                            OVERSIZE, out_of_order, with_foreign, with_garbage)
 
@@ -136,7 +137,7 @@ def main():
     paths = []
     for i, img in enumerate(qrchannel.frames_to_images(fa, panel=(320, 240))):
         q = tmp / f"{i:03d}.png"
-        qrchannel.fit_to_panel(img, 320, 240).save(q)
+        screens.qr_frame(320, 240, img).save(q)
         paths.append(q)
     src = ImageReplaySource(paths)
     got = scan_psbt(src)

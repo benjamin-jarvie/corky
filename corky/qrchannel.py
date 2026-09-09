@@ -304,8 +304,8 @@ def frames_to_images(frames, box_size=4, border=2, panel=None):
 
     panel=(w, h) LOWERS box_size when the frames would not fit that panel.
     Frame length drives the QR version, so one tuning change to
-    MAX_FRAGMENT_LEN can push a frame past the panel, where fit_to_panel used
-    to crop it into a code no scanner can read (I-1). box_size stays the
+    MAX_FRAGMENT_LEN can push a frame past the panel, where the screen
+    would crop it into a code no scanner can read (I-1). box_size stays the
     ceiling, so frames that already fit render exactly as before; only frames
     that would overflow get smaller modules.
 
@@ -386,27 +386,3 @@ def text_to_image(text, panel=None, box_size=8, border=2):
                 "one pixel per module")
         qr = build(fitted)
     return qr.make_image(fill_color="black", back_color="white").convert("RGB")
-
-
-def fit_to_panel(img, w, h):
-    """Scale a square QR to the panel by an INTEGER factor and letterbox it.
-
-    Resizing a square QR to a 4:3 panel gives non-square modules and
-    interpolated edges, so the coordinator's scanner has to recover a code
-    that is no longer a code. An integer factor with NEAREST keeps every
-    module square and hard-edged; the surround is white so the quiet zone
-    survives.
-    """
-    from PIL import Image
-    if img.width > w or img.height > h:
-        # Cropping a QR silently destroys it: the panel still shows something
-        # QR-shaped and no scanner will ever read it. Refuse instead, and let
-        # frames_to_images(panel=...) size the modules so this cannot arise.
-        raise QrChannelError(
-            f"a {img.width}x{img.height} QR does not fit a {w}x{h} panel")
-    factor = min(w // img.width, h // img.height)
-    scaled = img.resize((img.width * factor, img.height * factor),
-                        Image.Resampling.NEAREST)
-    panel = Image.new("RGB", (w, h), "white")
-    panel.paste(scaled, ((w - scaled.width) // 2, (h - scaled.height) // 2))
-    return panel

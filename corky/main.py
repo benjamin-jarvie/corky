@@ -1769,9 +1769,16 @@ class Session:
         readable for any multi-frame PSBT. Any key stops. A single frame is
         a static QR, so it is shown once and waits for a key.
         """
-        images = [qrchannel.fit_to_panel(img, self.w, self.h)
+        # Sized against the CARD's budget, not the panel's, because the
+        # frames now sit on the same gold-edged card the export uses
+        # (screens.qr_frame). The budget is the short side less the pad
+        # and the stroke on both edges, and it happens to cost nothing:
+        # an outbound frame is 212px either way on both panels.
+        budget = min(self.w, self.h) - 2 * (screens.QR_CARD_PAD
+                                            + screens.STROKE)
+        images = [screens.qr_frame(self.w, self.h, img)
                   for img in qrchannel.frames_to_images(
-                      frames, panel=(self.w, self.h))]
+                      frames, panel=(budget, budget))]
         if len(images) == 1:
             self.display.show(images[0])
             self.buttons.read()

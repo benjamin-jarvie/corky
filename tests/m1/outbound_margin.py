@@ -28,6 +28,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "corky"))
 sys.path.insert(0, str(REPO / "hw" / "vendor"))
 import qrchannel  # noqa: E402
+import screens     # noqa: E402
 
 SPARROW_BUILD = REPO / "tests/sparrow/.build"
 JAVA = SPARROW_BUILD / "jdk-25.0.4.1+1/Contents/Home/bin/java"
@@ -53,7 +54,7 @@ def main():
         images = qrchannel.frames_to_images(frames, panel=PANEL)
         for i, img in enumerate(images):
             path = tmp / f"{trial}_{i}.png"
-            qrchannel.fit_to_panel(img, *PANEL).save(path)
+            screens.qr_frame(*PANEL, img).save(path)
             total += 1
             qr = qrcode.QRCode(border=2,
                                error_correction=qrcode.constants.ERROR_CORRECT_L)

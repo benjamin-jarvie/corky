@@ -9,6 +9,7 @@ bounding box outside the canvas.
 Run: python3 tests/test_screen_fit.py
 """
 import ast
+import base64
 import inspect
 import sys
 from decimal import Decimal
@@ -117,6 +118,15 @@ CASES = {
         w, h, None, "hold the QR in view", 0.42),
     "scanning-advisory": lambda w, h: screens.scanning(
         w, h, None, "large frames: set Sparrow to Low density", 0.0),
+    # The outbound PSBT frame, on the same card as the export since
+    # 2026-09-08. Sized against the card's budget, which is what the
+    # device does, so this case fails if the card ever starts costing the
+    # code its size.
+    "qr-frame": lambda w, h: screens.qr_frame(
+        w, h, qrchannel.frames_to_images(
+            qrchannel.psbt_to_frames(
+                base64.b64encode(b"psbt\xff" + b"\x01\x02\x03" * 400).decode()),
+            panel=(min(w, h) - 2 * (screens.QR_CARD_PAD + screens.STROKE),) * 2)[0]),
     "qr-export": lambda w, h: screens.qr_export(
         w, h, qrchannel.text_to_image(
             "wpkh([73c5da0a/84h/0h/0h]" + "x" * 90 + "/0/*)#kwx0dvhr",

@@ -791,31 +791,43 @@ STROKE = 2
 TILE_RADIUS = 6
 
 
-def qr_export(w, h, code, xfp, kind, path):
-    """The export QR on the device's own dark ground, with its identity
-    underneath (Ben, 2026-09-05).
+#: The white margin a code gets on top of the two modules `qrchannel`
+#: renders. A QR wants four empty modules and the card supplies the rest.
+#: Ten pixels is what a 212px animated frame needs to reach 4.7 modules,
+#: which is the size the outbound PSBT frames are drawn at.
+QR_CARD_PAD = 10
 
-    The panel is INK like every other screen; the code sits on a light
-    card; the fingerprint, the script type and the derivation path run in
-    one line below it.
+
+def _qr_card(w, h, code, reserve=0):
+    """Draw one QR on the device's ground and return (img, d, bottom).
 
     **The light card is not decoration.** A QR needs a quiet zone of four
-    empty modules, and until this screen the panel was white, so the
-    letterbox WAS the quiet zone and it was effectively infinite. On a
-    dark ground that stops being true: `qrchannel` renders only two
-    modules of border, so the card has to make up the rest or the code
-    becomes harder to read rather than prettier.
+    empty modules, and while the panel was white the letterbox WAS the
+    quiet zone and it was effectively infinite. On a dark ground that
+    stops being true: `qrchannel` renders only two modules of border, so
+    the card has to make up the rest or the code becomes harder to read
+    rather than prettier.
+
+    `reserve` is height kept clear at the bottom for a caption. Pass 0
+    and the card centres in the whole panel.
 
     `code` is the rendered QR, already scaled. It is not resized here,
     because resizing a QR by anything but an integer factor turns square
     modules into soft ones.
     """
     img, d = _frame(w, h, None)
-    # A QR wants four empty modules around it. qrchannel renders two, so
-    # the card supplies the rest and then some.
-    pad = max(10, int(code.width * 0.06))
+    pad = max(QR_CARD_PAD, int(code.width * 0.06))
     card_w, card_h = code.width + 2 * pad, code.height + 2 * pad
-    top = max(STROKE, (h - card_h - int(h * 0.11)) // 2)
+    # REFUSE, because `img.paste` below crops in silence and a cropped QR
+    # still looks like a QR. This guard came from qrchannel.fit_to_panel,
+    # which the signing path used until this card replaced it (I-1, and
+    # again on text_to_image 2026-09-08). Nothing may lose it in the move.
+    if card_w + 2 * STROKE > w or card_h + 2 * STROKE > h:
+        raise ValueError(
+            f"a {code.width}x{code.height} QR needs a "
+            f"{card_w + 2 * STROKE}x{card_h + 2 * STROKE} card and the "
+            f"panel is {w}x{h}; size the code against the card's budget")
+    top = max(STROKE, (h - card_h - reserve) // 2)
     x0 = (w - card_w) // 2
     # The gold sits OUTSIDE the card: a larger rounded rectangle behind a
     # smaller white one, rather than an outline drawn on the card's own
@@ -826,14 +838,46 @@ def qr_export(w, h, code, xfp, kind, path):
     _round_rect(img, [x0, top, x0 + card_w, top + card_h],
                 CARD_RADIUS, fill="white")
     img.paste(code, (x0 + pad, top + pad))
+    return img, d, top + card_h + STROKE
+
+
+def qr_export(w, h, code, xfp, kind, path):
+    """The export QR, with its identity underneath (Ben, 2026-09-05).
+
+    The fingerprint, the script type and the derivation path run in one
+    line below the card, so a coordinator can be checked rather than
+    trusted.
+    """
+    img, d, below = _qr_card(w, h, code, reserve=int(h * 0.11))
     # Centred between the outside of the stroke and the bottom of the
     # screen, which is what Ben asked for and what stops the line looking
     # tacked onto the card.
-    below = top + card_h + STROKE
     _fit(d, (w // 2, (below + h) // 2),
          f"{xfp.upper()}  ·  {SCRIPT_LABELS[kind].upper()}  ·  {path}",
          int(h * 0.045), CREAM, "mm", int(w * 0.94))
     return img
+
+
+def qr_frame(w, h, code):
+    """One frame of the outbound PSBT animation, on the same card.
+
+    It was a bare QR letterboxed on a WHITE panel until 2026-09-08, so
+    the screen a signed transaction leaves by looked like nothing else on
+    the device, and the one screen that DID have the card was the export
+    (Ben spotted it in the demo recording).
+
+    The size does not change. Sized against the card's own budget, an
+    outbound frame is 212px on both panels, which is what the white
+    letterbox gave it, and the pad brings the quiet zone to 4.7 modules
+    against the four the spec asks for. So this is the dark ground and
+    the gold edge for nothing: M1's optics are the gate that is not
+    passed, and a prettier screen must not cost a coordinator's camera a
+    single module.
+
+    No caption. A caption would need height, and height is the thing the
+    code is using.
+    """
+    return _qr_card(w, h, code)[0]
 
 
 def address_page(w, h, index, address, kind, total=None):

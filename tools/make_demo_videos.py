@@ -295,9 +295,15 @@ def yield_scenes(xfp, xprv, desc, addrs, kinds, pages, path,
                                      input_total_btc=review["input_total_btc"]))
     shot("v6_done", screens.result(W, H, ok=True, detail="1 input signed",
                                    label="SIGNED"))
-    imgs = qrchannel.frames_to_images(frames[:1], panel=(W, H)) \
-        if hasattr(qrchannel, "frames_to_images") else []
-    shot("v6_out", imgs[0] if imgs else screens.busy(W, H, "sending…"))
+    # THE SAME TWO LINES main._show_qr_loop RUNS. This showed the bare
+    # image frames_to_images returns, which is not a screen: the device
+    # composes it onto the gold-edged card, and before that it letterboxed
+    # it. So the recording of the one flow that ends in a QR did not show
+    # what the panel shows, on a page whose first line is "these are the
+    # real screens" (Ben, from the recording, 2026-09-08).
+    budget = min(W, H) - 2 * (screens.QR_CARD_PAD + screens.STROKE)
+    imgs = qrchannel.frames_to_images(frames[:1], panel=(budget, budget))
+    shot("v6_out", screens.qr_frame(W, H, imgs[0]))
     build("06-sign-a-transaction", [
         ("v6_home", "Signing. The transaction arrives by camera, and "
                     "leaves the same way.", 0),

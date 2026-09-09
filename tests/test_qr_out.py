@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
 from PIL import Image  # noqa: E402
 import qrchannel  # noqa: E402
+import screens  # noqa: E402
 import hal  # noqa: E402
 import main as corky_main  # noqa: E402
 
@@ -57,47 +58,62 @@ for x in range(0, 60, 2):          # a striped pattern stands in for modules
     for y in range(60):
         src.putpixel((x, y), (0, 0, 0))
 
-out = qrchannel.fit_to_panel(src, PANEL_W, PANEL_H)
+# These four properties belonged to qrchannel.fit_to_panel, which scaled a
+# QR by an integer factor and letterboxed it in white. It had one caller,
+# the signing loop, and on 2026-09-08 that loop moved onto screens'
+# gold-edged card so the screen a signed transaction leaves by stops
+# looking like nothing else on the device (Ben, from the demo recording).
+# fit_to_panel went with it. The properties did not: they belong to
+# frames_to_images (which picks an integer box_size) and to _qr_card
+# (which pastes at natural size and refuses what will not fit), and they
+# are checked HERE against the pair rather than against the function that
+# used to hold them.
+out = screens.qr_frame(PANEL_W, PANEL_H, src)
 if out.size != (PANEL_W, PANEL_H):
-    bad(f"fit_to_panel returned {out.size}, not the panel size")
+    bad(f"qr_frame returned {out.size}, not the panel size")
 else:
-    ok("fit_to_panel returns exactly the panel size")
+    ok("qr_frame returns exactly the panel size")
 
-factor = min(PANEL_W // src.width, PANEL_H // src.height)
-if not module_edges_are_integral(src, out, factor):
-    bad("fit_to_panel did not scale by a whole number: modules are not square")
+# Every module is box_size pixels wide because box_size is an int, so a
+# square QR stays square and no module is a fraction of a pixel. Checked
+# on the real frames rather than on the striped stand-in, because the
+# scaling now happens when the code is rendered and not afterwards.
+_probe = qrchannel.frames_to_images(
+    qrchannel.psbt_to_frames(base64.b64encode(b"psbt\xff" * 200).decode()),
+    panel=(200, 200))
+if any(i.width != i.height for i in _probe):
+    bad(f"a frame is not square: {[i.size for i in _probe[:3]]}")
+elif len({i.size for i in _probe}) != 1:
+    bad(f"frames differ in size mid-animation: {sorted({i.size for i in _probe})}")
 else:
-    ok(f"fit_to_panel scaled by an integer factor ({factor}x), modules square")
+    ok(f"every frame is square and the same size ({_probe[0].width}px), so "
+       "modules stay square and the image does not resize mid-scan")
 
-# The surround must be white, so the quiet zone is not swallowed by the ink
-# ground of the rest of the UI.
-if out.getpixel((1, 1)) != (255, 255, 255):
-    bad("the letterbox surround is not white: the quiet zone is lost")
+# The surround immediately around the code must be WHITE, or the quiet
+# zone is swallowed. It is a card on an ink ground now rather than a white
+# letterbox, so the check moved inward: sample just outside the code.
+_c = screens.qr_frame(PANEL_W, PANEL_H, src)
+_inset = (PANEL_W - src.width) // 2 - 3
+if _c.getpixel((_inset, PANEL_H // 2)) != (255, 255, 255):
+    bad(f"the pixel just outside the code is "
+        f"{_c.getpixel((_inset, PANEL_H // 2))}, not white: the card is not "
+        "supplying the quiet zone")
 else:
-    ok("the letterbox surround is white, preserving the quiet zone")
-
-# A square source must stay square on a 4:3 panel: this is the whole defect
-# D11 named. Compare the scaled block's width and height.
-scaled_w = src.width * factor
-scaled_h = src.height * factor
-if scaled_w != scaled_h:
-    bad(f"a square QR became {scaled_w}x{scaled_h} on the panel")
-else:
-    ok("a square QR stays square on a 4:3 panel")
+    ok("the card supplies a white quiet zone around the code")
 
 # --- I-1: an oversized QR must never be cropped ---------------------------
 #
 # Cropping leaves the panel showing something QR-shaped that no scanner can
-# read, and nothing on the device says so. fit_to_panel refuses; the real
-# guard is frames_to_images(panel=...), which sizes the modules so an
-# oversized frame cannot be produced in the first place.
+# read, and nothing on the device says so. PIL's paste crops in silence, so
+# the card refuses; the real guard is frames_to_images(panel=...), which
+# sizes the modules so an oversized frame cannot be produced at all.
 
 big = Image.new("RGB", (400, 400), "white")
 try:
-    qrchannel.fit_to_panel(big, PANEL_W, PANEL_H)
-    bad("fit_to_panel cropped a 400x400 QR instead of refusing it (I-1)")
-except qrchannel.QrChannelError:
-    ok("fit_to_panel refuses an oversized QR rather than cropping it (I-1)")
+    screens.qr_frame(PANEL_W, PANEL_H, big)
+    bad("the QR card pasted a 400x400 code instead of refusing it (I-1)")
+except ValueError:
+    ok("the QR card refuses an oversized code rather than cropping it (I-1)")
 
 # The cliff measured before the fix: 336 characters renders a version-10 QR
 # at 244px, which overflows a 240px panel. Sweep fragment lengths well past
@@ -119,10 +135,18 @@ for panel in ((320, 240), (240, 240)):          # SeedSigner+ hat, pocket hat
             bad(f"panel {panel}, fragment {mfl}: the animation changes size "
                 f"between frames: {sorted({i.size for i in imgs})}")
             continue
-        # And each one must survive the real display path.
-        fitted = {qrchannel.fit_to_panel(i, *panel).size for i in imgs}
+        # And each one must survive the real display path, which is the
+        # card. This swept fit_to_panel until 2026-09-08; the card is what
+        # the signing loop composes now, and it is the thing that can
+        # refuse.
+        try:
+            fitted = {screens.qr_frame(*panel, i).size for i in imgs}
+        except ValueError as exc:
+            bad(f"panel {panel}, fragment {mfl}: a frame will not fit the "
+                f"card: {exc}")
+            continue
         if fitted != {panel}:
-            bad(f"panel {panel}, fragment {mfl}: fit_to_panel gave {fitted}")
+            bad(f"panel {panel}, fragment {mfl}: qr_frame gave {fitted}")
         else:
             ok(f"panel {panel[0]}x{panel[1]}, fragment {mfl} "
                f"({longest} chars): every frame fits at {imgs[0].width}px")
@@ -405,6 +429,30 @@ except Exception as exc:
         f"Session.HANDLED does not catch, so the process ends: {exc}")
 else:
     bad("a text past QR version 40 rendered something anyway")
+
+# --- the outbound frame must not shrink for the sake of the card -------
+#
+# The signed transaction leaves by this screen, a coordinator's camera has
+# to read it, and M1's optics are the gate that is not passed. Putting the
+# frames on the export's card (2026-09-08) was only acceptable because it
+# cost nothing: sized against the card's budget an outbound frame is the
+# same 212px the white letterbox gave it. If a later change to the pad,
+# the stroke or MAX_FRAGMENT_LEN starts charging the code for the
+# decoration, that is a readability regression wearing a style change.
+_psbt = base64.b64encode(b"psbt\xff" + b"\x01\x02\x03" * 400).decode()
+_frames = qrchannel.psbt_to_frames(_psbt)
+for _W, _H in ((320, 240), (240, 240)):
+    _bare = qrchannel.frames_to_images(_frames, panel=(_W, _H))[0].width
+    _budget = min(_W, _H) - 2 * (screens.QR_CARD_PAD + screens.STROKE)
+    _carded = qrchannel.frames_to_images(_frames,
+                                         panel=(_budget, _budget))[0].width
+    if _carded < _bare:
+        bad(f"{_W}x{_H}: the card costs the outbound QR {_bare - _carded}px "
+            f"({_bare} -> {_carded}). A coordinator's camera pays for that, "
+            "and M1's optics are not proven.")
+    else:
+        ok(f"{_W}x{_H}: the outbound QR is {_carded}px on the card, the same "
+           "as it was on the bare white panel")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

@@ -26,6 +26,7 @@ from harness import Java, Regtest, Results
 
 sys.path.insert(0, str(harness.REPO / "hw" / "vendor"))
 import qrchannel  # noqa: E402
+import screens     # noqa: E402
 
 PANEL = (320, 240)   # SeedSigner+ hat, the primary control surface (PLAN A-15c)
 
@@ -86,11 +87,11 @@ def main():
             paths = []
             for n, img in enumerate(images):
                 q = tmp / f"{script_type}_{n:03d}.png"
-                qrchannel.fit_to_panel(img, *PANEL).save(q)
+                screens.qr_frame(*PANEL, img).save(q)
                 paths.append(str(q))
             R.record(f"{script_type} Corky renders {len(frames)} frames onto a "
                      f"{PANEL[0]}x{PANEL[1]} panel", len(paths) == len(frames),
-                     f"{images[0].size[0]}px QR, letterboxed")
+                     f"{images[0].size[0]}px QR on the gold card")
 
             # 5. Sparrow's scanner reads those images.
             #
