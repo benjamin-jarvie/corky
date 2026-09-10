@@ -63,6 +63,23 @@ ticket needs to re-derive them.
 - **Core has no BSMS (BIP129) and no quorum setup command.** A multisig
   wallet in Core IS an imported descriptor, and `listdescriptors true`
   is its backup: one string holding the key and the quorum together.
+- **Core signs on a BLINDED path, and most hardware wallets do not.**
+  Blinded xpubs are Michael Flaxman's protocol from 2021, implemented in
+  `buidl-python`'s `multiwallet.py` and in Unchained's Caravan since
+  2024. Instead of the standard `m/48'/0'/0'/2'`, the cosigner key is
+  derived at a random hardened path, `secure_secret_path` in buidl, "31
+  bits of good entropy" per level. The coordinator gets
+  `[real-xfp/random-hardened-path]child-xpub`, so it can watch the wallet
+  and cannot reconstruct it, and buidl warns "Do NOT share this record
+  with the holder of the seed phrase, or they will be able to unblind
+  their key". Spending needs BOTH the seed and the record.
+
+  buidl's own warning is the interesting half for this map: "few HWWs can
+  sign on these paths. Some can't even co-sign a multisig transaction
+  with nonstandard BIP32 paths." **Core has no such limit.** Tested
+  2026-09-09 with a 3-level, 93-bit random hardened path: the quorum
+  imports, and Core signs its share. That is a thing Corky can do that
+  most of the vendors in a multivendor quorum cannot.
 
 ## Decisions so far
 
@@ -85,6 +102,16 @@ _None yet. Charted 2026-09-09._
 - **Several quorums at once.** Corky holds up to five keys. Whether one
   key can be a cosigner in more than one quorum, and whether that is
   visible anywhere, has not been thought about.
+- **Blinded xpubs as a supported flow rather than an accident.** Core
+  signs on these paths, which most hardware wallets cannot, so Corky
+  could support the protocol properly: derive a cosigner key at a random
+  hardened path, and export the blinded record. Two things are unclear
+  and neither is sharp enough to ticket. Where does the 93 bits come
+  from, given PLAN A-19 says Corky ships no randomness and asks Core for
+  every byte of it. And blinding breaks the property that the paper key
+  alone recovers the wallet, in a way the standard paths do not, which
+  is the descriptor argument at its strongest and needs its own thinking
+  about what Corky then owes the user.
 
 ## Out of scope
 

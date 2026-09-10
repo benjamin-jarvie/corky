@@ -25,3 +25,11 @@ untested here; `3'` is in the fog and probably its own map.
 
 The answer sets `PURPOSE_FUNCS` or whatever replaces it, the export menu,
 and how much of M2 and M3 there is to build.
+
+**A blinded path is the same question wearing different clothes.**
+Flaxman's blinded-xpub protocol derives the cosigner key at a random
+hardened path instead of a standard one, and Core signs on those paths
+where most hardware wallets refuse (see the map's established facts).
+Whatever answers this ticket has to say whether the set is fixed at
+build time or can be an arbitrary path the device is told about, because
+that decides whether blinding is reachable at all.
