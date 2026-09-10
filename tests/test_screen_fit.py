@@ -139,6 +139,25 @@ CASES = {
     "review-solo-path": lambda w, h: screens.review(
         w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
         cosigners=[("a1b2c3d4", "m/84h/0h/0h")], ours="a1b2c3d4"),
+    # A decaying quorum (map M6). Core types a miniscript witness script
+    # as nonstandard, so there is no threshold to show and the TIER goes
+    # on that line instead. The worst case is the longest wording with
+    # the longest path under it.
+    "review-decay": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
+        cosigners=BLINDED, ours=BLINDED[0][0],
+        timelocks=(10, 20), spend_lock=20),
+    "review-timelocked": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
+        cosigners=WIDE, ours=WIDE[3][0], timelocks=(4194303,)),
+    # The two outcomes of signing. Both are signed and only one of them
+    # can move the money, which is the whole point of the note line.
+    "result-share": lambda w, h: screens.result(
+        w, h, ok=True, label="SHARE", note="needs another signature",
+        detail="corky-73c5da0a-signed.psbt written", actions_sel=0),
+    "result-complete": lambda w, h: screens.result(
+        w, h, ok=True, label="SIGNED", note="ready to send",
+        detail="shown as 12 QR frames", actions_sel=1),
     # Six screens had no case at all until 2026-09-08, so neither the fit
     # check nor the collision check had ever rendered them. The guard
     # below fails if a seventh appears.

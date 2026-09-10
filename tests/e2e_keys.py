@@ -257,7 +257,8 @@ def main():
             "K2: the key screen with B pre-selected was never shown"
         last = _shots(work / "framesK2")[-1].read_bytes()
         assert any(last == _render(scr.result, ok=True,
-                                   detail=f"shown as {n} QR frames", actions_sel=1)
+                                   detail=f"shown as {n} QR frames", actions_sel=1,
+                                   label="SIGNED", note="ready to send")
                    for n in range(1, 80)), "K2: final frame is not a signed result"
         print("ok   K2: two keys loaded; the transaction's owner is found and signs")
 
@@ -597,7 +598,8 @@ def main():
         last10 = _shots(work / "framesK10")[-1].read_bytes()
         assert any(last10 == _render(scr.result, ok=True,
                                      detail=f"shown as {n} QR frames",
-                                     actions_sel=1)
+                                     actions_sel=1, label="SIGNED",
+                                     note="ready to send")
                    for n in range(1, 90)), \
             "K10: the key did not sign after being walked away from"
         left10 = [w for w in rpc.call("listwallets") if w in signer.SLOTS]

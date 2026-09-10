@@ -684,6 +684,7 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
          "amount_btc": vout["value"]}
         for vout in decoded["tx"]["vout"]
     ]
+    locks = _timelocks(decoded["inputs"])
     fee = decoded.get("fee")
     input_total = None
     if fee is not None:
@@ -698,6 +699,8 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
         "fee_note": "fee computed from coordinator-supplied input amounts",
         "quorum": _quorum(decoded["inputs"]),
         "cosigners": _cosigners(decoded["inputs"]),
+        "timelocks": locks,
+        "spend_lock": _spend_lock(decoded["tx"].get("vin", []), locks),
     }
 
 
@@ -736,6 +739,58 @@ def _cosigners(inputs: list) -> "list[tuple[str, str]]":
             if entry not in found:
                 found.append(entry)
     return found
+
+
+#: BIP68 packs a relative timelock into nSequence. Bit 31 set disables
+#: it; bit 22 set counts 512-second units instead of blocks. Corky reads
+#: BLOCK units only and says nothing about the rest, because comparing a
+#: block count to a duration is a consensus rule and not a reading.
+_SEQUENCE_UNITS = 1 << 22
+
+_CSV = re.compile(r"(\d+) OP_CHECKSEQUENCEVERIFY")
+
+
+def _timelocks(inputs: list) -> "tuple[int, ...]":
+    """Every relative timelock in the policy, as Core printed it.
+
+    Core types a miniscript witness script as `nonstandard`, so
+    `_quorum_of` finds no threshold and the review screen would say
+    nothing at all about a Liana policy or a decaying quorum. The same
+    `asm` that carries the threshold for a bare multisig carries the
+    timelocks here, in front of `OP_CHECKSEQUENCEVERIFY`. Measured
+    2026-09-10 against a three-tier decay: `('10', '20')`.
+    """
+    found = set()
+    for txin in inputs:
+        asm = str(txin.get("witness_script", {}).get("asm", ""))
+        found.update(int(n) for n in _CSV.findall(asm))
+    return tuple(sorted(found))
+
+
+def _spend_lock(vin: list, locks: "tuple[int, ...]") -> "int | None":
+    """Which tier THIS spend enables, or None for the ordinary path.
+
+    M6 measured that the tier belongs to the coordinator: it sets
+    `nSequence` when it builds, and the same policy finalises on one key
+    or refuses to, depending only on that. Corky cannot change it. A
+    person can refuse it, which is the whole reason the screen has to
+    show it: a recovery spend nobody asked for looks exactly like a
+    normal one today.
+
+    None whenever the answer is not plainly readable: no locks, inputs
+    that disagree, the disable bit set, or 512-second units. A screen
+    that says nothing is right more often than a screen that guesses.
+    """
+    if not locks:
+        return None
+    seqs = {v.get("sequence") for v in vin}
+    if len(seqs) != 1:
+        return None
+    seq = seqs.pop()
+    if not isinstance(seq, int) or seq >= _SEQUENCE_UNITS:
+        return None
+    enabled = [n for n in locks if n < _SEQUENCE_UNITS and n <= seq]
+    return max(enabled) if enabled else None
 
 
 def _quorum(inputs: list) -> "tuple[int, int] | str | None":

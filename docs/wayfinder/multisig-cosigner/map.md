@@ -182,6 +182,15 @@ ticket needs to re-derive them.
   gone. No key reached argv in 13 calls, and defeating that needs BOTH
   `Rpc.call`'s `_SECRET_RE` guard and the explicit stdin flag disabled
   together.
+- [M6 Miniscript, decaying quorums, and blinded paths: one question or four?](tickets/M6-miniscript-and-decay.md):
+  one, and two thirds of it was already answered. The tier belongs to the
+  coordinator, set with `nSequence` at build time, which charting had
+  suspected and this measured. Corky already signs every branch it is in
+  from one pass, since M9. What was left is what the screen says: review
+  shows `AFTER 20 BLOCKS`, and the result screen now separates `SIGNED ·
+  ready to send` from `SHARE · needs another signature`. That closes
+  M3's own reopen condition, because a miniscript screen never had a
+  threshold to state.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
@@ -203,12 +212,6 @@ ticket needs to re-derive them.
 - **Several quorums at once.** Corky holds up to five keys. Whether one
   key can be a cosigner in more than one quorum, and whether that is
   visible anywhere, has not been thought about.
-- **Which tier of a decaying quorum a spend uses.** None of the three
-  tiers finalised on Corky's signature alone, including the one-key tier
-  past its timelock, and the likely cause is that the coordinator's
-  `nSequence` never enabled the timelocked branch. If that is right the
-  choice belongs to the coordinator and Corky's job does not change. It
-  is not proven, and M6 says so rather than assuming it.
 - **Blinded xpubs as a supported flow rather than an accident.** Core
   signs on these paths, which most hardware wallets cannot, so Corky
   could support the protocol properly: derive a cosigner key at a random

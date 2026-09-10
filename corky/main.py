@@ -1736,7 +1736,8 @@ class Session:
                 input_total_btc=info["input_total_btc"],
                 page=page, unseen_pages=refused, actions_sel=sel,
                 quorum=info["quorum"], cosigners=info["cosigners"],
-                ours=ours))
+                ours=ours, timelocks=info["timelocks"],
+                spend_lock=info["spend_lock"]))
             key = self.buttons.read()
             if key in ("l", "r"):
                 sel = 1 - sel
@@ -1819,7 +1820,7 @@ class Session:
                 self._hold(f"signed, but not shown: {exc}")
                 return TO_HOME
             detail = f"shown as {len(frames)} QR frames"
-        return self._state_signed(detail)
+        return self._state_signed(detail, signed["complete"])
 
     def _show_qr_loop(self, frames, delay=0.15):
         """Play the BC-UR animation as a steady, repeating loop.
@@ -1863,12 +1864,23 @@ class Session:
                 self.display.show(img)
                 stop.wait(delay)
 
-    def _state_signed(self, detail):
-        """Result screen with SIGN ANOTHER / POWER OFF (Ben, 2026-09-01)."""
+    def _state_signed(self, detail, complete=True):
+        """Result screen with SIGN ANOTHER / POWER OFF (Ben, 2026-09-01).
+
+        `complete` separates a finished transaction from ONE SHARE of
+        one. Both are signed, and only one of them can move the money,
+        so the screen that used to say SIGNED for both now says which
+        (map M6, Ben's call 2026-09-10). CONTEXT.md calls the second a
+        share.
+        """
+        label = "SIGNED" if complete else "SHARE"
+        note = ("ready to send" if complete
+                else "needs another signature")
         sel = 0
         while True:
             self.display.show(screens.result(
-                self.w, self.h, ok=True, detail=detail, actions_sel=sel))
+                self.w, self.h, ok=True, detail=detail, actions_sel=sel,
+                label=label, note=note))
             key = self.buttons.read()
             if key in ("l", "r"):
                 sel = 1 - sel

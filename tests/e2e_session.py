@@ -104,7 +104,8 @@ def main():
         lastb = shots[-1].read_bytes()
         assert any(lastb == _render(scr.result, ok=True,
                                     detail=f"shown as {n} QR frames",
-                                    actions_sel=1)
+                                    actions_sel=1, label="SIGNED",
+                                    note="ready to send")
                    for n in range(1, 80)), "B: final frame not a QR-out result"
         print(f"ok   B: xprv QR (warning screen shown) -> PSBT via QR -> signed QR out ({len(shots)} frames)")
 

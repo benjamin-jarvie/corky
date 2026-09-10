@@ -375,7 +375,8 @@ def about(w, h):
 SETTINGS_OPTIONS = ["Power off", "About"]
 
 
-def _quorum_text(quorum, cosigners, ours) -> str:
+def _quorum_text(quorum, cosigners, ours, timelocks=(),
+                 spend_lock=None) -> str:
     """The one line that says what is being signed for, and for whom.
 
     `"2 of 3 · m/48h/1h/0h/2h"` for a quorum, the path alone for a
@@ -396,6 +397,14 @@ def _quorum_text(quorum, cosigners, ours) -> str:
         head = "MIXED QUORUMS"
     elif isinstance(quorum, tuple):
         head = f"{quorum[0]} of {quorum[1]}"
+    elif spend_lock is not None:
+        # M6: the coordinator picks the tier with nSequence, and a
+        # recovery spend nobody asked for looks exactly like a normal one
+        # without this line. The person cannot change it and can refuse
+        # it, so this is the only place it can matter.
+        head = f"AFTER {spend_lock} BLOCKS"
+    elif timelocks:
+        head = "TIMELOCKED"
     else:
         head = ""
     if head and path:
@@ -453,7 +462,8 @@ def _cosigner_row(d, w, y, cosigners, ours, size, maxw):
 
 def review(w, h, outputs, fee_btc, input_total_btc=None,
            page=0, unseen_pages=False, actions_sel=1,
-           quorum=None, cosigners=(), ours=None):
+           quorum=None, cosigners=(), ours=None,
+           timelocks=(), spend_lock=None):
     """The screen that matters. outputs: [(address, amount_btc), ...]
     Two outputs per page (Ben, 2026-09-01): less going on per frame.
 
@@ -484,7 +494,7 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
     # and the fee. With arbitrary paths allowed, the path is the only
     # thing telling a wallet you set up from one you did not, and the
     # threshold is what says this signature finishes nothing.
-    line = _quorum_text(quorum, cosigners, ours)
+    line = _quorum_text(quorum, cosigners, ours, timelocks, spend_lock)
     if line:
         _fit(d, (w // 2, int(h * 0.445)), line, int(h * 0.045),
              CREAM if quorum != "mixed" else OCHRE, "mm", int(w * 0.92))
@@ -511,7 +521,7 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
 
 
 def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
-           actions_sel=None, label=None):
+           actions_sel=None, label=None, note=None):
     """The end of a signing run, and every other message the device parks.
 
     `label` names what happened. It defaulted to SIGNED for anything that
@@ -529,6 +539,15 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
     _status_circle(img, d, w, h, label, OCHRE if ok else RED)
     _fit(d, (w // 2, int(h * 0.68)), detail, int(h * 0.055), CREAM, "mm",
          int(w * 0.92))
+    if note:
+        # What the signature MEANS, under where it went. M3 traded
+        # SIGNED-over-a-partial against the review screen stating the
+        # threshold, and M6 found a whole class of wallet whose screen
+        # cannot state one: Core types a miniscript witness script as
+        # nonstandard. So the outcome is said here instead, where it is
+        # true for every wallet shape.
+        _fit(d, (w // 2, int(h * 0.79)), note, int(h * 0.045), OCHRE, "mm",
+             int(w * 0.92))
     if actions_sel is not None:
         _actions(d, w, h, ["SIGN ANOTHER", "POWER OFF"], actions_sel)
     return img

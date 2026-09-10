@@ -59,6 +59,30 @@ it was imported as a bare descriptor. _In code_: `kind`, and the four are
 screen words; derivation path, which is a different thing that a policy
 implies.
 
+**quorum**: several keys that together control one wallet, and how many
+of them a spend needs. On screen as `2 of 3`. The coordinator holds it,
+never Corky. _In code_: `quorum`, a `(threshold, total)` pair. _Avoid_:
+multisig wallet, which names the software rather than the arrangement.
+
+**cosigner**: one key inside a quorum, and the record a coordinator needs
+to put it there: `[fingerprint/path]xpub`. Corky is one cosigner and
+never the quorum. _In code_: `cosigner_key`. _Avoid_: participant,
+member, signer, which is Core's role name for something else.
+
+**share**: one cosigner's signature on a transaction that needs more than
+one. It is a finished piece of work and never a failure. The screen says
+`SHARE` for it, and `SIGNED` only when the transaction can be sent.
+_In code_: `complete` is False for a share. _Avoid_: partial signature as
+a screen word, and "incomplete", which reads as a fault.
+
+**tier**: one branch of a policy that changes what a spend needs as time
+passes, such as 3 keys now and 1 key after 20 blocks. The coordinator
+chooses the tier when it builds, with `nSequence`, and Corky can only
+show it and refuse. On screen as `AFTER 20 BLOCKS`. _In code_:
+`timelocks` for what the policy holds and `spend_lock` for the one this
+spend enables. _Avoid_: decay path, recovery path, miniscript branch,
+all of which name the same thing three ways.
+
 **primary build**: the CM4 Lite with the SeedSigner+ display hat, 2.8"
 ST7789 at 320x240 (PLAN A-13b/A-15). **pocket build**: the Pi Zero 2 W in
 the SeedSigner case.

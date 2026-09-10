@@ -101,6 +101,60 @@ def build_quorum(rpc, threshold=2, total=3, extra_key=None):
     return psbt, keys, mw
 
 
+def build_decay(rpc):
+    """A three-tier decaying quorum, funded, with a spend per tier.
+
+    Our key sits at a DIFFERENT account in each tier, which is not a
+    style choice: Core refuses the policy as "contains duplicate public
+    keys" when a key repeats at one path, which is Liana's
+    DuplicateOriginSamePath seen from the other side.
+
+    Returns (spends, xfp) where spends is [(label, sequence, psbt), ...].
+    """
+    rpc.call("createwallet", "dours", False, True, "", False, True)
+    ours = []
+    for acct in (0, 1, 2):
+        path = f"48h/1h/{acct}h/2h"
+        raw = f"wpkh({XPRV}/{path}/0/*)"
+        c = rpc.call("getdescriptorinfo", raw, stdin=True)["checksum"]
+        rpc.call("importdescriptors",
+                 [{"desc": f"{raw}#{c}", "active": acct == 0,
+                   "timestamp": "now", "range": [0, 3]}],
+                 wallet="dours", stdin=True)
+        ours.append(signer.cosigner_key(rpc, "dours", path) + "/0/0")
+    strangers = {}
+    for i in (0, 1):
+        rpc.call("createwallet", f"ds{i}")
+        for acct in (0, 1):
+            strangers[(i, acct)] = signer.cosigner_key(
+                rpc, f"ds{i}", f"48h/1h/{acct}h/2h") + "/0/0"
+    a, b, c = ours
+    desc = (f"wsh(or_d(multi(2,{a},{strangers[(0, 0)]},{strangers[(1, 0)]}),"
+            f"or_i(and_v(v:multi(2,{b},{strangers[(0, 1)]}),older(10)),"
+            f"and_v(v:pk({c}),older(20)))))")
+    desc += "#" + rpc.call("getdescriptorinfo", desc, stdin=True)["checksum"]
+    rpc.call("createwallet", "dq", True, True, "", False, True)
+    rpc.call("importdescriptors", [{"desc": desc, "timestamp": "now"}],
+             wallet="dq", stdin=True)
+    addr = rpc.call("deriveaddresses", desc, stdin=True)[0]
+    rpc.call("createwallet", "dmn")
+    mine = rpc.call("getnewaddress", wallet="dmn")
+    rpc.call("generatetoaddress", 101, mine, wallet="dmn")
+    rpc.call("sendtoaddress", addr, 1.0, wallet="dmn")
+    rpc.call("generatetoaddress", 25, mine, wallet="dmn")
+    u = rpc.call("listunspent", 1, 9999, [addr], wallet="dq")[0]
+    spends = []
+    for label, seq in (("normal", 0xfffffffd), ("tier 2", 10),
+                       ("tier 3", 20)):
+        spends.append((label, seq, rpc.call(
+            "walletcreatefundedpsbt",
+            [{"txid": u["txid"], "vout": u["vout"], "sequence": seq}],
+            [{mine: float(u["amount"])}], 0,
+            {"fee_rate": 2, "subtractFeeFromOutputs": [0]}, True,
+            wallet="dq", stdin=True)["psbt"]))
+    return spends, signer.master_fingerprint(rpc, "dours")
+
+
 def main():
     daemon, rpc, datadir = start_node("m9-")
     try:
@@ -251,6 +305,52 @@ def main():
             ok("the branch it imported to sign with is gone again")
         else:
             bad(f"11: {after!r} left loaded after signing")
+
+        # 12. A DECAYING QUORUM. Core types a miniscript witness script
+        #     as "nonstandard", so `quorum` is None and the review screen
+        #     says no threshold. M3 decision 1 traded SIGNED-over-partial
+        #     against decision 2 stating the threshold, and for this
+        #     class of wallet the screen never had one. So the screen
+        #     says the TIER instead, out of the same asm Core hands over.
+        spends, dxfp = build_decay(rpc)
+        by_label = {}
+        for label, _seq, dpsbt in spends:
+            by_label[label] = signer.describe_psbt(rpc, dpsbt)
+        if by_label["tier 3"].get("timelocks") == (10, 20):
+            ok("review reads both timelocks out of the policy: (10, 20)")
+        else:
+            bad(f"12: timelocks {by_label['tier 3'].get('timelocks')!r} "
+                "should be (10, 20)")
+
+        # 13. AND WHICH TIER THIS SPEND USES. The coordinator chooses it
+        #     with nSequence at build time, which M6 measured. The device
+        #     cannot change it and the person can refuse it, so the
+        #     screen has to show it.
+        got = {k: v.get("spend_lock") for k, v in by_label.items()}
+        if got == {"normal": None, "tier 2": 10, "tier 3": 20}:
+            ok(f"review names the tier each spend enables: {got}")
+        else:
+            bad(f"13: spend_lock {got!r} should be "
+                "{'normal': None, 'tier 2': 10, 'tier 3': 20}")
+
+        # 14. A PLAIN QUORUM CLAIMS NO TIMELOCK. A screen that said
+        #     "AFTER 20 BLOCKS" over an ordinary 2-of-3 would be the
+        #     same lie in the other direction.
+        if not info.get("timelocks") and info.get("spend_lock") is None:
+            ok("a plain 2-of-3 reports no timelock and no tier")
+        else:
+            bad(f"14: a plain quorum reported timelocks "
+                f"{info.get('timelocks')!r} lock={info.get('spend_lock')!r}")
+
+        # 15. AND CORKY SIGNS EVERY TIER IT IS IN, IN ONE PASS. Our key
+        #     sits at three accounts here. M9's _branches reads all of
+        #     them out of the PSBT, so nothing has to be set up first.
+        t3 = signer.sign_psbt(rpc, spends[2][2], wallet="dours", xfp=dxfp)
+        if t3["added"] and t3["complete"]:
+            ok("past its timelock, Corky alone finishes the spend")
+        else:
+            bad(f"15: tier 3 added={t3['added']} complete={t3['complete']}; "
+                "the one-key tier must finish on this device alone")
     finally:
         daemon.terminate(); daemon.wait()
     print("\n" + ("=" * 60))
