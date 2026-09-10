@@ -81,18 +81,6 @@ ticket needs to re-derive them.
   imports, and Core signs its share. That is a thing Corky can do that
   most of the vendors in a multivendor quorum cannot.
 
-## Decisions so far
-
-<!-- one line per closed ticket -->
-
-- [M1 Which BIP48 script types does Corky offer?](tickets/M1-which-script-types.md):
-  arbitrary paths, told to the device, which opens miniscript, decay and
-  blinding together. Signing reads its path out of the PSBT and shows it
-  on the review screen, so none of those shapes needs setting up first.
-  Export keeps named rows at the top and puts the typed path inside
-  Advanced, which is Coldcard's structure with the capability they do not
-  have.
-
 - **The path is not a fixed set.** M1 settled it: Corky derives where it
   is told. Every ticket after this one inherits that, and so does every
   test: "these four policies" is no longer a claim anything can check by
@@ -104,10 +92,33 @@ ticket needs to re-derive them.
   reachable by the same trick as plain multisig, which is importing
   Corky's own key at the right path as an ordinary single-sig
   descriptor. See M6.
+- **A cosigner branch derives a single-sig address, not the quorum's.**
+  The quorum's address needs every cosigner and Corky holds one. So an
+  address is not available as a confirmation anywhere in this map, and
+  Core's 8-character descriptor checksum is what a person compares
+  instead. Measured: changing the path or the fingerprint changes it, and
+  a corrupt xpub is refused outright because base58 carries its own.
 - **A descriptor may hold at most one private key.** Two xprvs in one
   descriptor are refused as "not sane: contains duplicate public keys"
   even when they differ. Irrelevant in practice and worth knowing before
   someone writes a test that trips on it.
+
+## Decisions so far
+
+<!-- one line per closed ticket -->
+
+- [M1 Which BIP48 script types does Corky offer?](tickets/M1-which-script-types.md):
+  arbitrary paths, told to the device, which opens miniscript, decay and
+  blinding together. Signing reads its path out of the PSBT and shows it
+  on the review screen, so none of those shapes needs setting up first.
+  Export keeps named rows at the top and puts the typed path inside
+  Advanced, which is Coldcard's structure with the capability they do not
+  have.
+- [M2 How does the cosigner key leave the device?](tickets/M2-cosigner-export.md):
+  by QR and by file, not by typing. The typed path echoes Core's
+  8-character descriptor checksum rather than a test address, because a
+  cosigner branch derives a single-sig address and not the quorum's. The
+  file route exists because Core reads no QR, and its format is M7.
 
 ## Not yet specified
 
