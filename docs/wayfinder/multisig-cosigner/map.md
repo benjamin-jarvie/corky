@@ -87,6 +87,18 @@ ticket needs to re-derive them.
 
 _None yet. Charted 2026-09-09._
 
+- **Miniscript, decay and blinding are all M1 in disguise.** Core signs
+  a Liana-shaped timelock policy and finalises it alone; it imports a
+  three-tier decaying quorum and takes Corky's signature at every tier;
+  it signs on a 93-bit random hardened path. Every one of those is
+  reachable by the same trick as plain multisig, which is importing
+  Corky's own key at the right path as an ordinary single-sig
+  descriptor. See M6.
+- **A descriptor may hold at most one private key.** Two xprvs in one
+  descriptor are refused as "not sane: contains duplicate public keys"
+  even when they differ. Irrelevant in practice and worth knowing before
+  someone writes a test that trips on it.
+
 ## Not yet specified
 
 - **Taproot multisig.** BIP48 script type 2' is P2WSH. Taproot changes
@@ -102,6 +114,12 @@ _None yet. Charted 2026-09-09._
 - **Several quorums at once.** Corky holds up to five keys. Whether one
   key can be a cosigner in more than one quorum, and whether that is
   visible anywhere, has not been thought about.
+- **Which tier of a decaying quorum a spend uses.** None of the three
+  tiers finalised on Corky's signature alone, including the one-key tier
+  past its timelock, and the likely cause is that the coordinator's
+  `nSequence` never enabled the timelocked branch. If that is right the
+  choice belongs to the coordinator and Corky's job does not change. It
+  is not proven, and M6 says so rather than assuming it.
 - **Blinded xpubs as a supported flow rather than an accident.** Core
   signs on these paths, which most hardware wallets cannot, so Corky
   could support the protocol properly: derive a cosigner key at a random
