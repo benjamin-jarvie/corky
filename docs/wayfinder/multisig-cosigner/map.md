@@ -81,6 +81,16 @@ ticket needs to re-derive them.
   imports, and Core signs its share. That is a thing Corky can do that
   most of the vendors in a multivendor quorum cannot.
 
+- **Sparrow keeps a partial signature it did not make.** Measured
+  2026-09-10 against drongo 2.5.4. `wallet.sign(psbt)` signs the PSBT in
+  place and adds to what is already there, so the CHAINED route works:
+  coordinator sends, Corky signs, the signed PSBT returns by QR, and the
+  coordinator signs on top. That is the air-gapped flow, and it needed
+  proving rather than assuming. The COMBINED route, where both sign the
+  original and `combinepsbt` merges, reaches **identical transaction
+  hex**. The two are interchangeable and Corky does not care which the
+  coordinator uses.
+
 - **The path is not a fixed set.** M1 settled it: Corky derives where it
   is told. Every ticket after this one inherits that, and so does every
   test: "these four policies" is no longer a claim anything can check by
@@ -134,6 +144,14 @@ ticket needs to re-derive them.
   refused, and the review screen carries what that screen no longer
   says: the threshold, the path and every cosigner's fingerprint. Undrops
   `witness_script`, which M5 must re-measure for.
+- [M4 Does Sparrow accept Corky's cosigner export?](tickets/M4-sparrow-accepts.md):
+  yes, in M7's format unchanged, and it signs beside us. 20 checks green
+  in `tests/sparrow/test_cosigner.py` on both an ordinary BIP48 path and
+  a 93-bit blinded one: Sparrow derives the same addresses Core does,
+  Corky signs one share, and the quorum finalises by either the chained
+  or the combined route to identical hex. Proves the interop and the
+  format, NOT the device flow, because the test stands in for M3's
+  unbuilt "import the path out of the PSBT".
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives

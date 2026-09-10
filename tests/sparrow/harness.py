@@ -72,6 +72,12 @@ class Java:
         self.utxo_height = 101
 
     def __call__(self, cls, *args, raw=False, tags=("OUT",)):
+        """Run a Java class and collect its tagged lines.
+
+        RETURN TYPE FOLLOWS `tags`: one tag gives the bare list of that
+        tag's lines, and two or more give a dict keyed by tag. Asking for
+        `tags=("OUT",)` therefore gives a list, not a one-key dict.
+        """
         cmd = [str(JAVA_BIN), "--enable-native-access=ALL-UNNAMED",
                f"-Dchain.height={self.chain_height}",
                f"-Dutxo.height={self.utxo_height}"]

@@ -495,6 +495,55 @@ def receive_addresses(rpc: "Rpc", wallet: str, kind: str, count: int, start: int
     return rpc.call("deriveaddresses", desc, [start, start + count - 1])
 
 
+def cosigner_key(rpc: "Rpc", wallet: str, path: str) -> str:
+    """This key as ONE COSIGNER of somebody else's quorum.
+
+    Returns the key expression a coordinator needs, and nothing else:
+
+        [8d427bd4/48h/1h/0h/2h]tpubDErVqwfZ8V8DiTQUWnbLScTFk2Sfar7uB…
+
+    `path` is hardened steps only, no `m/` and no `/0/*`, as
+    `48h/1h/0h/2h`. It is not checked against a list: map M1 settled that
+    Corky derives where it is told, which is what makes a blinded path
+    reachable at all.
+
+    **Why the round trip.** `getdescriptorinfo`'s public form keeps
+    hardened steps unexpanded and hands back the MASTER xpub with the
+    path trailing it, which no coordinator can use watch-only: Core
+    itself refuses to expand it. Importing into a scratch wallet and
+    reading `listdescriptors` gives the xpub AT that depth with its
+    origin, which is the thing Sparrow and Nunchuk parse. Same round trip
+    `write_watch_only` uses, and for the same reason.
+
+    **No `/0/*` suffix, and the fingerprint lowercased.** That is
+    Coldcard's `key_expr.txt` exactly (`shared/export.py`,
+    `make_key_expression_export`), and matching a shape three
+    coordinators already parse beats agreeing a new one with three
+    projects (map M7).
+    """
+    scratch = f"{wallet}-cosign"
+    _drop_wallet(rpc, scratch)
+    rpc.call("createwallet", scratch, False, True, "", False, True)
+    try:
+        raw = f"wpkh({master_xprv(rpc, wallet)}/{path}/0/*)"
+        checksum = rpc.call("getdescriptorinfo", raw, stdin=True)["checksum"]
+        result = rpc.call("importdescriptors",
+                          [{"desc": f"{raw}#{checksum}", "active": True,
+                            "internal": False, "timestamp": "now",
+                            "range": [0, 1]}], wallet=scratch, stdin=True)
+        failures = [r for r in result if not r.get("success")]
+        if failures:
+            raise RuntimeError(
+                f"cosigner import failed: {redact(str(failures))}")
+        pub = rpc.call("listdescriptors", wallet=scratch)["descriptors"][0]
+        inner = pub["desc"][len("wpkh("):pub["desc"].index(")#")]
+    finally:
+        _drop_wallet(rpc, scratch)
+    if not inner.endswith("/0/*"):
+        raise RuntimeError(f"Core wrote a shape this cannot trim: {inner[:40]}")
+    return inner[:-len("/0/*")]
+
+
 #: What the watch-only wallet file is called. It carries no private key,
 #: which is why it is the one file the private-key-on-paper rule (A-24)
 #: still allows off this device.
