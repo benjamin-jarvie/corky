@@ -1,6 +1,6 @@
 # M5 How many multisig inputs will the board sign?
 
-Type: `wayfinder:task`, AFK. **Blocked by M3.**
+Type: `wayfinder:task`, AFK. **Blocked by M3 (closed).**
 
 ## Question
 
@@ -20,3 +20,12 @@ multisig ceiling is lower, 150 is a promise the board cannot keep.
 Measure it the way M0 measured the first one, with `m0/m0_gate.py` or its
 descendant, on the Zero 2 W, swap off. Decide whether the cap becomes two
 numbers or one conservative one.
+
+**M3 made this worse and it is the reason to measure rather than
+estimate.** The review screen now shows the threshold, which means
+`witness_script` comes back out of `_REVIEW_DROPS`. That field was
+dropped deliberately: dropping the review's unread fields took Corky's
+own process from 56MB to 45MB. A witness script per input, at 150
+inputs, is 150 scripts back in the decoded tree, on the board where the
+headroom between 175 inputs and 200 was 36MB. Measure with the undrop in
+place or the number is about a device nobody ships.

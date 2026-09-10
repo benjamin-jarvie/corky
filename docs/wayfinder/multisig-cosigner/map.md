@@ -92,6 +92,10 @@ ticket needs to re-derive them.
   reachable by the same trick as plain multisig, which is importing
   Corky's own key at the right path as an ordinary single-sig
   descriptor. See M6.
+- **`analyzepsbt` cannot tell a finished PSBT from an unfinished one.**
+  It reports `next: signer` both before and after Corky's signature, so
+  nothing derives "one of two present" from it. Counting
+  `partial_signatures` would, and `_REVIEW_DROPS` drops that too.
 - **Bitcoin Core has no file import at all.** `importdescriptors` takes
   `desc` as `RPCArg::Type::STR` and `importwallet`/`dumpwallet` are gone.
   A cosigner file reaches a Core coordinator only as a string a person
@@ -125,6 +129,11 @@ ticket needs to re-derive them.
   8-character descriptor checksum rather than a test address, because a
   cosigner branch derives a single-sig address and not the quorum's. The
   file route exists because Core reads no QR, and its format is M7.
+- [M3 What changes in the signing path?](tickets/M3-signing-path.md):
+  a partial signature is delivered on today's SIGNED screen rather than
+  refused, and the review screen carries what that screen no longer
+  says: the threshold, the path and every cosigner's fingerprint. Undrops
+  `witness_script`, which M5 must re-measure for.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
