@@ -13,7 +13,19 @@
 #   - there is no serial console on the GPIO header
 #   - the only way in is the panel, the buttons and the camera
 #
-# To undo it you reflash the card. That is the point.
+# TO UNDO IT: `sudo bash /opt/corky/image/unharden.sh`, and reboot.
+#
+# That line used to read "to undo it you reflash the card, that is the
+# point", and it was true when it was written and false by 2026-09-06,
+# when unharden.sh was added and `tests/test_harden_reversible.py` began
+# proving that it reverses every unit this script masks. A shipped script
+# telling you the way back does not exist, when it does, is the same
+# class of defect as the rest of this audit (found 2026-09-09).
+#
+# Getting root on a hardened board to run it: an HDMI console still logs
+# in, because this script does not touch getty@tty1. unharden.sh's own
+# header lists three more ways. Take an image of the card first; that is
+# ten minutes and it keeps the broken one to look at.
 #
 # What it does NOT do, and cannot: power the wireless chip down. The
 # `disable-wifi` overlay disables the SDIO host controller and the chip

@@ -74,7 +74,15 @@ else:
 # 4. harden.sh must NOT take the local console away, because that is the
 #    way back in. If this ever changes, the recovery path in
 #    unharden.sh's header stops being true and has to be rewritten.
-if re.search(r"getty@tty1|getty@tty\b", HARDEN):
+#
+#    Read the CODE, not the comments. This searched the whole file, so a
+#    comment explaining that the console is deliberately left alone was
+#    itself enough to fail the check (2026-09-09, on a comment I had just
+#    added). A check that cannot tell a script from its own explanation
+#    of itself is measuring prose.
+HARDEN_CODE = "\n".join(
+    ln for ln in HARDEN.splitlines() if not ln.lstrip().startswith("#"))
+if re.search(r"getty@tty1|getty@tty\b", HARDEN_CODE):
     bad("harden.sh now touches the HDMI console, which is the documented "
         "way back into a hardened board. unharden.sh's header says it is "
         "untouched; one of the two is now wrong.")
