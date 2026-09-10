@@ -602,10 +602,20 @@ def prop_a_failing_stick_does_not_lose_a_signature():
     class Signs:
         chain = "regtest"
 
+        def __init__(self):
+            self.signed = False
+
         def call(self, method, *params, wallet=None, stdin=False, drop=()):
             if method == "walletprocesspsbt":
+                self.signed = True
                 return {"psbt": base64.b64encode(b"psbt\xffSIGNED").decode(),
                         "complete": True}
+            if method == "analyzepsbt":
+                # sign_psbt counts what Core still wants, before and
+                # after, so that "signed nothing" cannot reach the SIGNED
+                # screen (map M9). One missing signature becomes none.
+                return {"inputs": [{"missing": {}} if self.signed
+                                   else {"missing": {"signatures": ["ab"]}}]}
             return ""
 
     src = Path(tempfile.mkdtemp()) / "tx.psbt"

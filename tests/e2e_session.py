@@ -264,8 +264,14 @@ def main():
                            for _ in range(6)],
                           0, {"fee_rate": 10}, True, wallet="watch")["psbt"]
             (st / "n.psbt").write_bytes(base64.b64decode(pn))
-            signer.open_session_xprv(rpc, XPRV)
+            wname = signer.open_session_xprv(rpc, XPRV)
             info = signer.describe_psbt(rpc, pn)
+            # The device now names the wallet it is signing for on this
+            # screen (map M9, from M1 decision 2), so the expected render
+            # must be given what the device gives it or every frame
+            # differs by one line.
+            ours = next((k.xfp for k in signer.loaded_keys(rpc)
+                         if k.name == wname), None)
             signer.close_session(rpc)
             outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
             assert (len(outs) + 1) // 2 == 4, "N: expected exactly 4 pages"
@@ -273,7 +279,9 @@ def main():
             # that says why SIGN was refused (unseen pages remain).
             pages = [[_render(scr.review, outs, info["fee_btc"],
                               input_total_btc=info["input_total_btc"],
-                              page=i, unseen_pages=refused)
+                              page=i, unseen_pages=refused,
+                              quorum=info["quorum"],
+                              cosigners=info["cosigners"], ours=ours)
                       for refused in (False, True)]
                      for i in range(4)]
             key_sq = work / ("key_n" + tag + ".txt")

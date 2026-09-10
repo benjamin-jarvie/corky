@@ -1,6 +1,6 @@
 # M5 How many multisig inputs will the board sign?
 
-Type: `wayfinder:task`, AFK. **Blocked by M3 (closed).**
+Type: `wayfinder:task`, AFK. **Blocked by M3, M9 (both closed).**
 
 ## Question
 
@@ -29,3 +29,29 @@ own process from 56MB to 45MB. A witness script per input, at 150
 inputs, is 150 scripts back in the decoded tree, on the board where the
 headroom between 175 inputs and 200 was 36MB. Measure with the undrop in
 place or the number is about a device nobody ships.
+
+
+## What M9 measured, 2026-09-10, so this is a confirmation
+
+M9 built the undrop and measured it on a real 150-input 2-of-3 PSBT,
+516KB of base64, on the dev machine against Core 31.1:
+
+| drop set | retained tree | peak |
+|---|---|---|
+| before, `witness_script` and `bip32_derivs` dropped | 0.06MB | 14.85MB |
+| after, both kept | 0.35MB | 14.85MB |
+
+**0.29MB retained, and the peak does not move.** The peak belongs to the
+JSON text and the parse, not to what is kept afterwards, and
+`non_witness_utxo` stays dropped.
+
+So the paragraph above, written when "150 more scripts in the tree" was
+an estimate, was pessimistic by about two orders of magnitude against
+the 36MB band between 175 inputs and 200. **The number to measure on the
+board is the 14.85MB peak, which this change does not move**, and the
+question is whether the multisig ceiling differs from 150 at all.
+
+One thing M9 added that this must include: `sign_at_told_paths` imports
+a descriptor per branch and signs in a scratch wallet, so a multisig
+sign now runs `decodepsbt` once more than a single-sig one. Measure the
+whole signing run, not just the review.

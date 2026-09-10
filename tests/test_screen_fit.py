@@ -85,6 +85,17 @@ ADDR = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"
 OUTPUTS = [(ADDR, 0.03444556), ("bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
                                 21.21212121), (ADDR, 0.1), (ADDR, 0.2)]
 
+COSIGNERS = [("a1b2c3d4", "m/48h/0h/0h/2h"), ("e5f6a7b8", "m/48h/0h/0h/2h"),
+             ("09c1d2e3", "m/48h/0h/0h/2h")]
+# A blinded path, which is what M4 proved Core signs on: three hardened
+# levels of 31 bits each, so the longest path this device can be told.
+BLINDED = [(f"{i:08x}", "m/607137099h/1711870460h/1965312408h")
+           for i in (0x4513369e, 0x73c5da0a, 0xbeb4fc29)]
+# A quorum too wide to name key by key. P2WSH allows up to 20 pubkeys in
+# a CHECKMULTISIG, and 20 eight-character fingerprints do not fit on 240
+# pixels at any size a person can read.
+WIDE = [(f"{i:08x}", "m/48h/0h/0h/2h") for i in range(0x10000000, 0x10000014)]
+
 CASES = {
     "splash": lambda w, h: screens.splash(w, h),
     "home": lambda w, h: screens.home(w, h, 1),
@@ -105,6 +116,29 @@ CASES = {
                (ADDR, Decimal("21000000"))],
         Decimal("20999999.99999999"),
         input_total_btc=Decimal("21000000")),
+    # The multisig review (map M9). Three eight-character fingerprints
+    # and a path on the screen you sign from is the most crowded this
+    # screen gets, and the worst case is all of it at once: the widest
+    # amount, a paged transaction, unseen pages, and a blinded path,
+    # which is longer than any BIP48 one and is the case Corky can sign
+    # that most vendors cannot.
+    "review-quorum": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], Decimal("20999999.99999999"),
+        input_total_btc=Decimal("21000000"),
+        quorum=(2, 3), cosigners=COSIGNERS, ours=COSIGNERS[1][0]),
+    "review-quorum-paged": lambda w, h: screens.review(
+        w, h, OUTPUTS, 0.0000851, input_total_btc=21.3, page=1,
+        unseen_pages=True, quorum=(2, 3), cosigners=BLINDED,
+        ours=BLINDED[0][0]),
+    "review-quorum-wide": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
+        quorum=(11, 15), cosigners=WIDE, ours=WIDE[7][0]),
+    "review-mixed": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
+        quorum="mixed", cosigners=COSIGNERS, ours=None),
+    "review-solo-path": lambda w, h: screens.review(
+        w, h, OUTPUTS[:2], 0.0000851, input_total_btc=21.3,
+        cosigners=[("a1b2c3d4", "m/84h/0h/0h")], ours="a1b2c3d4"),
     # Six screens had no case at all until 2026-09-08, so neither the fit
     # check nor the collision check had ever rendered them. The guard
     # below fails if a seventh appears.

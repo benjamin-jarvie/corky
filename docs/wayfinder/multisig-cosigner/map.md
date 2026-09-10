@@ -91,6 +91,21 @@ ticket needs to re-derive them.
   hex**. The two are interchangeable and Corky does not care which the
   coordinator uses.
 
+- **`analyzepsbt` answers "did WE add a signature", it just cannot
+  answer "is this finished".** `next` reads `signer` before and after,
+  which is what the note below says. `missing.signatures` is a separate
+  field listing the key hashes Core has not seen, and it shrinks as
+  signatures land. Measured 2026-09-10, and it is what `sign_psbt`'s
+  `added` is built on. Core also returns the IDENTICAL base64 string
+  when it signs nothing, which is a free second reading of the same
+  fact.
+- **Signing at a path the device was told needs the master xprv.** A
+  descriptor is the only way Core imports a derivation and a descriptor
+  carries the key, so there is no route that keeps the key inside Core.
+  M9 makes the exposure as narrow as it goes: only when the loaded
+  policies signed nothing, into a scratch wallet, dropped in a
+  `finally`.
+
 - **The path is not a fixed set.** M1 settled it: Corky derives where it
   is told. Every ticket after this one inherits that, and so does every
   test: "these four policies" is no longer a claim anything can check by
@@ -152,6 +167,14 @@ ticket needs to re-derive them.
   or the combined route to identical hex. Proves the interop and the
   format, NOT the device flow, because the test stands in for M3's
   unbuilt "import the path out of the PSBT".
+- [M9 Build M3: deliver the signature, and make review say what it is](tickets/M9-build-the-signing-path.md):
+  built. Review states the quorum, the path and every cosigner, and the
+  device signs its share at whatever path the PSBT names, so
+  `tests/sparrow/test_cosigner.py` no longer needs a stand-in. `sign_psbt`
+  gains `added`, because `complete` is False both for one signature of
+  two and for none at all. **The undrop costs 0.29MB retained and
+  nothing at the peak**, measured at 150 multisig inputs, so M5 is a
+  confirmation rather than a risk.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives

@@ -375,8 +375,85 @@ def about(w, h):
 SETTINGS_OPTIONS = ["Power off", "About"]
 
 
+def _quorum_text(quorum, cosigners, ours) -> str:
+    """The one line that says what is being signed for, and for whom.
+
+    `"2 of 3 · m/48h/1h/0h/2h"` for a quorum, the path alone for a
+    single-sig spend, and `"MIXED QUORUMS · …"` when the inputs do not
+    agree, which `signer.describe_psbt` reports rather than guessing a
+    threshold from the first input.
+
+    Empty when the transaction names no path at all, so a PSBT carrying
+    no derivations draws today's screen and not a blank line.
+    """
+    path = ""
+    for xfp, p in cosigners:
+        if not path or (ours and xfp == ours):
+            path = p
+        if ours and xfp == ours:
+            break
+    if quorum == "mixed":
+        head = "MIXED QUORUMS"
+    elif isinstance(quorum, tuple):
+        head = f"{quorum[0]} of {quorum[1]}"
+    else:
+        head = ""
+    if head and path:
+        return f"{head} · {path}"
+    return head or path
+
+
+def _cosigner_row(d, w, y, cosigners, ours, size, maxw):
+    """Every fingerprint on the transaction, this device's in cream.
+
+    M3 decision 3. The marking is COLOUR and not a prefix character,
+    because a prefix costs width on a line that already carries three
+    eight-character fingerprints, and width is the scarce thing on the
+    240x240 panel. Drawn segment by segment so one of them can differ,
+    with a real gap between segments: `test_screen_fit.collisions`
+    counts a separator touching a fingerprint as two strings painted on
+    each other, which on this screen it would be.
+
+    Returns nothing. Draws nothing when there is one cosigner, because a
+    single-sig spend has no quorum to name and the path line above
+    already says whose wallet it is.
+    """
+    if len(cosigners) < 2:
+        return
+    marks = [x for x, _ in cosigners]
+    gap = max(3, int(w * 0.018))
+    while True:
+        font = _font(size)
+        widths = [d.textbbox((0, 0), m, font=font)[2] for m in marks]
+        sep_w = d.textbbox((0, 0), "·", font=font)[2]
+        total = sum(widths) + (len(marks) - 1) * (sep_w + gap * 2)
+        if total <= maxw or size <= 6:
+            break
+        size -= 1
+    if total > maxw:
+        # A big quorum does not fit at any legible size, and drawing it
+        # anyway put eight of a 15-key quorum off both edges of the panel
+        # where they are simply not there (test_screen_fit, 2026-09-10).
+        # A count is true and readable; a row that runs off the screen is
+        # neither. `_fit` shortens the line further if even this is wide.
+        rest = len(marks) - 1 if ours in marks else len(marks)
+        said = f"{ours} · {rest} more keys" if ours in marks \
+            else f"{rest} cosigners"
+        _fit(d, (w // 2, y), said, size, GREY, "mm", maxw)
+        return
+    x = (w - total) // 2
+    for i, (mark, mw) in enumerate(zip(marks, widths, strict=True)):
+        d.text((x, y), mark, font=font, anchor="lm",
+               fill=CREAM if ours and mark == ours else GREY)
+        x += mw
+        if i < len(marks) - 1:
+            d.text((x + gap, y), "·", font=font, anchor="lm", fill=GREY)
+            x += gap * 2 + sep_w
+
+
 def review(w, h, outputs, fee_btc, input_total_btc=None,
-           page=0, unseen_pages=False, actions_sel=1):
+           page=0, unseen_pages=False, actions_sel=1,
+           quorum=None, cosigners=(), ours=None):
     """The screen that matters. outputs: [(address, amount_btc), ...]
     Two outputs per page (Ben, 2026-09-01): less going on per frame.
 
@@ -403,7 +480,17 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
         _row(d, left, right, y, short, f"{amt:.8f}",
              int(h * 0.055), int(h * 0.055), CREAM, CREAM, gap)
         y += int(h * 0.115)
-    if pages > 1:
+    # M1 decision 2 and M3 decision 2, in the band between the outputs
+    # and the fee. With arbitrary paths allowed, the path is the only
+    # thing telling a wallet you set up from one you did not, and the
+    # threshold is what says this signature finishes nothing.
+    line = _quorum_text(quorum, cosigners, ours)
+    if line:
+        _fit(d, (w // 2, int(h * 0.445)), line, int(h * 0.045),
+             CREAM if quorum != "mixed" else OCHRE, "mm", int(w * 0.92))
+        _cosigner_row(d, w, int(h * 0.505), cosigners, ours,
+                      int(h * 0.042), int(w * 0.92))
+    if pages > 1 and not line:
         d.text((w // 2, y + int(h * 0.01)), "UP/DOWN · more outputs",
                font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
     ky = int(h * 0.58)

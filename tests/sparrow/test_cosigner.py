@@ -124,22 +124,14 @@ def main():
                                 [{net.miner_addr: 0.5}], 0, {"fee_rate": 2},
                                 wallet=coord)["psbt"]
 
-            # Corky needs its own branch imported to sign at this path.
-            # Map M3 decided the device reads that path out of the PSBT
-            # and imports it; that is not built, so this stands in for it.
-            corky_w = f"cork{abs(hash(path)) % 9999}"
-            net.rpc.call("createwallet", corky_w, False, True, "", False,
-                         True)
-            for change in (0, 1):
-                raw = f"wpkh({harness.XPRV}/{path}/{change}/*)"
-                c = net.rpc.call("getdescriptorinfo", raw,
-                                 stdin=True)["checksum"]
-                net.rpc.call("importdescriptors",
-                             [{"desc": f"{raw}#{c}", "active": True,
-                               "internal": bool(change), "timestamp": "now",
-                               "range": [0, 20]}], wallet=corky_w,
-                             stdin=True)
-            ours_signed = signer.sign_psbt(net.rpc, psbt, wallet=corky_w)
+            # THE SESSION WALLET, with no branch imported by hand. This
+            # used to build a scratch wallet at `path` first, standing in
+            # for M3's decision that the device reads the path out of the
+            # PSBT. Map M9 built it, so the stand-in is gone and this is
+            # now the flow the device runs.
+            ours_signed = signer.sign_psbt(
+                net.rpc, psbt, wallet=net.wallet,
+                xfp=signer.master_fingerprint(net.rpc, net.wallet))
 
             # COUNT THE SIGNATURE, do not just check `complete`. The first
             # version of this asserted `complete is False`, which is also

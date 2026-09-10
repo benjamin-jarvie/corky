@@ -374,6 +374,11 @@ def open_session_descriptors(rpc: "Rpc", descriptors: list[str]) -> str:
 #: the thing that decides it.
 _CHANGE_BRANCH = re.compile(r"/(\d+)/\*")
 
+#: The change branch and address index at the end of a derivation, which
+#: `_branches` splits off so it can import one ranged descriptor per
+#: branch instead of one flat descriptor per input.
+_CHANGE_LEAF = re.compile(r"/(\d+)/(\d+)$")
+
 
 def _is_change(bare: str) -> bool:
     m = _CHANGE_BRANCH.search(bare)
@@ -594,11 +599,46 @@ def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
 #: The rest are signing and derivation material Core needs and the screen
 #: does not.
 _REVIEW_DROPS = frozenset((
-    "non_witness_utxo", "witness_utxo", "bip32_derivs",
-    "taproot_bip32_derivs", "redeem_script", "witness_script",
+    "non_witness_utxo", "witness_utxo",
+    "taproot_bip32_derivs", "redeem_script",
     "final_scriptSig", "final_scriptwitness", "scriptSig", "txinwitness",
-    "partial_signatures", "asm", "hex", "desc",
+    "partial_signatures", "hex", "desc",
 ))
+
+#: Kept out of `_REVIEW_DROPS` since M9, and each one is read:
+#: `witness_script` and its `asm` carry the threshold, `bip32_derivs`
+#: carries every cosigner's fingerprint and path.
+#:
+#: `non_witness_utxo` STAYS dropped, and it was the expensive one: 20.7MB
+#: of the 21.1MB tree at 250 batch inputs. What comes back is a witness
+#: script of about 210 hex characters and three derivation entries of
+#: about 150 per input. M3 recorded the consequence for M5 as "150 more
+#: scripts in the tree" and that was an estimate; M9 measures it, and
+#: M5 confirms the number on the board.
+
+
+def _quorum_of(script: dict) -> "tuple[int, int] | None":
+    """The threshold Core already decoded, read and not parsed.
+
+    PLAN A-22: Corky computes nothing on a script. Core reports
+    `type: "multisig"` and renders the script as `asm`, which for a
+    bare multisig begins with the threshold and ends with the total
+    before `OP_CHECKMULTISIG`. Reading two of Core's own tokens is not
+    parsing a script, and it is what M3 sanctioned when it asked for a
+    threshold on the review screen.
+
+    Anything that is not exactly that shape returns None, so a script
+    this build has never seen shows no quorum rather than a wrong one.
+    """
+    if script.get("type") != "multisig":
+        return None
+    parts = str(script.get("asm", "")).split()
+    if len(parts) < 3 or parts[-1] != "OP_CHECKMULTISIG":
+        return None
+    try:
+        return int(parts[0]), int(parts[-2])
+    except ValueError:
+        return None
 
 #: The same idea for `owners`, which reads the fingerprints and nothing
 #: else. It must NOT drop the two bip32 lists that carry them.
@@ -656,7 +696,64 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
         "input_count": len(decoded["inputs"]),
         "next_role": analysis.get("next"),
         "fee_note": "fee computed from coordinator-supplied input amounts",
+        "quorum": _quorum(decoded["inputs"]),
+        "cosigners": _cosigners(decoded["inputs"]),
     }
+
+
+_LEAF = re.compile(r"/\d+/\d+$")
+
+
+def _account_path(path: str) -> str:
+    """The wallet, with the address stripped off.
+
+    Core reports `m/48h/1h/0h/2h/0/0`. The last two steps are the change
+    branch and the address index: they differ for every address in one
+    wallet, and they say nothing about WHICH wallet, which is the only
+    thing M1 decision 2 wants this path to say. Two non-hardened steps
+    at the end are removed and nothing else is, so a path of an unusual
+    shape is shown whole rather than trimmed by a rule it does not obey.
+    """
+    return _LEAF.sub("", path)
+
+
+def _cosigners(inputs: list) -> "list[tuple[str, str]]":
+    """Every fingerprint on the transaction, with the wallet it derives at.
+
+    One entry per (fingerprint, account path), in the order Core reports
+    them, so a quorum reads the same way twice. `owners()` stays as it
+    is: it answers "whose transaction is this" for key selection, which
+    is a different question asked before this screen exists.
+    """
+    found = []
+    for txin in inputs:
+        for deriv in txin.get("bip32_derivs", []):
+            xfp = deriv.get("master_fingerprint")
+            path = deriv.get("path")
+            if not xfp or not path:
+                continue
+            entry = (xfp.lower(), _account_path(path))
+            if entry not in found:
+                found.append(entry)
+    return found
+
+
+def _quorum(inputs: list) -> "tuple[int, int] | str | None":
+    """One quorum for the whole transaction, or an honest refusal to say.
+
+    `None` when nothing being spent is multisig, `(threshold, total)` when
+    every input agrees, and the string `"mixed"` when they do not.
+
+    The third case earns its place. A screen that reads the first input
+    and prints "2 of 3" over a transaction whose other inputs are
+    single-sig, or a different quorum, states something untrue on the one
+    screen this device exists to make truthful. That is audit A6, and the
+    cheapest guard against it is to notice rather than to assume.
+    """
+    seen = {_quorum_of(txin.get("witness_script", {})) for txin in inputs}
+    if seen == {None} or not seen:
+        return None
+    return seen.pop() if len(seen) == 1 else "mixed"
 
 
 def owners(rpc: "Rpc", psbt_b64: str) -> set[str]:
@@ -679,10 +776,133 @@ def owners(rpc: "Rpc", psbt_b64: str) -> set[str]:
     return found
 
 
-def sign_psbt(rpc: "Rpc", psbt_b64: str, wallet: str = WALLET) -> dict:
+def _missing_signatures(rpc: "Rpc", psbt_b64: str) -> int:
+    """How many signatures Core still wants, across every input.
+
+    `analyzepsbt` reports `missing.signatures` per input as the list of
+    key hashes it has not seen. Its `next` field cannot tell a finished
+    PSBT from an unfinished one, which the map recorded; this field is a
+    different question and it does answer.
+    """
+    analysis = rpc.call("analyzepsbt", psbt_b64, stdin=True)
+    return sum(len(i.get("missing", {}).get("signatures", []))
+               for i in analysis.get("inputs", []))
+
+
+_SIGN_SCRATCH = "corky-sign-branch"
+
+
+def _branches(inputs: list, xfp: str) -> "dict[tuple[str, str], int]":
+    """Where this key is used, as (account, change) -> highest index.
+
+    Read out of the PSBT's own derivations, so the device is TOLD where
+    to sign rather than assuming a policy (map M1 decision 2). A path
+    whose last two steps are not a change branch and an index is carried
+    whole, with change and index empty, and imported exactly.
+    """
+    found: "dict[tuple[str, str], int]" = {}
+    for txin in inputs:
+        for deriv in txin.get("bip32_derivs", []):
+            if (deriv.get("master_fingerprint") or "").lower() != xfp:
+                continue
+            path = deriv.get("path") or ""
+            m = _CHANGE_LEAF.search(path)
+            if m:
+                key = (path[:m.start()], m.group(1))
+                found[key] = max(found.get(key, 0), int(m.group(2)))
+            else:
+                found[(path, "")] = 0
+    return found
+
+
+def sign_at_told_paths(rpc: "Rpc", wallet: str, psbt_b64: str,
+                       xfp: str) -> dict:
+    """Sign the shares this PSBT asks this key for, at ITS paths.
+
+    A loaded key holds the four standard policies. A quorum, a miniscript
+    branch or a blinded path is none of them, so Core signs nothing and
+    the device that M4 proved a coordinator would accept could not
+    actually produce the signature. M1 decision 2 settled the answer:
+    the PSBT names the path, and the device derives where it is told.
+
+    **The master key is read, and that is the cost.** Building a
+    descriptor is the only way Core imports a derivation, and a
+    descriptor needs the key, so this pulls the master xprv into Corky
+    for the length of one signature. `generate_wallet` refuses to hand it
+    back for exactly this reason, so the exposure is kept as narrow as it
+    can be: this runs ONLY when a plain sign added nothing, the branch
+    goes into a scratch wallet and not the session's, and the scratch
+    wallet is dropped in a `finally` whether or not the signing worked.
+    A-24 is untouched, because nothing here writes a key anywhere: the
+    datadir is tmpfs and the wallet is gone before this returns.
+    """
+    decoded = rpc.call("decodepsbt", psbt_b64, stdin=True,
+                       drop=_OWNER_DROPS)
+    branches = _branches(decoded["inputs"], xfp.lower())
+    if not branches:
+        return {"psbt": psbt_b64, "complete": False, "added": False}
+    _drop_wallet(rpc, _SIGN_SCRATCH)
+    rpc.call("createwallet", _SIGN_SCRATCH, False, True, "", False, True)
+    try:
+        xprv = master_xprv(rpc, wallet)
+        imports = []
+        for (account, change), top in branches.items():
+            stem = account.removeprefix("m/")
+            raw = (f"wpkh({xprv}/{stem}/{change}/*)" if change
+                   else f"wpkh({xprv}/{stem})")
+            entry = {"desc": raw, "timestamp": "now"}
+            if change:
+                entry["range"] = [0, top]
+            imports.append(entry)
+        for entry in imports:
+            entry["desc"] = (
+                entry["desc"] + "#"
+                + rpc.call("getdescriptorinfo", entry["desc"],
+                           stdin=True)["checksum"])
+        result = rpc.call("importdescriptors", imports,
+                          wallet=_SIGN_SCRATCH, stdin=True)
+        failed = [r for r in result if not r.get("success")]
+        if failed:
+            raise RuntimeError(
+                f"could not derive where the PSBT asks: {redact(str(failed))}")
+        return sign_psbt(rpc, psbt_b64, wallet=_SIGN_SCRATCH)
+    finally:
+        _drop_wallet(rpc, _SIGN_SCRATCH)
+
+
+def sign_psbt(rpc: "Rpc", psbt_b64: str, wallet: str = WALLET,
+              xfp: "str | None" = None) -> dict:
+    """Sign, and say whether this device actually signed anything.
+
+    `added` exists because `complete` cannot carry the question. M3
+    decision 1 delivers a partial signature rather than refusing it, and
+    `complete: False` is true both for one signature of two AND for none
+    at all. Without `added`, the SIGNED screen would appear over a PSBT
+    this device never touched, which is a lie on the one screen the
+    project exists to keep truthful (audit A6).
+
+    That case is ordinary, not contrived. A loaded key holds the four
+    standard policies, so a BIP48 quorum PSBT arriving at it produces no
+    signature whatsoever. It is also the exact bug M4's test nearly
+    shipped, where `complete is False` passed while nothing was signed.
+
+    Measured 2026-09-10: when Core signs nothing, `walletprocesspsbt`
+    returns the IDENTICAL base64 string. That is a second, free reading
+    of the same fact, and the count below is the one relied on, because
+    it stays right if a later Core adds metadata without signing.
+    """
+    before = _missing_signatures(rpc, psbt_b64)
     result = rpc.call("walletprocesspsbt", psbt_b64, wallet=wallet,
                       stdin=True)
-    return {"psbt": result["psbt"], "complete": result["complete"]}
+    after = _missing_signatures(rpc, result["psbt"])
+    if after >= before and xfp:
+        # Nothing signed with the policies this wallet holds. The PSBT
+        # may still be asking this key for a share at a path it was
+        # never told about until now, which is every quorum, every
+        # miniscript branch and every blinded path.
+        return sign_at_told_paths(rpc, wallet, psbt_b64, xfp)
+    return {"psbt": result["psbt"], "complete": result["complete"],
+            "added": after < before}
 
 
 def generate_wallet(rpc: "Rpc") -> str:

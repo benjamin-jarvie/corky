@@ -1724,6 +1724,9 @@ class Session:
                 detail="PSBT lacks input data; fee unknown; refused"))
             self.buttons.read()
             return TO_HOME
+        # M1 decision 2 and M3 decisions 2 and 3: the review screen says
+        # which wallet this signature is for, and who else is in it.
+        ours = next((k.xfp for k in self.keys if k.name == wallet), None)
         outs = [(o["address"], o["amount_btc"]) for o in info["outputs"]]
         pages = max(1, (len(outs) + 1) // 2)
         page, seen, refused, sel = 0, {0}, False, 1
@@ -1731,7 +1734,9 @@ class Session:
             self.display.show(screens.review(
                 self.w, self.h, outs, info["fee_btc"],
                 input_total_btc=info["input_total_btc"],
-                page=page, unseen_pages=refused, actions_sel=sel))
+                page=page, unseen_pages=refused, actions_sel=sel,
+                quorum=info["quorum"], cosigners=info["cosigners"],
+                ours=ours))
             key = self.buttons.read()
             if key in ("l", "r"):
                 sel = 1 - sel
@@ -1759,13 +1764,25 @@ class Session:
     def _sign_and_deliver(self, psbt, source, wallet):
         stop = self._busy("signing in Core…")
         try:
-            signed = signer.sign_psbt(self.rpc, psbt, wallet=wallet)
+            # The fingerprint lets Core derive where the PSBT says when
+            # the loaded policies sign nothing, which is every quorum and
+            # every blinded path (M1 decision 2).
+            signed = signer.sign_psbt(
+                self.rpc, psbt, wallet=wallet,
+                xfp=next((k.xfp for k in self.keys if k.name == wallet),
+                         None))
         finally:
             stop()
-        if not signed["complete"]:
+        if not signed["added"]:
+            # M3 decision 1: an INCOMPLETE PSBT is now the correct and
+            # final outcome for a cosigner, so `complete` stopped being
+            # the test. What is still a failure is signing NOTHING, and
+            # that is what this refuses. The review screen has already
+            # said "2 of 3", so a person reaching the SIGNED screen has
+            # been told the transaction needs others.
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
-                detail="wallet cannot complete this PSBT"))
+                detail="this key signed nothing on that PSBT"))
             self.buttons.read()
             return TO_HOME
         detail = None
