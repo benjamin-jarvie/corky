@@ -92,6 +92,12 @@ ticket needs to re-derive them.
   reachable by the same trick as plain multisig, which is importing
   Corky's own key at the right path as an ordinary single-sig
   descriptor. See M6.
+- **Bitcoin Core has no file import at all.** `importdescriptors` takes
+  `desc` as `RPCArg::Type::STR` and `importwallet`/`dumpwallet` are gone.
+  A cosigner file reaches a Core coordinator only as a string a person
+  carries into a descriptor they assemble. M2 added the file route
+  believing Core would read it; half of that was wrong and M7 says which
+  half.
 - **A cosigner branch derives a single-sig address, not the quorum's.**
   The quorum's address needs every cosigner and Corky holds one. So an
   address is not available as a confirmation anywhere in this map, and
@@ -119,6 +125,11 @@ ticket needs to re-derive them.
   8-character descriptor checksum rather than a test address, because a
   cosigner branch derives a single-sig address and not the quorum's. The
   file route exists because Core reads no QR, and its format is M7.
+- [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
+  a bare key expression on one line, which Coldcard writes and both
+  Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
+  us, so Corky strips it. Core reads no file either, which corrects half
+  of M2's reasoning.
 
 ## Not yet specified
 
