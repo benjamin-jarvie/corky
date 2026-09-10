@@ -175,6 +175,13 @@ ticket needs to re-derive them.
   two and for none at all. **The undrop costs 0.29MB retained and
   nothing at the peak**, measured at 150 multisig inputs, so M5 is a
   confirmation rather than a risk.
+- [M10 Prove the master xprv leaves nothing when it signs at a told path](tickets/M10-prove-the-xprv-window.md):
+  measured, and it leaves nothing. The scratch wallet DOES hold the key
+  while signing, which is the positive control; after the sign, and
+  after a sign forced to FAIL, no new file holds it and the wallet is
+  gone. No key reached argv in 13 calls, and defeating that needs BOTH
+  `Rpc.call`'s `_SECRET_RE` guard and the explicit stdin flag disabled
+  together.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives

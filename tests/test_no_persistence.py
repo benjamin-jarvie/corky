@@ -20,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "tests"))
 import signer  # noqa: E402
 
 XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
@@ -100,6 +101,111 @@ def test_production_conf():
         bad("m0/bitcoin.conf does not turn the debug log off")
     else:
         ok("the shipped bitcoin.conf writes no log file")
+
+
+def told_path_sign(rpc, datadir):
+    """M10. Signing at a path the PSBT names reads the master xprv.
+
+    A descriptor is the only way Core imports a derivation and a
+    descriptor carries the key, so `sign_at_told_paths` writes the master
+    xprv into a scratch wallet to sign one share. M9 argued that leaves
+    nothing behind. This measures it.
+
+    **The question is whether the sign adds a NEW place the key lives**,
+    not whether the datadir is empty. A loaded session wallet holds the
+    key on purpose, and so does the fixture wallet that puts our key in
+    the quorum. Comparing against a baseline says the thing that matters
+    and cannot be satisfied by closing the session first.
+    """
+    import test_multisig_review as m9
+    psbt, _, _ = m9.build_quorum(rpc, extra_key=XPRV_A)
+    wallet = signer.open_session_xprv(rpc, XPRV_A)
+    xfp = signer.master_fingerprint(rpc, wallet)
+    scratch_dir = rpc.wallet_dir / signer._SIGN_SCRATCH
+    baseline = set(hits(datadir, XPRV_A))
+
+    # 1. THE POSITIVE CONTROL FOR THIS PATH. The key must be findable
+    #    INSIDE the scratch wallet while it exists, or checks 2 and 3
+    #    below pass by being blind, which is the trap the top of this
+    #    file exists to avoid.
+    seen = {}
+    real_sign = signer.sign_psbt
+
+    def watched(rpc_, psbt_, wallet=signer.WALLET, xfp=None):
+        if wallet == signer._SIGN_SCRATCH:
+            seen["during"] = hits(scratch_dir, XPRV_A)
+        return real_sign(rpc_, psbt_, wallet=wallet, xfp=xfp)
+
+    # 2. AND NO ARGV. Rpc.call pushes anything `redact` would strip to
+    #    stdin, and this path hands Core three descriptors carrying the
+    #    xprv. Nothing had asked whether that holds here.
+    argv = []
+    real_run = signer.subprocess.run
+
+    def taped(cmd, **kw):
+        argv.append([str(c) for c in cmd])
+        return real_run(cmd, **kw)
+
+    signer.sign_psbt = watched
+    signer.subprocess.run = taped
+    try:
+        out = signer.sign_psbt(rpc, psbt, wallet=wallet, xfp=xfp)
+    finally:
+        signer.sign_psbt = real_sign
+        signer.subprocess.run = real_run
+
+    if not out.get("added"):
+        bad("M10: the told-path sign added no signature, so this whole "
+            "check is about a code path that did not run")
+    elif seen.get("during"):
+        ok(f"the scratch wallet DOES hold the master key while signing "
+           f"({', '.join(seen['during'])}); the checks below can fail")
+    else:
+        bad("M10: the key was never in the scratch wallet, so the checks "
+            "below prove nothing")
+
+    grew = set(hits(datadir, XPRV_A)) - baseline
+    if not grew:
+        ok("a told-path sign puts the key in no new file")
+    else:
+        bad(f"M10: the told-path sign left the key in {sorted(grew)}")
+    if not scratch_dir.exists():
+        ok("the scratch wallet it signed in is gone from the disk")
+    else:
+        bad(f"M10: {signer._SIGN_SCRATCH} survived the sign")
+
+    text = _key_bytes(XPRV_A)["xprv text"].decode()
+    leaky = [c for c in argv if any(text in a for a in c)]
+    if not leaky:
+        ok(f"no key material reached argv in {len(argv)} bitcoin-cli calls")
+    else:
+        bad(f"M10: the key reached argv in {len(leaky)} of {len(argv)} "
+            f"calls, first at {signer.redact(' '.join(leaky[0]))[:70]}")
+
+    # 3. THE FAILURE PATH, which is where a teardown gets skipped. The
+    #    scratch wallet holds the key at the moment this raises.
+    def explode(cmd, **kw):
+        if "walletprocesspsbt" in cmd:
+            raise RuntimeError("walletprocesspsbt: forced failure")
+        return real_run(cmd, **kw)
+
+    signer.subprocess.run = explode
+    try:
+        signer.sign_at_told_paths(rpc, wallet, psbt, xfp)
+    except RuntimeError:
+        pass
+    finally:
+        signer.subprocess.run = real_run
+    grew = set(hits(datadir, XPRV_A)) - baseline
+    if not grew and not scratch_dir.exists():
+        ok("a told-path sign that FAILS leaves no new key and no wallet")
+    else:
+        bad(f"M10: a failed told-path sign left {sorted(grew)} "
+            f"and dir={scratch_dir.exists()}")
+
+    signer.close_session(rpc)
+    for w in rpc.call("listwallets"):
+        signer._drop_wallet(rpc, w)
 
 
 def main():
@@ -213,6 +319,11 @@ def main():
             ok("clear_on_start drops an abandoned scratch wallet too")
         else:
             bad(f"a scratch survived startup: {hits(datadir, XPRV_A)}")
+
+        # 6b. M10. Signing at a path the PSBT names is the fourth place
+        #     that reads the master xprv, and the only one that writes it
+        #     into a wallet to do its work.
+        told_path_sign(rpc, datadir)
 
         # 7. The teardown the device really runs: a key is loaded, the
         #    session closes it, and only then does bitcoind stop. This is
