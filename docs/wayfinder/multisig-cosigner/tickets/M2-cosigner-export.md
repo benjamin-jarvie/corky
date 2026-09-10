@@ -22,5 +22,16 @@ What is undecided is the shape of it on the device:
   It is useless on its own" is a different message from the single-sig
   export, which is a wallet a coordinator can watch immediately.
 
-Depends on M1 because the number of script types decides whether this is
-one row or several.
+M1 answered the shape: named rows at the top (the four single-sig plus
+Cosigner (P2WSH)), and an Advanced submenu holding the nested variant,
+the account number, and a typed path. What is left for this ticket is
+what that typed row DOES.
+
+**It must echo, and M1's answer says why.** A typed path is the only
+route to a blinded xpub, and blinding is where a typo is unrecoverable:
+get it wrong and the coordinator watches a wallet your key does not open,
+with nothing saying so until money is in it. Deriving a test address on
+the device, for a person to compare against what the coordinator shows,
+is the cheapest check that catches it. Whether that is a screen, how many
+addresses, and whether it blocks the export until compared, is this
+ticket's to decide.

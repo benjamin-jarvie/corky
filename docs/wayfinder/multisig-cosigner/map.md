@@ -85,8 +85,18 @@ ticket needs to re-derive them.
 
 <!-- one line per closed ticket -->
 
-_None yet. Charted 2026-09-09._
+- [M1 Which BIP48 script types does Corky offer?](tickets/M1-which-script-types.md):
+  arbitrary paths, told to the device, which opens miniscript, decay and
+  blinding together. Signing reads its path out of the PSBT and shows it
+  on the review screen, so none of those shapes needs setting up first.
+  Export keeps named rows at the top and puts the typed path inside
+  Advanced, which is Coldcard's structure with the capability they do not
+  have.
 
+- **The path is not a fixed set.** M1 settled it: Corky derives where it
+  is told. Every ticket after this one inherits that, and so does every
+  test: "these four policies" is no longer a claim anything can check by
+  enumeration.
 - **Miniscript, decay and blinding are all M1 in disguise.** Core signs
   a Liana-shaped timelock policy and finalises it alone; it imports a
   three-tier decaying quorum and takes Corky's signature at every tier;
