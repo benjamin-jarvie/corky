@@ -1,6 +1,7 @@
 # M7 What file does a coordinator want a cosigner key in?
 
 Type: `wayfinder:research`, AFK. **Blocked by M2 (closed).**
+Claimed 2026-09-09, resolved by subagent.
 
 ## Question
 
