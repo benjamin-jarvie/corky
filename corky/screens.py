@@ -751,7 +751,16 @@ KEY_MENU_OPTIONS = [
     ("Discard key", "Core forgets it"),
 ]
 
-def script_menu(w, h, kinds, selected=0):
+#: The cosigner rows on the export menu, under the four policies. M1
+#: decision 3: named rows at the top, the typed path one level down
+#: inside Advanced, which is Coldcard's structure with the capability
+#: they do not have. Nobody types m/48'/0'/0'/2', so nobody mistypes it.
+COSIGNER_KIND = "cosigner"
+COSIGNER_ROW = "Cosigner (P2WSH)"
+ADVANCED_ROW = "Advanced…"
+
+
+def script_menu(w, h, kinds, selected=0, cosigner_path=None):
     """Which script policy to export. Chosen FIRST, before the QR.
 
     Ben, 2026-09-05: "if exporting, you should have chosen this first."
@@ -763,7 +772,26 @@ def script_menu(w, h, kinds, selected=0):
     a key imported since D6.
     """
     rows = [(SCRIPT_LABELS[k], "", "normal") for k in kinds]
+    if cosigner_path:
+        rows.append((COSIGNER_ROW, cosigner_path, "normal"))
+        rows.append((ADVANCED_ROW, "", "normal"))
     return _menu(w, h, "SCRIPT  TYPE", rows, selected)
+
+
+#: How a cosigner record leaves. Two rows, not the three the single-sig
+#: export offers: M2 ruled out typing it, and Core reads no file and no
+#: QR anyway, so its half of this is a person copying a string.
+COSIGNER_OPTIONS = [
+    ("QR code", "scan it in"),
+    ("File", "stick or card"),
+]
+
+
+def cosigner_options(w, h, selected=0):
+    """QR or file, and nothing else."""
+    return _menu(w, h, "HOW  IT  LEAVES",
+                 [(label, note, "normal") for label, note in COSIGNER_OPTIONS],
+                 selected)
 
 # HOW the key leaves, asked after the script type and before anything is
 # shown (Ben, 2026-09-05: "choose usb or QR to export after choosing
@@ -865,7 +893,13 @@ def tools_menu(w, h, selected=0):
 # "Nested segwit" are what Sparrow, BlueWallet and Core's own GUI call
 # them, so the panel uses them too rather than saying pkh and sh(wpkh).
 SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot",
-                 "sh": "Nested segwit", "pkh": "Legacy"}
+                 "sh": "Nested segwit", "pkh": "Legacy",
+                 # Not a policy this key HAS, so `script_menu` never
+                 # draws it: `available_kinds` returns the four above and
+                 # the cosigner row is appended separately. It is here so
+                 # the export QR can label itself with the same line the
+                 # single-sig one uses.
+                 COSIGNER_KIND: "Cosigner"}
 
 
 def _groups(text):

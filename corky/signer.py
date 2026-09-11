@@ -555,6 +555,86 @@ def cosigner_key(rpc: "Rpc", wallet: str, path: str) -> str:
 WATCH_PREFIX = "corky-"
 
 
+#: BIP48's script-type step. 2h is P2WSH, which is what a modern quorum
+#: uses; 1h is P2SH-P2WSH, kept for a coordinator that still wants it.
+COSIGNER_SCRIPTS = {"wsh": 2, "sh-wsh": 1}
+
+
+def cosigner_path(rpc: "Rpc", script: str = "wsh", account: int = 0) -> str:
+    """The BIP48 path for this chain, as `48h/1h/0h/2h`.
+
+    Hardened steps only, no `m/` and no `/0/*`, which is the shape
+    `cosigner_key` takes. The coin step follows the chain the way
+    `build_descriptors` does, so a regtest key never offers a mainnet
+    path and the person cannot pick the wrong one by reading it.
+
+    M1 settled that Corky derives where it is TOLD, so this is a
+    convenience for the common case and never a limit: the typed row
+    reaches any path at all, which is the only route to a blinded xpub.
+    """
+    coin = 0 if rpc.chain == "main" else 1
+    return f"48h/{coin}h/{account}h/{COSIGNER_SCRIPTS[script]}h"
+
+
+def write_cosigner(rpc: "Rpc", wallet: str, path: str,
+                   dest_dir: "str | Path") -> Path:
+    """The cosigner record as the file Sparrow's importer reads.
+
+    The BARE key expression on one line, which is M7's answer and M8's
+    measurement: the file importer wants exactly this and refuses a
+    wrapper, where the scan wants a whole descriptor and refuses this.
+    `cosigner_qr` is the other half.
+
+    Named by the fingerprint, as `write_watch_only` is. Two exports of
+    DIFFERENT paths for one key overwrite each other, which is a real
+    limit and a small one: a person exporting a second path is doing it
+    because the first was wrong.
+    """
+    record = cosigner_key(rpc, wallet, path)
+    xfp = master_fingerprint(rpc, wallet=wallet) or "unknown"
+    out = Path(dest_dir) / f"corky-{xfp}-cosigner.txt"
+    # NO TRAILING NEWLINE, and this is measured rather than tidy.
+    # Sparrow's Specter DIY importer refuses the file with one: `\n`,
+    # `\r\n` and two newlines all fail, where a LEADING space is
+    # tolerated. M7 read Nunchuk allowing at most one trailing newline
+    # and this was written to match; Sparrow is the stricter of the two
+    # and the file has to satisfy both. Found by pointing the M8 suite
+    # at what the device writes rather than at a string the test built.
+    out.write_text(record)
+    return out
+
+
+def cosigner_qr(rpc: "Rpc", wallet: str, path: str) -> str:
+    """The same cosigner key, as the QR a coordinator can scan.
+
+    Returns a whole descriptor with Core's checksum on it:
+
+        wsh(sortedmulti(1,[8d427bd4/48h/1h/0h/2h]tpubDErV…/0/*))#7asmw9jj
+
+    **The QR and the file carry different text, and that is not a slip.**
+    Map M8 measured both ends. Sparrow's file importer wants the BARE key
+    expression `cosigner_key` returns and refuses a wrapper. Its scan
+    path wants a whole descriptor and refuses the bare expression, because
+    a key expression on its own is not a descriptor. One question is put
+    to the person; the two payloads behind it are not their problem.
+
+    **Why `sortedmulti(1, …)` and not `wsh(<key>)`.** Sparrow parses the
+    second one, and Core refuses it: "A function is needed within P2WSH".
+    Emitting a string this device's own brain calls invalid is how a
+    format rots, so the wrapper is one both agree on. The `1` is a
+    placeholder because Corky holds ONE key and the quorum belongs to
+    the coordinator, which is the scope Ben set for this map.
+
+    It also keeps the SCRIPT TYPE honest. Sparrow hands the scan result
+    to `getScannedKeystore(ScriptType)` for the wallet being built, so a
+    `wsh(…)` payload matches a P2WSH quorum where a `wpkh(…)` one, which
+    Core and Sparrow would both otherwise accept, claims single-sig
+    native segwit about a key that is neither.
+    """
+    raw = f"wsh(sortedmulti(1,{cosigner_key(rpc, wallet, path)}/0/*))"
+    return f"{raw}#{rpc.call('getdescriptorinfo', raw, stdin=True)['checksum']}"
+
+
 def write_watch_only(rpc: "Rpc", wallet: str, dest_dir: "str | Path") -> Path:
     """A watch-only wallet file for a laptop running Bitcoin Core.
 

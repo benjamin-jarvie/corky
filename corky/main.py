@@ -727,18 +727,77 @@ class Session:
         if not order:
             # Nothing to offer. Saying so beats a menu with no rows.
             return self._hold("this key has no policies to export")
+        # The cosigner rows sit under the four policies (M1 decision 3).
+        # `order` stays the four, and the extra rows are indexed past it,
+        # so `available_kinds` keeps meaning what it always did.
+        path = signer.cosigner_path(self.rpc)
+        shown = "m/" + path.replace("h", "'")
+        rows = list(order) + [screens.COSIGNER_KIND, "advanced"]
         selected = 0
         while True:
             selected = self._pick(
-                lambda sel, o=order: screens.script_menu(self.w, self.h, o, sel),
-                len(order), start=selected)
+                lambda sel, o=order, p=shown: screens.script_menu(
+                    self.w, self.h, o, sel, cosigner_path=p),
+                len(rows), start=selected)
             if selected is None:
                 return
+            if rows[selected] == screens.COSIGNER_KIND:
+                if self._export_cosigner(name, path):
+                    return
+                continue
+            if rows[selected] == "advanced":
+                self._hold("Advanced is not built yet")
+                continue
             # A completed export leaves the flow. It used to drop back on
             # the script type, which read as "that did not work" after an
             # export that had worked (Ben, on the board).
             if self._export_one(name, order[selected]):
                 return
+
+    def _export_cosigner(self, name, path):
+        """This key as ONE COSIGNER of somebody else's quorum.
+
+        Two routes and two payloads, which is map M8 measured against
+        Sparrow's own importers. The QR carries a whole descriptor,
+        because the scan path refuses a bare key expression. The file
+        carries that bare expression, because the file importer refuses
+        the wrapper. One question reaches the person and the difference
+        never does.
+
+        Both screens name the entry to pick in the coordinator. Ben,
+        2026-09-10: "the coordinator is going to ask what device type so
+        we need to let them know which to choose too." Sparrow's airgapped
+        import is an accordion of devices, each with its own Scan and
+        Import File buttons, so the person picks the device first either
+        way.
+        """
+        choice = self._pick(
+            lambda sel: screens.cosigner_options(self.w, self.h, sel),
+            len(screens.COSIGNER_OPTIONS))
+        if choice is None:
+            return False
+        if choice == 0:
+            stop = self._busy("building the cosigner code…")
+            try:
+                payload = signer.cosigner_qr(self.rpc, name, path)
+            finally:
+                stop()
+            if not self._export_qr(name, payload, screens.COSIGNER_KIND):
+                return False
+            self._hold("in the wallet choose Specter DIY, then Scan",
+                       ok=True)
+            return True
+        dest = self._choose_channel()
+        if dest is None:
+            return False
+        stop = self._busy("writing the cosigner file…")
+        try:
+            out = signer.write_cosigner(self.rpc, name, path, dest)
+        finally:
+            stop()
+        self._hold(f"{out.name}: choose Specter DIY, then Import File",
+                   ok=True)
+        return True
 
     def _export_one(self, name, kind):
         """One policy, out by one route, then the addresses to compare.

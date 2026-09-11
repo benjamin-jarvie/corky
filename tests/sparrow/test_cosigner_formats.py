@@ -107,6 +107,16 @@ def main():
             f = work / (name.replace(" ", "_") + ".txt")
             f.write_text(body)
             files[name] = f
+        # THE ONE-LINER COMES FROM THE DEVICE, not from this file. The
+        # rest of the table is built here because Corky does not write
+        # those shapes, and the point of them is what they prove about
+        # the one it does.
+        written = signer.write_cosigner(net.rpc, net.wallet, PATH, work)
+        files["one-liner"] = written
+        r.record("the device writes one line, named by the fingerprint",
+                 written.name == f"corky-{xfp}-cosigner.txt"
+                 and written.read_text() == record,
+                 f"{written.name}, {len(written.read_text())} bytes")
 
         for (importer, fmt), want in EXPECT.items():
             out = java("SparrowImport", "REGTEST", importer, "P2WSH",
@@ -126,6 +136,32 @@ def main():
                      f"{'offers' if has_file else 'offers NO'} file import",
                      out[0] == menu_name and (out[2] == "true") == has_file,
                      f"name={out[0]!r} qr={out[1]} file={out[2]}")
+
+        # THE NAMED ROW FOLLOWS THE CHAIN. A mainnet path offered on a
+        # regtest key is a path the coordinator will not find a coin at,
+        # and the person reads the row rather than typing it, so nothing
+        # else would catch it.
+        r.record("the named cosigner row uses this chain's coin type",
+                 signer.cosigner_path(net.rpc) == PATH
+                 and signer.cosigner_path(net.rpc, "sh-wsh")
+                 == "48h/1h/0h/1h",
+                 f"{signer.cosigner_path(net.rpc)} and "
+                 f"{signer.cosigner_path(net.rpc, 'sh-wsh')}")
+
+        # A TRAILING NEWLINE BREAKS IT. Sparrow refuses the file with
+        # one, and with \r\n, and with two, where a LEADING space is
+        # tolerated. Writing a text file without a final newline looks
+        # like an oversight, so this is the check that stops someone
+        # helpfully adding one.
+        for name, suffix in (("a newline", "\n"), ("CRLF", "\r\n"),
+                             ("two newlines", "\n\n")):
+            f = work / "nl.txt"
+            f.write_text(record + suffix)
+            out = java("SparrowImport", "REGTEST", "SpecterDIY", "P2WSH",
+                       str(f), tags=("OUT",))[0].split("\t")
+            r.record(f"the file must NOT end with {name}",
+                     out[0] != "OK",
+                     out[1][:40] if len(out) > 1 else out[0])
 
         # THE SCAN PATH IS A DIFFERENT QUESTION, and it does not use
         # those importers: only Bip93 implements KeystoreCodexImport, so
@@ -154,6 +190,34 @@ def main():
                      ok_,
                      (f"{out[1]} {out[2]}" if took
                       else out[0] + " " + (out[1][:34] if len(out) > 1 else "")))
+
+        # WHAT CORKY ACTUALLY PUTS ON THE QR. The scan wants a whole
+        # descriptor, and `wsh(<key>)` is NOT one: Core refuses it with
+        # "A function is needed within P2WSH", so Corky would be emitting
+        # a string its own brain calls invalid. `sortedmulti(1, ...)` is
+        # a descriptor both agree on, and its script type matches the
+        # P2WSH wallet the key is being added to, which is what
+        # `getScannedKeystore(ScriptType)` is handed.
+        qr = signer.cosigner_qr(net.rpc, net.wallet, PATH)
+        f = work / "qr.txt"
+        f.write_text(qr)
+        out = java("SparrowScan", "REGTEST", str(f), tags=("OUT",))[0] \
+            .split("\t")
+        r.record("the QR payload carries the key, the fingerprint and "
+                 "the path",
+                 out[0] == "DESCRIPTOR" and out[1] == xfp
+                 and out[2] == DERIV,
+                 f"{out[0]} {out[1] if len(out) > 1 else ''} "
+                 f"{out[2] if len(out) > 2 else ''}")
+        r.record("and Core calls that payload a valid descriptor",
+                 "#" in qr and net.rpc.call(
+                     "getdescriptorinfo", qr,
+                     stdin=True)["checksum"] == qr.split("#")[1],
+                 f"{len(qr)} chars, checksum {qr.split('#')[-1]}")
+        r.record("the file payload is NOT a descriptor, and that is why "
+                 "the two channels differ",
+                 record != qr and record in qr,
+                 f"file {len(record)} chars, QR {len(qr)}")
 
         # SLIP-132 is the finding that matters for the decision. M7 said
         # the JSON needs a Vpub, and Sparrow enforcing that would have

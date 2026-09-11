@@ -196,8 +196,9 @@ ticket needs to re-derive them.
   payload and one name to tell the person: **Specter DIY**, which is the
   format Krux and SeedSigner both extend. The two channels carry
   DIFFERENT text, which M2 never asked about: the scan path refuses a
-  bare key expression, so the QR must be `wsh([xfp/path]tpub)` while the
-  file stays the bare one-liner.
+  bare key expression, so the QR must be a whole descriptor,
+  `wsh(sortedmulti(1,[xfp/path]tpub/0/*))#cs`, while the file stays the
+  bare one-liner.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives

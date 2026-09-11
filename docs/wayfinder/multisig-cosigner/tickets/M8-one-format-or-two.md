@@ -95,7 +95,8 @@ drongo parsers.
 | `[xfp/48h/1h/0h/2h]tpub…` (what Corky writes) | **REFUSED** |
 | the same with `/0/*` | **REFUSED** |
 | a bare `tpub` | a key with **no origin**: no fingerprint, no path |
-| `wsh([xfp/48h/1h/0h/2h]tpub)` | fingerprint, path and key, all correct |
+| `wsh([xfp/48h/1h/0h/2h]tpub)` | fingerprint, path and key, all correct, **but Core refuses to write it** |
+| `wsh(sortedmulti(1,[xfp/…]tpub/0/*))` | all correct, and Core agrees it is a descriptor |
 | the flat JSON | REFUSED |
 
 **So the QR must carry a descriptor, and today's record is not one.** A
@@ -143,7 +144,7 @@ file, and no mention of Coldcard.
 
 | channel | what Corky shows or writes | what the screen says to choose |
 |---|---|---|
-| QR | `wsh([xfp/48h/1h/0h/2h]tpub)` | Specter DIY |
+| QR | `wsh(sortedmulti(1,[xfp/48h/1h/0h/2h]tpub/0/*))#cs` | Specter DIY |
 | file | `[xfp/48h/1h/0h/2h]tpub` on one line | Specter DIY |
 
 **Why Specter DIY and not Krux or SeedSigner.** Ben, 2026-09-10: "if
@@ -198,3 +199,20 @@ and Corky's wording is the same shape on both paths:
     choose Specter DIY, then Import File...
 
 Nothing here is left for the board.
+
+
+## Corrected while building M11, 2026-09-10
+
+The QR payload recorded above as `wsh([xfp/path]tpub)` is one **Core
+refuses**: `getdescriptorinfo` answers "A function is needed within
+P2WSH". Sparrow parses it, and that is the trap. Corky emitting a string
+its own brain calls invalid is how a format rots, and PLAN A-11 puts
+Core in charge of what a descriptor is.
+
+The payload is therefore
+`wsh(sortedmulti(1,[xfp/48h/1h/0h/2h]tpub/0/*))#<checksum>`, 167
+characters, which Core checksums and Sparrow reads with the fingerprint
+and path intact. The `1` is a placeholder because Corky holds one key
+and the quorum belongs to the coordinator. It also keeps the script type
+honest, where `wpkh(...)` would also satisfy both and would claim
+single-sig native segwit about a key that is neither.

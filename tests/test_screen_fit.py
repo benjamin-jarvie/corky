@@ -223,6 +223,13 @@ CASES = {
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
     "export-options": lambda w, h: screens.export_options(w, h, 0),
+    # The cosigner rows and the two routes out (map M11). The path on the
+    # row is the longest the named rows can produce, which is mainnet's
+    # m/48'/0'/0'/2' at the same width as regtest's.
+    "cosigner-options": lambda w, h: screens.cosigner_options(w, h, 1),
+    "script-menu-cosigner": lambda w, h: screens.script_menu(
+        w, h, ("wpkh", "tr", "sh", "pkh"), 4,
+        cosigner_path="m/48'/0'/0'/2'"),
     "script-menu": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "choose-key": lambda w, h: screens.choose_key(
@@ -249,6 +256,10 @@ MENUS = {
     "export options": lambda w, h: screens.export_options(w, h, 0),
     "script type": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
+    "cosigner options": lambda w, h: screens.cosigner_options(w, h, 0),
+    "script type with cosigner": lambda w, h: screens.script_menu(
+        w, h, ("wpkh", "tr", "sh", "pkh"), 0,
+        cosigner_path="m/48'/0'/0'/2'"),
 }
 
 
