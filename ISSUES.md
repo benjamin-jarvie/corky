@@ -14,35 +14,18 @@ needs a copy here.
 Last reviewed 2026-09-06, audit A9. Every claim below was checked against
 the source on that date.
 
+E-6, the export QR mask threshold that failed about one run in forty,
+was opened and closed on 2026-09-11. The flake was the FIXTURE: the
+suite generated a fresh key every run and asserted 6 of 8 masks decode,
+where 720 measured renders put 8 of 8 at about 94%, 7 at 5% and 5 at
+0.3%. It now runs a pinned corpus of descriptors measured awkward, and
+the floor is 3, which is what the export's own mask cycle needs.
+
 E-5, the export QR that about one key in a hundred could never show, was
 opened and closed on 2026-09-09. It is not here because this file's own
 rule is that fixed items leave; the measurements are in the commit.
 
 ## Open
-
-### E-6 The export QR mask threshold fails about one run in ten
-
-`tests/sparrow/test_export_interop.py` asserts that zxing reads at least
-6 of the 8 QR mask patterns off the 240x240 export screen. On
-2026-09-10 one run failed with `tr: 5 of 8 masks readable`, and the same
-suite passed on the two runs either side of it.
-
-Nothing in that day's work touched QR generation. The check is a
-sampling threshold over a randomly generated key, so a key whose taproot
-descriptor happens to mask badly will trip it, which is the same
-variance E-5 was about: E-5 fixed the FAILURE by cycling all eight masks
-so a coordinator reads whichever it catches, and this is the THRESHOLD
-that says how much margin that leaves.
-
-So the device is not broken by it. What is not known is whether 5 of 8
-is ordinary variance or the tail of something, and TESTING.md rule 12
-says a flake is a defect nobody has read yet.
-
-**Deferred deliberately, Ben 2026-09-11: after the M-features and their
-fixes ship.** Read it by running the suite's mask sampler over a few
-hundred generated keys and plotting how often each count appears. If 5
-is common the threshold is wrong; if 5 is rare and always taproot, the
-cause is the descriptor length rather than the mask.
 
 ### E-4 The five coordinators are unproven on a device
 

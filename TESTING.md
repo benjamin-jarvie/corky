@@ -311,6 +311,16 @@ believing any failure whose source looks right:
 
     find . -name __pycache__ -type d -not -path "*/.build/*" -exec rm -rf {} +
 
+**And judge the run by its EXIT CODE, not by counting "FAIL" lines.** A
+mutation that makes a suite CRASH prints no FAIL line at all, and a
+runner that greps for one calls that "survived". On 2026-09-11 three
+mutations were reported as survivors that way; one had killed the suite
+outright. A survivor you did not earn is worse than a missing test,
+because it is written down as proof.
+
+The predicate is `returncode != 0 or a FAIL line`, and a survivor is
+worth a second look before it is believed.
+
 ## What is still thin
 
 `ISSUES.md` is the open list and nothing else since audit A9: what is

@@ -20,6 +20,47 @@ import qrchannel
 import screens  # noqa: E402
 import signer  # noqa: E402
 
+#: How many of the eight masks must decode. ISSUES.md E-6.
+#:
+#: This was 6, chosen by eye, and it failed about one run in forty
+#: because the key is GENERATED fresh each run and about one descriptor
+#: in three hundred masks awkwardly. Measured 2026-09-11 over 720
+#: renders, 45 keys twice, four policies, both panels:
+#:
+#:     8 of 8   ~94%        7 of 8   ~5%       5 of 8   0.3%
+#:
+#: Nothing read 6, and nothing read below 5. `wpkh` never dropped below
+#: 8 at all; the low outlier was `tr` both times, on BOTH panels for the
+#: same key, so it is the descriptor's content and not the panel.
+#:
+#: **What the number has to protect is time to scan, not a tidy score.**
+#: The export cycles all eight masks at EXPORT_MASK_DELAY, 0.3s each, so
+#: with k of 8 readable a coordinator's first readable frame arrives in
+#: about (8/k) x 0.3s: 0.3s at k=8, 0.5s at k=5, 0.8s at k=3. The
+#: failure that matters is k=0, a key whose export can never be read,
+#: and 720 renders produced none. Three bounds the wait under a second
+#: and sits well clear of the measured floor of 5.
+MIN_MASKS = 3
+
+#: Descriptors measured at 7 of 8, kept so every run meets awkward
+#: content instead of drawing for it. A generated key still runs beside
+#: them, because what Core really writes is the thing under test and a
+#: frozen corpus cannot notice Core changing.
+HARD_DESCRIPTORS = [
+    ("pkh", "pkh([4abbcc4c/44h/1h/0h]tpubDCSALTaVF5mgfGbPu2Hn8PQkAomNX1Zvwg"
+            "JJYn7FHFjfUZcnESg4hR53UMZCaDX5UgNXKKyDNC4bksPLegrUdmi5narMjs7a"
+            "CBe5c4UBfPF/0/*)#arkj9h0u"),
+    ("tr", "tr([2e249786/86h/1h/0h]tpubDChTwweq5BgQwMnbGmKMUNgNodLn8YkkyZXcH"
+           "mcgLLVfd5SjAmz4hF6VJVGUzML7hqdTepLne9pDRPEJ7GZMrJ6MBYXyKFGGq348d"
+           "5fmfCu/0/*)#n3czq29y"),
+    ("tr", "tr([b3e01921/86h/1h/0h]tpubDChTREaE9NLFZe7kevKgFkNKG9FcQPYSi4mvx"
+           "osNu3BpGw1zFXcCio6Yev39VrV8iGGZdFnRiorabWtgRMss3JbASgVo4DtriLch3"
+           "qq1ccK/0/*)#mulrnnv4"),
+    ("wpkh", "wpkh([f592f2a3/84h/1h/0h]tpubDDqZvAmGV9hWgnkAJ5M6auHVjCBWS1sbE"
+             "CVPZF1EvT6TonAgWGqEYndWfkw6kbfJXgirmNNvwns1YD1pPHfTqEqdxhnY65q"
+             "6HiWymrw8hNK/0/*)#7k5tw96g"),
+]
+
 PANELS = [("primary 320x240", (320, 240)), ("pocket 240x240", (240, 240))]
 
 
@@ -163,10 +204,10 @@ def main():
                         pass
                 r.record(f"{kind}: zxing reads the {panel_name} export screen "
                          "of a Core-generated key",
-                         read >= 6,
+                         read >= MIN_MASKS,
                          f"{read} of 8 masks readable"
-                         + ("" if read >= 6 else "  TOO FEW: a scanner can "
-                            "miss a whole cycle"))
+                         + ("" if read >= MIN_MASKS else
+                            "  TOO FEW: a scanner can miss a whole cycle"))
             out = java("SparrowDesc", "REGTEST", desc, 3, tags=("INFO", "OUT"))
             sparrow_addrs = [line.split("\t")[1] for line in out["OUT"]]
             r.record(f"{kind}: Sparrow derives Core's first three addresses",
@@ -174,6 +215,35 @@ def main():
                      f"{core_addrs[0][:18]}… x3" if sparrow_addrs == core_addrs
                      else f"{sparrow_addrs[:1]} != {core_addrs[:1]}")
         signer.close_session(net.rpc)
+
+        # THE PINNED AWKWARD ONES (E-6). Every run meets these, so the
+        # suite stops depending on which key Core happened to make.
+        totals = []
+        for kind, desc in HARD_DESCRIPTORS:
+            xfp, path = signer.origin_of(desc)
+            for panel_name, panel in PANELS:
+                read = 0
+                pngs = []
+                for m, img in enumerate(qrchannel.text_to_images(
+                        desc, panel=(panel[0],
+                                     min(panel[1], screens.QR_MAX_PX)))):
+                    png = work / f"hard-{xfp}-{kind}-{panel[0]}-m{m}.png"
+                    screens.qr_export(panel[0], panel[1], img,
+                                      xfp, kind, path).save(png)
+                    pngs.append(str(png))
+                for line in java("SparrowQr", "qrcount", *pngs, tags=("OUT",)):
+                    if line.startswith("HIT\t") and line[4:] == desc:
+                        read += 1
+                totals.append(read)
+                r.record(f"{kind} {xfp}: the {panel_name} screen of a "
+                         "descriptor measured awkward",
+                         read >= MIN_MASKS, f"{read} of 8 masks readable")
+        # One awkward key is ordinary; all of them dropping together is a
+        # regression in the renderer, and a per-render floor of 3 would
+        # not notice it.
+        mean = sum(totals) / len(totals)
+        r.record("the awkward corpus still averages near eight masks",
+                 mean >= 6.5, f"mean {mean:.2f} of 8 over {len(totals)} renders")
 
     return r.summary()
 

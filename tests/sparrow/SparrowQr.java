@@ -41,6 +41,7 @@ public class SparrowQr {
             case "urencode" -> urencode(args);
             case "urdecode" -> urdecode(args);
             case "qrdecode" -> qrdecode(args);
+            case "qrcount" -> qrcount(args);
             case "inspect"  -> inspect(args);
             default -> throw new IllegalArgumentException("mode: " + args[0]);
         }
@@ -91,6 +92,28 @@ public class SparrowQr {
                 // zxing readers carry state between images. Without this a
                 // later image can fail for a reason belonging to an earlier
                 // one, which shows up as an intermittent test failure.
+                reader.reset();
+            }
+        }
+    }
+
+    private static void qrcount(String[] args) throws Exception {
+        // One line per image, HIT or MISS, so a caller can count how many
+        // of a set decode. `qrdecode` throws on the first failure, which
+        // is right when every image must read and useless when the
+        // question is how many do (ISSUES.md E-6).
+        MultiFormatReader reader = new MultiFormatReader();
+        for (int i = 1; i < args.length; i++) {
+            var img = ImageIO.read(new File(args[i]));
+            var bitmap = new BinaryBitmap(new HybridBinarizer(
+                    new BufferedImageLuminanceSource(img)));
+            try {
+                Result r = reader.decode(bitmap,
+                        Map.of(DecodeHintType.TRY_HARDER, Boolean.TRUE));
+                System.out.println("OUT\tHIT\t" + r.getText());
+            } catch (NotFoundException e) {
+                System.out.println("OUT\tMISS\t");
+            } finally {
                 reader.reset();
             }
         }
