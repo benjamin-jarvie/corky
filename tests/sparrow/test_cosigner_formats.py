@@ -73,6 +73,13 @@ EXPECT = {
 #: the exact words it puts in the list. Corky has to name the entry a
 #: person picks, so it reads the menu rather than guessing at it. Three
 #: entries are scan-only, which no amount of format work changes.
+#:
+#: These two flags are also what decides the BUTTONS. `hw_airgapped.fxml`
+#: is an Accordion, `HwAirgappedController` puts one pane in it per
+#: importer, and `FileImportPane` shows "Scan..." and "Import File..."
+#: according to `isKeystoreImportScannable()` and
+#: `isFileFormatAvailable()`. So pinning them here pins what Corky's
+#: export screen is allowed to tell a person to press.
 MENU = {
     "SpecterDIY": ("Specter DIY", True),
     "Krux": ("Krux", True),

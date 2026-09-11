@@ -175,10 +175,26 @@ and the person never sees the difference.
   requirement: "the coordinator is going to ask what device type so we
   need to let them know which to choose too".
 
-### One thing to check on the board
+### The wording, settled the same day and without a camera
 
-Whether Sparrow shows its device list BEFORE offering the scan button.
-The decoding is generic, so the payload is right either way, but the
-wording on Corky's screen depends on whether the person picks Specter
-DIY first and then scans, or scans straight away. Friday or Saturday,
-with a real Sparrow.
+This ticket first deferred "does Sparrow show its device list before
+offering the scan button" to the board. That was wrong. Scanning needs a
+camera; the LAYOUT does not, and it is in the release already unpacked
+in `tests/sparrow/.build`.
+
+- `keystoreimport/hw_airgapped.fxml` is an **`Accordion`**.
+- `HwAirgappedController` puts one `FileKeystoreImportPane` in it per
+  `KeystoreFileImport`, so **the device list comes first** and the
+  person expands the one they want.
+- `FileImportPane` holds `scanButton` and `importButton`, labelled
+  **"Scan..."** and **"Import File..."**, shown according to
+  `isKeystoreImportScannable()` and `isFileFormatAvailable()`. Specter
+  DIY has both true, which is why the test pins those two flags.
+
+So the person picks the device FIRST and then chooses how to feed it,
+and Corky's wording is the same shape on both paths:
+
+    choose Specter DIY, then Scan...
+    choose Specter DIY, then Import File...
+
+Nothing here is left for the board.

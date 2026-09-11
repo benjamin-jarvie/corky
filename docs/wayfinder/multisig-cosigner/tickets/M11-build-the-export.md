@@ -30,9 +30,14 @@ The flow runs on the dev rig, `tests/sparrow/test_cosigner_formats.py`
 still passes against what the device actually writes rather than against
 a string a test built, and the screens are in `test_screen_fit.py`.
 
-## Note
+## The wording, already settled
 
-The wording depends on one thing M8 could not settle without a camera:
-whether Sparrow shows its device list BEFORE offering the scan button.
-The payload is right either way. Check it on the board before the
-wording is final.
+M8 read Sparrow's own layout rather than deferring it. The airgapped
+import is an `Accordion` with one pane per device, so the person picks
+the device first, and each pane carries a **"Scan..."** and an **"Import
+File..."** button. So both screens read the same shape:
+
+    choose Specter DIY, then Scan...
+    choose Specter DIY, then Import File...
+
+Nothing in this ticket waits on hardware.
