@@ -113,3 +113,38 @@ comment says that is a factor of 7.3 on bytes per input. The undrop
 conclusion stands, because it is about the RETAINED tree and that is
 small either way. **The peak figures are not comparable**, and the board
 must use the batch-100 case, which is what the cap was set against.
+
+## Decision, 2026-09-11. Ben's call: two numbers, not one.
+
+The ticket asked "whether the cap becomes two numbers or one
+conservative one". **Two.** One low cap for everything would refuse
+ordinary single-sig batches this board has already been measured
+signing, which is work a person loses for no reason, and
+`describe_psbt` already reports whether the inputs are a quorum, so the
+device picks without guessing.
+
+    MAX_SIGNABLE_INPUTS           150   measured on the board
+    MAX_SIGNABLE_MULTISIG_INPUTS  120   PROVISIONAL, from the ratio above
+
+`state_review` applies the lower one when `quorum` is set OR `timelocks`
+is, because a miniscript policy carries a witness script per input the
+same way. That second case is NOT measured, and refusing early is the
+safe side.
+
+**The 120 is an estimate and rule 6 says that is not good enough for a
+cost claim.** It stands because the alternative is worse: 150 for a
+quorum is a promise the board probably cannot keep, and the failure mode
+is the OOM killer taking bitcoind while it holds the only copy of a
+signature. `tests/test_property.py` pins the value in a band and checks
+that each shape is judged against its OWN ceiling, so a quorum cannot
+quietly get the single-sig number.
+
+**This ticket is not closed.** The board replaces 120 with a measurement:
+
+    python3 m0/m0_gate.py --inputs 100 --quorum 2-of-3
+    python3 m0/m0_gate.py --inputs 120 --quorum 2-of-3
+    python3 m0/m0_gate.py --inputs 150 --quorum 2-of-3
+    python3 m0/m0_gate.py --inputs 175 --quorum 2-of-3
+
+Swap must be off or the gate refuses to give a verdict. Pass is
+MemAvailable never below 100MB.

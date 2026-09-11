@@ -121,6 +121,28 @@ def _classify_qr(payload):
 #: number; a board with more RAM does.
 MAX_SIGNABLE_INPUTS = 150
 
+#: The same ceiling for a QUORUM, which costs more per input: a witness
+#: script and a derivation entry per cosigner rather than one, and M9
+#: undropped both for the review screen.
+#:
+#: **PROVISIONAL, and it is an estimate rather than a measurement**,
+#: which TESTING.md rule 6 says is not good enough for a cost claim. It
+#: stands here because the alternative is worse: 150 for a quorum is a
+#: promise the board probably cannot keep, and this errs toward refusing
+#: work rather than toward the OOM killer taking bitcoind while it holds
+#: the only copy of a signature.
+#:
+#: Where it comes from. `describe_psbt` under tracemalloc at funding
+#: batch 100, the worst case the number above was set against:
+#: single-sig decodes 100 inputs in 15.29MB and 150 in 19.27MB, where a
+#: 2-of-3 takes 18.74MB and 23.69MB. **1.23x at both sizes.** So a
+#: quorum at 150/1.23 is about the decode the board was measured
+#: holding at 150 single-sig.
+#:
+#: Map M5 confirms or replaces it on the Zero 2 W with
+#: `python3 m0/m0_gate.py --inputs N --quorum 2-of-3`.
+MAX_SIGNABLE_MULTISIG_INPUTS = 120
+
 # What a PSBT run reports back to the home screen.
 SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 
@@ -1855,7 +1877,15 @@ class Session:
         if wallet is None:
             return TO_HOME
         info = signer.describe_psbt(self.rpc, psbt)
-        if info["input_count"] > MAX_SIGNABLE_INPUTS:
+        # A quorum costs more per input, so it gets its own ceiling
+        # rather than one conservative number for everything, which would
+        # refuse ordinary batches this board is measured signing (Ben,
+        # 2026-09-11). `timelocks` joins `quorum` because a miniscript
+        # policy carries a witness script per input the same way; its
+        # cost is not measured, and refusing early is the safe side.
+        heavy = bool(info["quorum"] or info["timelocks"])
+        cap = MAX_SIGNABLE_MULTISIG_INPUTS if heavy else MAX_SIGNABLE_INPUTS
+        if info["input_count"] > cap:
             # Refusing beats dying half way through. Measured on the
             # board, 250 batch-funded inputs leave 72MB where 100MB is
             # required, and the kernel kills whichever process asks for
@@ -1864,7 +1894,7 @@ class Session:
             self.display.show(screens.result(
                 self.w, self.h, ok=False,
                 detail=f"{info['input_count']} inputs; this board signs "
-                       f"up to {MAX_SIGNABLE_INPUTS}"))
+                       f"up to {cap}"))
             self.buttons.read()
             return TO_HOME
         if info["fee_btc"] is None:

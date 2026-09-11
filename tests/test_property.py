@@ -515,8 +515,15 @@ def prop_too_many_inputs_is_refused_not_signed():
     class Answers:
         chain = "regtest"
 
-        def __init__(self, n):
+        def __init__(self, n, quorum=False):
             self.n = n
+            # A quorum input carries a witness script, which is what
+            # `describe_psbt` reads the threshold out of and what makes
+            # the decode cost more per input.
+            self.txin = ({"witness_script": {
+                "type": "multisig",
+                "asm": "2 03aa 03bb 03cc 3 OP_CHECKMULTISIG"}}
+                if quorum else {})
 
         def call(self, method, *params, wallet=None, stdin=False, drop=()):
             if method == "decodepsbt":
@@ -524,7 +531,7 @@ def prop_too_many_inputs_is_refused_not_signed():
                                          "scriptPubKey": {"address": "bcrt1q"}}],
                                "vin": [{}] * self.n},
                         "fee": Decimal("0.0001"),
-                        "inputs": [{}] * self.n}
+                        "inputs": [dict(self.txin) for _ in range(self.n)]}
             if method == "analyzepsbt":
                 return {"next": "signer"}
             if method == "listdescriptors":
@@ -548,10 +555,24 @@ def prop_too_many_inputs_is_refused_not_signed():
             f"MAX_SIGNABLE_INPUTS is {limit}. The board was measured at "
             "114MB of headroom on 175 inputs and 78MB on 200, against "
             "100MB required, so the limit belongs between 100 and 199")
-    for n, want_refusal in ((limit + 1, True), (limit, False)):
+    # And the QUORUM ceiling, which is lower because a multisig input
+    # costs more to decode. Ben, 2026-09-11: two numbers, not one
+    # conservative one, because a single low cap refuses ordinary batches
+    # this board is measured signing.
+    multi = corky_main.MAX_SIGNABLE_MULTISIG_INPUTS
+    if not 60 <= multi < limit:
+        raise AssertionError(
+            f"MAX_SIGNABLE_MULTISIG_INPUTS is {multi}. A 2-of-3 decode "
+            f"costs 1.23x a single-sig one at the same input count, so it "
+            f"belongs below {limit} and not so low it refuses a quorum "
+            "the board can hold")
+    for n, quorum, want_refusal in ((limit + 1, False, True),
+                                    (limit, False, False),
+                                    (multi + 1, True, True),
+                                    (multi, True, False)):
         disp = Painted()
         sess = corky_main.Session(disp, hal.DevButtons("a" * 40),
-                                  rpc=Answers(n), animate=False,
+                                  rpc=Answers(n, quorum), animate=False,
                                   on_device=False)
         sess.keys = [corky_main.LoadedKey("corky-73c5da0a", "73c5da0a")] \
             if hasattr(corky_main, "LoadedKey") else []
@@ -560,18 +581,31 @@ def prop_too_many_inputs_is_refused_not_signed():
             sess.state_review("cHNidP8B", None)
         except hal.ScriptExhausted:
             pass
+        cap = multi if quorum else limit
         refusal = screens.result(
             320, 240, ok=False,
-            detail=f"{n} inputs; this board signs up to {limit}")
+            detail=f"{n} inputs; this board signs up to {cap}")
         drew = any(f.tobytes() == refusal.tobytes() for f in disp.shown)
+        shape = "a quorum" if quorum else "single-sig"
         if want_refusal and not drew:
             raise AssertionError(
-                f"{n} inputs is past the {limit} the board can hold, and "
-                "the device did not refuse it")
+                f"{n} {shape} inputs is past the {cap} the board can hold, "
+                "and the device did not refuse it")
         if not want_refusal and drew:
             raise AssertionError(
-                f"{n} inputs is within the limit and was refused anyway; "
-                "a guard that refuses real work is worse than no guard")
+                f"{n} {shape} inputs is within the limit and was refused "
+                "anyway; a guard that refuses real work is worse than no "
+                "guard")
+        # The cap that ran must be the one for THIS shape, or a quorum
+        # gets the single-sig number and the whole split does nothing.
+        other = limit if quorum else multi
+        if any(f.tobytes() == screens.result(
+                320, 240, ok=False,
+                detail=f"{n} inputs; this board signs up to {other}"
+        ).tobytes() for f in disp.shown):
+            raise AssertionError(
+                f"{n} {shape} inputs was judged against {other}, which is "
+                "the other shape's ceiling")
 
 
 def prop_a_failing_stick_does_not_lose_a_signature():
