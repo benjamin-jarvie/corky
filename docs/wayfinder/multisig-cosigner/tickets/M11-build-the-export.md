@@ -15,8 +15,10 @@ Build it:
 2. Named rows for the common paths at the top, and the typed path inside
    Advanced, which is M1 decision 3.
 3. ONE question: QR or file (M8).
-4. **QR** shows `wsh([xfp/path]tpub)`. **File** writes the bare
-   one-liner. The two payloads differ and the person never sees that.
+4. **QR** shows a whole descriptor,
+   `wsh(sortedmulti(1,[xfp/path]tpub/0/*))#<checksum>`. **File** writes
+   the bare one-liner. The two payloads differ and the person never sees
+   that. (Corrected from `wsh([xfp/path]tpub)`, which Core refuses.)
 5. Both screens say to choose **Specter DIY** in the coordinator, which
    is Ben's requirement: the coordinator asks what device type, so Corky
    has to say which to pick.
@@ -85,9 +87,22 @@ is exactly the change a person makes to a text file that lacks one.
 the trap. M8 is corrected above; the payload is the `sortedmulti(1,…)`
 form that Core checksums and Sparrow reads.
 
-### Not built, and deliberately
+### Advanced, which the first pass left out
 
-**Advanced** is a row that says so. It holds the nested-segwit path, the
-account number and the typed path with its checksum echo, which is M1
-decision 3 and M2's echo. That is its own slice and the named row is
-what a person needs first.
+The first version of this Answer called Advanced "its own slice" and
+closed the ticket with items 2 and 6 of the Question unbuilt. **Nobody
+agreed to that.** A two-axis review found the Answer had been written to
+match the code rather than the code to match the decision, and Ben's
+call on 2026-09-10 was to build it. It is built:
+
+- **Cosigner (nested)** exports at `48h/{coin}h/{account}h/1h`.
+- **Account number** offers 0 to 9. A person with more separate quorums
+  on one key types the path instead.
+- **Type a path…** takes any path at all on a grid holding only
+  `0123456789h'/`, accepts `m/` and either hardened mark, and then shows
+  **M2's echo**: the path as Core read it and Core's 8-character
+  descriptor checksum, with BACK pre-selected so the export is chosen
+  and never landed on.
+
+That closes items 2 and 6, and makes `COSIGNER_SCRIPTS["sh-wsh"]` and
+`cosigner_path(script=, account=)` reachable rather than speculative.

@@ -227,6 +227,14 @@ CASES = {
     # row is the longest the named rows can produce, which is mainnet's
     # m/48'/0'/0'/2' at the same width as regtest's.
     "cosigner-options": lambda w, h: screens.cosigner_options(w, h, 1),
+    "advanced-menu": lambda w, h: screens.advanced_menu(
+        w, h, screens.advanced_rows("m/48'/0'/0'/1'", 9), 2),
+    "account-menu": lambda w, h: screens.account_menu(w, h, 9),
+    # The worst path a person can type: three hardened levels of 31 bits,
+    # which is the shape buidl's secure_secret_path builds and the only
+    # thing this row exists for.
+    "path-echo": lambda w, h: screens.path_echo(
+        w, h, "m/607137099'/1711870460'/1965312408'", "7asmw9jj", 1),
     "script-menu-cosigner": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 4,
         cosigner_path="m/48'/0'/0'/2'"),
@@ -257,6 +265,9 @@ MENUS = {
     "script type": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "cosigner options": lambda w, h: screens.cosigner_options(w, h, 0),
+    "advanced": lambda w, h: screens.advanced_menu(
+        w, h, screens.advanced_rows("m/48'/0'/0'/1'", 0), 0),
+    "account number": lambda w, h: screens.account_menu(w, h, 0),
     "script type with cosigner": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0,
         cosigner_path="m/48'/0'/0'/2'"),
@@ -415,6 +426,57 @@ for w, h in [(320, 240), (240, 240)]:
                 bad(f"{w}x{h} backup {label} page {i}: {x[0][:20]!r} at "
                     f"{x[1]} is painted over {y[0][:20]!r} at {y[1]}")
         ok(f"{w}x{h} {label} paginates into {len(pages)} pages that fit")
+
+# --- what the review screen must SAY, not just where it fits ----------
+#
+# Both of these shipped broken and every suite stayed green, because
+# fitting and overlapping were checked and PRESENCE was not.
+
+
+def _strings(**kw):
+    """Every string one review render draws."""
+    outs = [(ADDR, Decimal("0.1"))] * 4
+    _ctx.update(w=240, h=240, name="probe", over=[], drawn=[])
+    screens.review(240, 240, outs[:kw.pop("outputs", 4)],
+                   Decimal("0.0001"), input_total_btc=Decimal("1"), **kw)
+    return [t for t, _ in _ctx["drawn"]]
+
+
+SOLO = [("a1b2c3d4", "m/84h/0h/0h")]
+QUORUM = [("a1b2c3d4", "m/48h/0h/0h/2h"), ("e5f6a7b8", "m/48h/0h/0h/2h")]
+HINT = "UP/DOWN · more outputs"
+
+# 1. THE PAGING HINT. It was drawn only when no quorum line was, and
+#    `main` passes cosigners for any PSBT carrying derivations, so it
+#    vanished from every paged review including single-sig ones. The
+#    scrollbar and the refusal banner remained, so nothing failed.
+for label, kw in (("single-sig", {"cosigners": SOLO, "ours": "a1b2c3d4"}),
+                  ("a quorum", {"quorum": (2, 3), "cosigners": QUORUM,
+                                "ours": "a1b2c3d4"}),
+                  ("no derivations at all", {})):
+    if HINT in _strings(**kw):
+        ok(f"a paged review tells you to page, with {label}")
+    else:
+        bad(f"a paged review with {label} never says {HINT!r}")
+if HINT not in _strings(outputs=2, cosigners=QUORUM, ours="a1b2c3d4"):
+    ok("a one-page review does not tell you to page")
+else:
+    bad("a single page still says there are more outputs")
+
+# 2. THE PATH MUST BE OURS. It fell back to the first cosigner's when
+#    ours was not among them, which printed a stranger's derivation as
+#    the wallet being signed for. `_key_for` lets a person choose any
+#    loaded key, so the case is reachable.
+if any("m/48h/0h/0h/2h" in t for t in
+       _strings(quorum=(2, 3), cosigners=QUORUM, ours="e5f6a7b8")):
+    ok("the review shows OUR derivation path")
+else:
+    bad("the review does not show our path at all")
+if not any("m/48h" in t for t in
+           _strings(quorum=(2, 3), cosigners=QUORUM, ours="cccccccc")):
+    ok("and shows NO path when this key is not one of the cosigners")
+else:
+    bad("the review shows a stranger's path as the wallet being signed for")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

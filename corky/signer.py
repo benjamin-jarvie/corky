@@ -374,10 +374,6 @@ def open_session_descriptors(rpc: "Rpc", descriptors: list[str]) -> str:
 #: the thing that decides it.
 _CHANGE_BRANCH = re.compile(r"/(\d+)/\*")
 
-#: The change branch and address index at the end of a derivation, which
-#: `_branches` splits off so it can import one ranged descriptor per
-#: branch instead of one flat descriptor per input.
-_CHANGE_LEAF = re.compile(r"/(\d+)/(\d+)$")
 
 
 def _is_change(bare: str) -> bool:
@@ -700,7 +696,9 @@ _REVIEW_DROPS = frozenset((
 def _quorum_of(script: dict) -> "tuple[int, int] | None":
     """The threshold Core already decoded, read and not parsed.
 
-    PLAN A-22: Corky computes nothing on a script. Core reports
+    PLAN A-11: Core is the only thing that parses a descriptor or a
+    script, and this reads Core's answer rather than the script. Core
+    reports
     `type: "multisig"` and renders the script as `asm`, which for a
     bare multisig begins with the threshold and ends with the total
     before `OP_CHECKMULTISIG`. Reading two of Core's own tokens is not
@@ -784,7 +782,11 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
     }
 
 
-_LEAF = re.compile(r"/\d+/\d+$")
+#: The change branch and address index at the end of a derivation.
+#: `_account_path` strips it, and `_branches` reads the two numbers out
+#: of it. One pattern, because two readings of the same question
+#: disagree eventually and nothing then says which is the definition.
+_CHANGE_LEAF = re.compile(r"/(\d+)/(\d+)$")
 
 
 def _account_path(path: str) -> str:
@@ -797,7 +799,7 @@ def _account_path(path: str) -> str:
     at the end are removed and nothing else is, so a path of an unusual
     shape is shown whole rather than trimmed by a rule it does not obey.
     """
-    return _LEAF.sub("", path)
+    return _CHANGE_LEAF.sub("", path)
 
 
 def _cosigners(inputs: list) -> "list[tuple[str, str]]":
@@ -854,7 +856,7 @@ def _spend_lock(vin: list, locks: "tuple[int, ...]") -> "int | None":
     `nSequence` when it builds, and the same policy finalises on one key
     or refuses to, depending only on that. Corky cannot change it. A
     person can refuse it, which is the whole reason the screen has to
-    show it: a recovery spend nobody asked for looks exactly like a
+    show it: a spend at a tier nobody asked for looks exactly like a
     normal one today.
 
     None whenever the answer is not plainly readable: no locks, inputs
@@ -869,6 +871,11 @@ def _spend_lock(vin: list, locks: "tuple[int, ...]") -> "int | None":
     seq = seqs.pop()
     if not isinstance(seq, int) or seq >= _SEQUENCE_UNITS:
         return None
+    # BIP68 puts the VALUE in the low 16 bits and ignores bits 16 to 21.
+    # Comparing the whole word read a sequence of 0x00010005 as 65541
+    # where consensus reads it as 5, so the screen could name a tier the
+    # spend does not reach (two-axis review, 2026-09-10).
+    seq &= 0xffff
     enabled = [n for n in locks if n < _SEQUENCE_UNITS and n <= seq]
     return max(enabled) if enabled else None
 
@@ -954,8 +961,8 @@ def sign_at_told_paths(rpc: "Rpc", wallet: str, psbt_b64: str,
                        xfp: str) -> dict:
     """Sign the shares this PSBT asks this key for, at ITS paths.
 
-    A loaded key holds the four standard policies. A quorum, a miniscript
-    branch or a blinded path is none of them, so Core signs nothing and
+    A loaded key holds the four standard policies. A quorum, a tier of a
+    decaying policy or a blinded path is none of them, so Core signs nothing and
     the device that M4 proved a coordinator would accept could not
     actually produce the signature. M1 decision 2 settled the answer:
     the PSBT names the path, and the device derives where it is told.
@@ -1034,7 +1041,7 @@ def sign_psbt(rpc: "Rpc", psbt_b64: str, wallet: str = WALLET,
         # Nothing signed with the policies this wallet holds. The PSBT
         # may still be asking this key for a share at a path it was
         # never told about until now, which is every quorum, every
-        # miniscript branch and every blinded path.
+        # tier of a decaying policy and every blinded path.
         return sign_at_told_paths(rpc, wallet, psbt_b64, xfp)
     return {"psbt": result["psbt"], "complete": result["complete"],
             "added": after < before}

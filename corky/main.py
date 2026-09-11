@@ -732,7 +732,9 @@ class Session:
         # so `available_kinds` keeps meaning what it always did.
         path = signer.cosigner_path(self.rpc)
         shown = "m/" + path.replace("h", "'")
-        rows = list(order) + [screens.COSIGNER_KIND, "advanced"]
+        # The SAME list screens draws, so the label and the handler cannot
+        # drift apart (TESTING.md rule 11).
+        rows = screens.script_rows(order, shown)
         selected = 0
         while True:
             selected = self._pick(
@@ -741,18 +743,104 @@ class Session:
                 len(rows), start=selected)
             if selected is None:
                 return
-            if rows[selected] == screens.COSIGNER_KIND:
+            kind = rows[selected][2]
+            if kind == screens.COSIGNER_KIND:
                 if self._export_cosigner(name, path):
                     return
                 continue
-            if rows[selected] == "advanced":
-                self._hold("Advanced is not built yet")
+            if kind == screens.ADVANCED_KIND:
+                if self._export_advanced(name):
+                    return
                 continue
             # A completed export leaves the flow. It used to drop back on
             # the script type, which read as "that did not work" after an
             # export that had worked (Ben, on the board).
-            if self._export_one(name, order[selected]):
+            if self._export_one(name, kind):
                 return
+
+    #: Which account the NAMED cosigner rows derive at. One session's
+    #: choice, never written anywhere, like every other thing this device
+    #: holds.
+    cosigner_account = 0
+
+    def _export_advanced(self, name):
+        """The nested path, the account number, and a typed path.
+
+        M1 decision 3 puts these one level down, which is Coldcard's
+        structure: "the free-text row is one level down, where it is not
+        reached by accident, and it is the only route to a blinded xpub".
+
+        Returns True when an export finished, which ends the whole flow.
+        """
+        while True:
+            nested = signer.cosigner_path(self.rpc, "sh-wsh",
+                                          self.cosigner_account)
+            rows = screens.advanced_rows("m/" + nested.replace("h", "'"),
+                                         self.cosigner_account)
+            chosen = self._pick(
+                lambda sel, r=rows: screens.advanced_menu(
+                    self.w, self.h, r, sel),
+                len(rows))
+            if chosen is None:
+                return False
+            kind = rows[chosen][2]
+            if kind == screens.NESTED_KIND:
+                if self._export_cosigner(name, nested):
+                    return True
+            elif kind == screens.ACCOUNT_KIND:
+                picked = self._pick(
+                    lambda sel: screens.account_menu(self.w, self.h, sel),
+                    screens.ACCOUNTS, start=self.cosigner_account)
+                if picked is not None:
+                    self.cosigner_account = picked
+            elif self._export_typed_path(name):
+                return True
+
+    def _export_typed_path(self, name):
+        """Any path at all, typed, and echoed back before it leaves.
+
+        The echo is M2's, and the reason is M1's: a typed path is the only
+        route to a blinded xpub, and blinding is where a typo cannot be
+        recovered from. Core builds the checksum, so the thing being
+        checked is Core's reading of the path and not Corky's.
+        """
+        typed = self._text_entry("DERIVATION  PATH", "path")
+        if not typed:
+            return False
+        # `48h/1h/0h/2h` is the shape signer wants. A person types what
+        # they read off a coordinator, which usually carries the m/ and
+        # may use either hardened mark.
+        path = typed.strip().replace("'", "h").strip("/")
+        if path.startswith("m/"):
+            path = path[2:]
+        stop = self._busy("asking Core about that path…")
+        try:
+            checksum = signer.cosigner_qr(
+                self.rpc, name, path).rsplit("#", 1)[1]
+        except RuntimeError as exc:
+            stop()          # before _hold blocks; see _tool_leak_check
+            self._hold(signer.redact(str(exc))[:60])
+            return False
+        finally:
+            stop()
+        # An ACTION BAR, so LEFT and RIGHT move and A chooses, which is
+        # `_discard`'s loop and not `_pick`'s: `_pick` drives list rows
+        # with UP and DOWN. BACK is pre-selected, so the export is
+        # chosen and never landed on.
+        shown = "m/" + path.replace("h", "'")
+        selected = 0
+        while True:
+            self.display.show(screens.path_echo(self.w, self.h, shown,
+                                                checksum, selected))
+            key = self.buttons.read()
+            if key in ("l", "r"):
+                selected = 1 - selected
+            elif key in ("b", "c"):
+                return False
+            elif key in ("a", "p"):
+                if selected == 0:
+                    return False
+                return self._export_cosigner(name, path)
 
     def _export_cosigner(self, name, path):
         """This key as ONE COSIGNER of somebody else's quorum.
@@ -782,11 +870,15 @@ class Session:
                 payload = signer.cosigner_qr(self.rpc, name, path)
             finally:
                 stop()
-            if not self._export_qr(name, payload, screens.COSIGNER_KIND):
-                return False
-            self._hold("in the wallet choose Specter DIY, then Scan",
+            # BEFORE the code, because that is the order the person
+            # works in: Sparrow's airgapped import is an accordion of
+            # devices, each with its own Scan button, so they pick
+            # Specter DIY and then point the camera. Saying it after the
+            # code is dismissed is saying it too late.
+            self._hold("in your coordinator choose Specter DIY, then Scan",
                        ok=True)
-            return True
+            return bool(self._export_qr(name, payload,
+                                        screens.COSIGNER_KIND))
         dest = self._choose_channel()
         if dest is None:
             return False
@@ -795,8 +887,8 @@ class Session:
             out = signer.write_cosigner(self.rpc, name, path, dest)
         finally:
             stop()
-        self._hold(f"{out.name}: choose Specter DIY, then Import File",
-                   ok=True)
+        self._hold(f"{out.name}: in your coordinator choose Specter DIY, "
+                   "then Import File", ok=True)
         return True
 
     def _export_one(self, name, kind):

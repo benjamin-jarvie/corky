@@ -387,19 +387,25 @@ def _quorum_text(quorum, cosigners, ours, timelocks=(),
     Empty when the transaction names no path at all, so a PSBT carrying
     no derivations draws today's screen and not a blank line.
     """
-    path = ""
-    for xfp, p in cosigners:
-        if not path or (ours and xfp == ours):
-            path = p
-        if ours and xfp == ours:
-            break
+    # ONLY THIS DEVICE'S PATH. This used to fall back to the first
+    # cosigner's when `ours` was not among them, which printed a
+    # stranger's derivation under "whose wallet you are approving for"
+    # (M1 decision 2) with nothing to say it was not yours. `_key_for`
+    # lets a person pick any loaded key, so that case is reachable: the
+    # signing then adds nothing and is refused, but the screen had
+    # already said something untrue (two-axis review, 2026-09-10).
+    path = next((p for xfp, p in cosigners if xfp == ours), "")
+    if not ours and len({p for _, p in cosigners}) == 1:
+        # No key chosen yet and every input derives from one place, so
+        # there is only one path it could be.
+        path = cosigners[0][1]
     if quorum == "mixed":
         head = "MIXED QUORUMS"
     elif isinstance(quorum, tuple):
         head = f"{quorum[0]} of {quorum[1]}"
     elif spend_lock is not None:
         # M6: the coordinator picks the tier with nSequence, and a
-        # recovery spend nobody asked for looks exactly like a normal one
+        # spend at a tier nobody asked for looks exactly like a normal one
         # without this line. The person cannot change it and can refuse
         # it, so this is the only place it can matter.
         head = f"AFTER {spend_lock} BLOCKS"
@@ -494,15 +500,27 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
     # and the fee. With arbitrary paths allowed, the path is the only
     # thing telling a wallet you set up from one you did not, and the
     # threshold is what says this signature finishes nothing.
+    # Three things want this band: the quorum and path, the cosigners,
+    # and the paging hint. M3 ruled on the collision before it happened:
+    # "If they do not fit, the fingerprints are the line to move, not the
+    # fee." The hint is what a person needs to finish reading the
+    # transaction, so it keeps its place and the rows above it compress.
+    #
+    # The hint used to be dropped whenever this line drew, which deleted
+    # it from EVERY paged review rather than only a multisig one, because
+    # `main` passes cosigners for any PSBT carrying derivations
+    # (two-axis review, 2026-09-10).
     line = _quorum_text(quorum, cosigners, ours, timelocks, spend_lock)
     if line:
-        _fit(d, (w // 2, int(h * 0.445)), line, int(h * 0.045),
+        _fit(d, (w // 2, int(h * 0.435)), line, int(h * 0.042),
              CREAM if quorum != "mixed" else OCHRE, "mm", int(w * 0.92))
-        _cosigner_row(d, w, int(h * 0.505), cosigners, ours,
-                      int(h * 0.042), int(w * 0.92))
-    if pages > 1 and not line:
-        d.text((w // 2, y + int(h * 0.01)), "UP/DOWN · more outputs",
-               font=_font(int(h * 0.045)), fill=OCHRE, anchor="mm")
+        _cosigner_row(d, w, int(h * 0.487), cosigners, ours,
+                      int(h * 0.040), int(w * 0.92))
+    if pages > 1:
+        d.text((w // 2, int(h * 0.545) if line else y + int(h * 0.01)),
+               "UP/DOWN · more outputs",
+               font=_font(int(h * (0.042 if line else 0.045))), fill=OCHRE,
+               anchor="mm")
     ky = int(h * 0.58)
     d.line([(left, ky), (right, ky)], fill=GREY, width=1)
     _row(d, left, right, ky + int(h * 0.075), "FEE", f"{fee_btc:.8f} BTC",
@@ -543,7 +561,7 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
         # What the signature MEANS, under where it went. M3 traded
         # SIGNED-over-a-partial against the review screen stating the
         # threshold, and M6 found a whole class of wallet whose screen
-        # cannot state one: Core types a miniscript witness script as
+        # cannot state one: Core types a decaying policy's witness script as
         # nonstandard. So the outcome is said here instead, where it is
         # true for every wallet shape.
         _fit(d, (w // 2, int(h * 0.79)), note, int(h * 0.045), OCHRE, "mm",
@@ -756,8 +774,26 @@ KEY_MENU_OPTIONS = [
 #: inside Advanced, which is Coldcard's structure with the capability
 #: they do not have. Nobody types m/48'/0'/0'/2', so nobody mistypes it.
 COSIGNER_KIND = "cosigner"
+ADVANCED_KIND = "advanced"
 COSIGNER_ROW = "Cosigner (P2WSH)"
 ADVANCED_ROW = "Advanced…"
+
+
+def script_rows(kinds, cosigner_path=None):
+    """The rows SCRIPT TYPE draws, with the thing each one MEANS.
+
+    ONE list. `script_menu` draws it and `main._export` dispatches on it,
+    so the two cannot drift, which is TESTING.md rule 11: "a menu is two
+    lists, and nothing joins them". That rule exists because the BACKUP
+    menu drew "On paper" and ran the file backup. This screen had the
+    same shape for a day: `main` built its own row list and `script_menu`
+    appended the cosigner rows under a condition of its own.
+    """
+    rows = [(SCRIPT_LABELS[k], "", k) for k in kinds]
+    if cosigner_path:
+        rows.append((COSIGNER_ROW, cosigner_path, COSIGNER_KIND))
+        rows.append((ADVANCED_ROW, "", ADVANCED_KIND))
+    return rows
 
 
 def script_menu(w, h, kinds, selected=0, cosigner_path=None):
@@ -771,11 +807,71 @@ def script_menu(w, h, kinds, selected=0, cosigner_path=None):
     `kinds` is what this key HAS, which is all four for a key Core made or
     a key imported since D6.
     """
-    rows = [(SCRIPT_LABELS[k], "", "normal") for k in kinds]
-    if cosigner_path:
-        rows.append((COSIGNER_ROW, cosigner_path, "normal"))
-        rows.append((ADVANCED_ROW, "", "normal"))
+    rows = [(label, note, "normal")
+            for label, note, _kind in script_rows(kinds, cosigner_path)]
     return _menu(w, h, "SCRIPT  TYPE", rows, selected)
+
+
+#: One level down from the named row, which is Coldcard's structure:
+#: expert things once under Advanced, and nothing destructive here at
+#: all. M1 decision 3: "Nobody types m/48'/0'/0'/2', so nobody mistypes
+#: it. The free-text row is one level down, where it is not reached by
+#: accident, and it is the only route to a blinded xpub."
+NESTED_KIND, ACCOUNT_KIND, TYPED_KIND = "nested", "account", "typed"
+
+
+def advanced_rows(nested_path, account):
+    """The rows ADVANCED draws, with the thing each one means.
+
+    One list, drawn and dispatched from, as `script_rows` is and for the
+    same reason (TESTING.md rule 11).
+    """
+    return [("Cosigner (nested)", nested_path, NESTED_KIND),
+            ("Account number", str(account), ACCOUNT_KIND),
+            ("Type a path…", "", TYPED_KIND)]
+
+
+def advanced_menu(w, h, rows, selected=0):
+    return _menu(w, h, "ADVANCED",
+                 [(label, note, "normal") for label, note, _k in rows],
+                 selected)
+
+
+#: How many accounts the chooser offers. A person with more than this
+#: many separate quorums on one key types the path instead.
+ACCOUNTS = 10
+
+
+def account_menu(w, h, selected=0):
+    """Which account the named rows derive at. `m/48'/coin'/ACCOUNT'/…`"""
+    return _menu(w, h, "ACCOUNT  NUMBER",
+                 [(str(i), "", "normal") for i in range(ACCOUNTS)], selected)
+
+
+def path_echo(w, h, path, checksum, selected=0):
+    """What Core made of a typed path, before anything leaves.
+
+    M2 decided this echo and why it is a CHECKSUM and not a test address:
+    a cosigner branch derives a single-sig address, not the quorum's, so
+    an address here would be a number a coordinator never shows. Core's
+    8-character descriptor checksum changes if the path or the
+    fingerprint changes, and a corrupt xpub is refused outright because
+    base58 carries its own.
+
+    Blinding is exactly where a typo is unrecoverable: get it wrong and
+    the coordinator watches a wallet nobody can spend from.
+    """
+    img, d = _frame(w, h, "CHECK  THE  PATH")
+    _fit(d, (w // 2, int(h * 0.30)), path, int(h * 0.065), CREAM, "mm",
+         int(w * 0.92))
+    _fit(d, (w // 2, int(h * 0.48)), checksum.upper(), int(h * 0.10),
+         OCHRE, "mm", int(w * 0.9))
+    _fit_block(d, ["Core made this checksum.",
+                   "It changes if the path does."],
+               [(w // 2, int(h * 0.64)), (w // 2, int(h * 0.73))],
+               int(h * 0.045), GREY, "mm", int(w * 0.92))
+    _actions(d, w, h, ["BACK", "EXPORT"], selected)
+    return img
 
 
 #: How a cosigner record leaves. Two rows, not the three the single-sig
@@ -1160,7 +1256,14 @@ DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
 
 # A passphrase alphabet went with the file backup: the only thing this
 # device asks you to type now is a key, and a key is base58 (PLAN A-24).
-CHARSETS = {"xprv": BASE58, "descriptor": DESCRIPTOR_CHARSET}
+#: Everything a derivation path is made of and nothing else. A typed
+#: path is the only route to a blinded xpub (M1 decision 3), and it is
+#: also where a typo is unrecoverable, so the grid offers no character
+#: that cannot appear in one.
+PATH_CHARSET = "0123456789h'/"
+
+CHARSETS = {"xprv": BASE58, "descriptor": DESCRIPTOR_CHARSET,
+            "path": PATH_CHARSET}
 
 
 def charset_pages(name):

@@ -286,6 +286,31 @@ counts presses proves the code agrees with itself. Where a list screen
 dispatches, one test must read the row's words and name the function it is
 supposed to call.
 
+## Rule 12a: a mutation run must clear `__pycache__`
+
+Mutation testing is how every fix in this repo is accepted: break the
+code on purpose, and the check that was supposed to catch it must fail.
+That depends on the edit actually reaching the interpreter.
+
+CPython caches by source size and mtime. A mutation script that writes a
+mutant, runs a suite, and writes the original back can produce a `.pyc`
+the interpreter then reuses for the ORIGINAL file, because the restored
+source is the same length and the mtime moved within the same coarse
+tick. On 2026-09-10 that left `corky/main.py` executing a mutant for
+three suite runs after the script printed "restored", and
+`test_menu_wiring.py` failed with the mutation's exact symptoms against
+a source file that was correct on disk.
+
+It reads as a flake, which rule 12 says is a defect not yet read. The
+danger is the other direction: the same staleness can run the ORIGINAL
+against a mutant's result and report a mutation as CAUGHT that nothing
+caught.
+
+**Clear `__pycache__` before trusting a mutation run**, and before
+believing any failure whose source looks right:
+
+    find . -name __pycache__ -type d -not -path "*/.build/*" -exec rm -rf {} +
+
 ## What is still thin
 
 `ISSUES.md` is the open list and nothing else since audit A9: what is

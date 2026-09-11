@@ -156,6 +156,103 @@ pin("EXPORT AS", screens.EXPORT_OPTIONS, run_export, {
 })
 
 
+# --- 4b. SCRIPT TYPE, which now dispatches on more than a script -------
+# The cosigner and Advanced rows were added under a condition inside
+# `screens.script_menu` while `main._export` built its own parallel list,
+# which is the two-lists shape this whole file exists for. They now share
+# `screens.script_rows`, and this is what says so.
+
+SCRIPT_ROWS = screens.script_rows(corky_main.signer.EXPORT_ORDER, "m/48'/0'/0'/2'")
+
+
+def _stub(target, **values):
+    """Replace module attributes and give back a restore function.
+
+    Set globally and never put back, these leak into every check after
+    them: the first version of this block left `available_kinds` stubbed
+    and two later checks about EMPTY menus started passing for the wrong
+    reason.
+    """
+    old = {k: getattr(target, k) for k in values}
+    for k, v in values.items():
+        setattr(target, k, v)
+    return lambda: [setattr(target, k, v) for k, v in old.items()]
+
+
+def run_script_menu(sess):
+    ran = []
+    recorder(sess, ("_export_one", "_export_cosigner", "_export_advanced"),
+             ran)
+    undo = _stub(corky_main.signer,
+                 available_kinds=lambda *a, **k: corky_main.signer.EXPORT_ORDER,
+                 cosigner_path=lambda *a, **k: "48h/0h/0h/2h")
+    try:
+        sess._export("corky")
+    finally:
+        undo()
+    return ran[0] if ran else "nothing"
+
+
+pin("SCRIPT TYPE", [(label, note) for label, note, _k in SCRIPT_ROWS],
+    run_script_menu,
+    {"Native segwit": "_export_one", "Taproot": "_export_one",
+     "Nested segwit": "_export_one", "Legacy": "_export_one",
+     "Cosigner (P2WSH)": "_export_cosigner",
+     "Advanced…": "_export_advanced"})
+
+
+# --- 4c. how a cosigner record leaves, and what Advanced offers --------
+
+def run_cosigner(sess):
+    ran = []
+    recorder(sess, ("_export_qr",), ran)
+    # The file route calls no method of its own, so watch the channel
+    # chooser instead: reaching it IS the file branch.
+    sess._choose_channel = lambda: ran.append("file")
+    undo = _stub(corky_main.signer,
+                 cosigner_qr=lambda *a, **k: "wsh(x)#aaaaaaaa")
+    try:
+        sess._export_cosigner("corky", "48h/0h/0h/2h")
+    finally:
+        undo()
+    return ran[0] if ran else "nothing"
+
+
+pin("COSIGNER OUT", screens.COSIGNER_OPTIONS, run_cosigner,
+    {"QR code": "_export_qr", "File": "file"})
+
+
+def run_advanced(sess):
+    ran = []
+    recorder(sess, ("_export_cosigner", "_export_typed_path"), ran)
+    # The account row opens a menu rather than calling a handler, so the
+    # SCREEN is what says the right row ran.
+    undo = _stub(corky_main.signer,
+                 cosigner_path=lambda *a, **k: "48h/0h/0h/1h")
+    # The REAL one, captured first: corky_main.screens is this module's
+    # own `screens`, so a stub that calls it by name calls itself.
+    real = screens.account_menu
+    undo2 = _stub(corky_main.screens,
+                  account_menu=lambda *a, **k: (ran.append("account")
+                                                or real(*a, **k)))
+    try:
+        sess._export_advanced("corky")
+    except hal.ScriptExhausted:
+        pass            # the account menu asks again; the row still ran
+    finally:
+        undo2(); undo()
+    return ran[0] if ran else "nothing"
+
+
+pin("ADVANCED",
+    [(label, note)
+     for label, note, _k in screens.advanced_rows("m/48'/0'/0'/1'", 0)],
+    run_advanced,
+    {"Cosigner (nested)": "_export_cosigner",
+     "Account number": "account",
+     "Type a path…": "_export_typed_path"})
+
+
 # --- 5. tools ------------------------------------------------------------
 
 def run_tools(sess):

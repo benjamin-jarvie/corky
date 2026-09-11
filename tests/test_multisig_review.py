@@ -333,6 +333,25 @@ def main():
             bad(f"13: spend_lock {got!r} should be "
                 "{'normal': None, 'tier 2': 10, 'tier 3': 20}")
 
+        # 13b. BIP68 PUTS THE VALUE IN THE LOW 16 BITS. A sequence of
+        #      0x00010005 means five blocks; read as a whole word it is
+        #      65541, which clears both tiers and would name one the
+        #      spend does not reach. Nothing else in this file separates
+        #      the two readings, because 10 and 20 survive the mask.
+        u = rpc.call("listunspent", 1, 9999, wallet="dq")[0]
+        odd = rpc.call(
+            "walletcreatefundedpsbt",
+            [{"txid": u["txid"], "vout": u["vout"], "sequence": 0x00010005}],
+            [{rpc.call("getnewaddress", wallet="dmn"): float(u["amount"])}],
+            0, {"fee_rate": 2, "subtractFeeFromOutputs": [0]}, True,
+            wallet="dq", stdin=True)["psbt"]
+        odd_lock = signer.describe_psbt(rpc, odd).get("spend_lock")
+        if odd_lock is None:
+            ok("a sequence of 0x00010005 reaches no tier, as BIP68 reads it")
+        else:
+            bad(f"13b: spend_lock {odd_lock!r} for a sequence whose low 16 "
+                "bits are 5; the screen would name a tier not reached")
+
         # 14. A PLAIN QUORUM CLAIMS NO TIMELOCK. A screen that said
         #     "AFTER 20 BLOCKS" over an ordinary 2-of-3 would be the
         #     same lie in the other direction.

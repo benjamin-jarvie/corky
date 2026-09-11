@@ -199,6 +199,13 @@ ticket needs to re-derive them.
   bare key expression, so the QR must be a whole descriptor,
   `wsh(sortedmulti(1,[xfp/path]tpub/0/*))#cs`, while the file stays the
   bare one-liner.
+- [M11 Build the cosigner export](tickets/M11-build-the-export.md):
+  built, including Advanced. One question, QR or file, and each ending
+  names **Specter DIY** before the payload rather than after. The file
+  must carry NO trailing newline, which Sparrow refuses; the QR carries
+  a whole descriptor Core will checksum. A first pass closed this with
+  Advanced unbuilt and the justification written into the answer, which
+  a two-axis review caught.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
@@ -233,15 +240,11 @@ ticket needs to re-derive them.
 
 ## Still to build
 
-The map's decisions are all made. Two pieces of execution remain, and
-both are tickets rather than fog.
+The map's decisions are all made. ONE piece of execution remains.
 
 - [M5 How many multisig inputs will the board sign?](tickets/M5-memory.md),
   which needs the Zero 2 W. M9 measured the cost of its undrop at 0.29MB
   retained and nothing at the peak, so this is a confirmation.
-- [M11 Build the cosigner export](tickets/M11-build-the-export.md). The
-  record is proven against Sparrow and nothing in `main.py` calls it
-  yet.
 
 ## Out of scope
 
