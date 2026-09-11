@@ -43,3 +43,21 @@ on the first real flash and pinned thereafter.
   the hash out-of-band (SHA256SUMS + Guix attestation keys on a trusted
   machine), then pin. A checksum fetched from the same server as the
   binary proves nothing and is not used as a gate.
+
+
+## Re-provisioning by hand, over SSH
+
+`provision.sh` is the source of truth and it reads a tarball from the
+boot partition, so it needs the card in the Mac. A board already running
+can be moved to a new build over SSH instead, and on 2026-09-11 that was
+done for the Core Signer rename.
+
+**Replicate every step, not the obvious ones.** That run copied the tree,
+the units, the udev rule, the ramdisk and `bitcoin.conf`, and missed two
+files written further down: `/etc/systemd/journald.conf.d/
+coresigner-volatile.conf` and `/etc/modprobe.d/coresigner-no-gadget.conf`.
+The leak check caught the second one immediately, 13 failures becoming
+14, which is the only reason it was noticed.
+
+Read `provision.sh` end to end and remove the OLD-named files as well as
+writing the new ones, or the board carries both and matches neither.
