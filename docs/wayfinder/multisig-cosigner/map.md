@@ -230,6 +230,18 @@ ticket needs to re-derive them.
   is the descriptor argument at its strongest and needs its own thinking
   about what Corky then owes the user.
 
+## Still to build
+
+The map's decisions are all made. Two pieces of execution remain, and
+both are tickets rather than fog.
+
+- [M5 How many multisig inputs will the board sign?](tickets/M5-memory.md),
+  which needs the Zero 2 W. M9 measured the cost of its undrop at 0.29MB
+  retained and nothing at the peak, so this is a confirmation.
+- [M11 Build the cosigner export](tickets/M11-build-the-export.md). The
+  record is proven against Sparrow and nothing in `main.py` calls it
+  yet.
+
 ## Out of scope
 
 - **Backing up the quorum, on paper or digitally.** Ruled out by Ben,
