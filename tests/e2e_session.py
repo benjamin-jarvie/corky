@@ -387,7 +387,12 @@ def main():
         xprv_pages = 3
         r = run_device(datadir,
                        "ra" + "a"                 # Keys, New key (first row)
-                       + "dda"                    # key menu -> Backup key
+                       # BY LABEL. This was "dda", which was right only
+                       # while Backup was the third row; it moved to the
+                       # top on 2026-09-11 so a fresh key opens on it.
+                       + "d" * [lab for lab, _n, _k in
+                                scr.KEY_MENU_OPTIONS].index("Backup key")
+                       + "a"
                        + "a" * xprv_pages         # one press per page
                        + "b" + "b" + "draa",      # key menu -> Keys -> home -> off
                        fg)

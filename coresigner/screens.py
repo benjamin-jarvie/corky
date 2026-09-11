@@ -762,11 +762,22 @@ def _menu(w, h, title, rows, selected, icons=None):
 # Four things that belong to a key. Sign transaction left on 2026-09-05:
 # the Sign tile does it, from the camera or a stick, and a second door to
 # the same room only made you choose which door.
+#: BACKUP IS FIRST, so it is also what the cursor lands on when the menu
+#: opens (Ben, 2026-09-11). A key Core has just made exists in one place,
+#: a ramdisk, and the 111 characters on paper are the only other copy. A
+#: menu that led with "Export public key" invited a person to hand a
+#: coordinator an address, fund it, and only then find out what a backup
+#: is. The most consequential row is the first row.
+#:
+#: Each row carries what it MEANS, because `main.state_key_menu` used to
+#: dispatch on `selected == 0`, which is TESTING.md rule 11's two lists
+#: with nothing joining them: this reorder would have moved Export onto
+#: the backup handler.
 KEY_MENU_OPTIONS = [
-    ("Export public key", "for a coordinator"),
-    ("Receiving addresses", "Core derives"),
-    ("Backup key", "on paper"),
-    ("Discard key", "Core forgets it"),
+    ("Backup key", "on paper", "backup"),
+    ("Export public key", "for a coordinator", "export"),
+    ("Receiving addresses", "Core derives", "addresses"),
+    ("Discard key", "Core forgets it", "discard"),
 ]
 
 #: The cosigner rows on the export menu, under the four policies. M1
@@ -974,8 +985,8 @@ def keys_menu(w, h, keys, selected=0):
 
 def key_menu(w, h, xfp, selected=0):
     """What one key can do. The title names it by fingerprint."""
-    rows = [(label, note, "red" if label == "Discard key" else "normal")
-            for label, note in KEY_MENU_OPTIONS]
+    rows = [(label, note, "red" if kind == "discard" else "normal")
+            for label, note, kind in KEY_MENU_OPTIONS]
     return _menu(w, h, f"KEY  {(xfp or '').upper()}", rows, selected)
 
 
@@ -1297,10 +1308,19 @@ def _echo_with_caret(d, w, h, shown, at):
 #: focus a screen is in has to be readable FROM the screen; a modal
 #: surface with no statement of its mode is how a button comes to "do
 #: nothing" (Ben, on the board, 2026-09-05).
+#: EVERY hint names the next move, because C cycles grid -> caret ->
+#: buttons and only the first two steps were written down. ABORT lives on
+#: the button bar, so the only way out of a half-typed page was two
+#: presses of a key nothing mentioned twice. Ben hit exactly that on the
+#: board, 2026-09-11: "I CAN'T get to the abort button."
+#:
+#: The hardware calls C abort (`hal`: "c = abort/KEY3"), which is why a
+#: person presses it expecting to leave and why it must lead somewhere
+#: that says what it does.
 CHECK_HINTS = {
-    "grid": "%d/%d typed   ·   C to move the caret",
-    "text": "%d/%d typed   ·   L/R move the caret, A returns to the grid",
-    "bar": "%d/%d typed   ·   L/R choose, A does it",
+    "grid": "%d/%d typed   ·   C for the caret, C again for ABORT",
+    "text": "%d/%d typed   ·   L/R move, A to the grid, C for ABORT",
+    "bar": "%d/%d typed   ·   L/R choose, A does it, B back to typing",
 }
 
 #: How many typed characters the echo line can hold at this font size.

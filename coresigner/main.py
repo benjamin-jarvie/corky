@@ -632,13 +632,17 @@ class Session:
                 start=selected)
             if selected is None:
                 return None
-            if selected == 0:
-                self._export(name)
-            elif selected == 1:
-                self._browse_addresses(name)
-            elif selected == 2:
+            # By what the row MEANS, never by its index. Backup moved to
+            # the top on 2026-09-11 and an index dispatch would have run
+            # the export from it.
+            kind = screens.KEY_MENU_OPTIONS[selected][2]
+            if kind == "backup":
                 self._backup_paper(name, xfp)
-            elif selected == 3 and self._discard(name, xfp):
+            elif kind == "export":
+                self._export(name)
+            elif kind == "addresses":
+                self._browse_addresses(name)
+            elif kind == "discard" and self._discard(name, xfp):
                 return TO_HOME
 
     def state_tools(self):

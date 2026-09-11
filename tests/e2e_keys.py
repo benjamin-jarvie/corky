@@ -106,9 +106,17 @@ def tools_press(action, start=0):
 
 
 def key_menu_press(action, start=0):
-    """Presses that pick an action on one key's menu."""
-    names = [label for label, _note in scr.KEY_MENU_OPTIONS]
-    return "d" * (names.index(action) - start) + "a"
+    """Presses that pick an action on one key's menu, from `start`.
+
+    UP as well as DOWN. It multiplied "d" by a delta that could be
+    negative, which is the empty string, so a move upward silently picked
+    whatever row the cursor was already on. Nothing noticed until Backup
+    key moved to the top on 2026-09-11 and the walk below had to go back
+    up the list.
+    """
+    names = [label for label, _note, _kind in scr.KEY_MENU_OPTIONS]
+    delta = names.index(action) - start
+    return ("d" if delta > 0 else "u") * abs(delta) + "a"
 
 
 def keys_press(n_keys, action, start=0):
@@ -268,14 +276,25 @@ def main():
         # and lands on its menu with no detour. Then Receiving addresses,
         # Backup key on paper, Discard key. Then Tools, which holds the leak
         # check alone. Then Keys, New key, which is the first row there now.
+        #
+        # BY LABEL, not by counted presses. This walk was written as "da"
+        # three times, which was right only while Export was row 0, and
+        # rule 11 is in TESTING.md because a scripted session that counts
+        # presses proves the code agrees with itself. `key_menu_press`
+        # reads the real menu; the second argument is where the cursor is
+        # left, because the menu reopens on the row it last ran.
         script = ("ra" + keys_press(0, "Scan a key") + "a"  # Keys -> Scan a key -> warning
-                  + "da" + "dda" + "b"            # Receiving addresses -> page on, back
-                  + "da" + "aaa"                  # Backup key -> 3 pages, paper is the only kind
-                  + "da" + "ra"                   # Discard key -> confirm: DISCARD
+                  + key_menu_press("Receiving addresses", 0)
+                  + "dda" + "b"                   # page on, back
+                  + key_menu_press("Backup key", 2)
+                  + "aaa"                         # 3 pages, paper is the only kind
+                  + key_menu_press("Discard key", 0)
+                  + "ra"                          # confirm: DISCARD
                   + "da" + "a" + "c"              # Tools -> Check for leaks -> C leaves
                   + "b"                           # Tools -> home
                   + "ra" + keys_press(0, "New key")   # Keys -> New key, done
-                  + "dda" + "aaa"                 # Backup key -> 3 pages
+                  + key_menu_press("Backup key", 0)
+                  + "aaa"                         # 3 pages
                   + "b" + "b"                     # key menu -> keys -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -362,7 +381,7 @@ def main():
         # writes something a check can find. A completed export leaves the
         # flow rather than dropping back on the script type.
         script = ("ra" + "da" + "a"                   # Keys -> Scan a key -> warning
-                  + "a"                               # Export public key
+                  + key_menu_press("Export public key", 0)
                   + "a"                               # SCRIPT TYPE -> Native segwit
                   + "dda"                             # EXPORT AS -> Wallet file
                   + "a" + "a"                         # channel -> dismiss
@@ -483,7 +502,7 @@ def main():
         page1_bad = pages9[0][:wrong_at] + typo + pages9[0][wrong_at + 1:]
 
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
-                  + "dda"                        # Backup key: paper, no chooser
+                  + key_menu_press("Backup key", 0)  # paper, no chooser
                   + "aa" + "ra"                  # 3 pages, then CHECK IT
                   + text_keys("xprv", page1_bad)  # page 1, one wrong
                   + "a"                          # verdict: FIX is selected

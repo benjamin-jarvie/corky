@@ -108,7 +108,8 @@ def run_key_menu(sess):
 
 
 coresigner_main.signer.master_fingerprint = lambda *a, **k: "73c5da0a"
-pin("KEY", screens.KEY_MENU_OPTIONS, run_key_menu, {
+pin("KEY", [(lab, note) for lab, note, _k in screens.KEY_MENU_OPTIONS],
+    run_key_menu, {
     "Export public key": "_export",
     "Receiving addresses": "_browse_addresses",
     "Backup key": "_backup_paper",
