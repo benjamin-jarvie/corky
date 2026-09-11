@@ -25,7 +25,7 @@ with the undrop in place, or the number describes a device nobody ships.
 Agreed before any test, per `/mp-tdd`:
 
 1. **`signer.describe_psbt`'s returned dict.** Gains the quorum and the
-   path. Every number stays Core's, so PLAN A-11 holds: Corky reads
+   path. Every number stays Core's, so PLAN A-11 holds: Core Signer reads
    `type` and the threshold Core already reports and parses no script.
 2. **`screens.review`'s image.** Renders the quorum line and the
    cosigner fingerprints, and still fits 240x240. `tests/test_screen_fit.py`
@@ -136,7 +136,7 @@ pages and a blinded path.
 
 **The cost, recorded because it was paid knowingly.** A descriptor is
 the only way Core imports a derivation, and a descriptor needs the key,
-so signing at a told path pulls the master xprv into Corky for the
+so signing at a told path pulls the master xprv into Core Signer for the
 length of one signature. `generate_wallet` refuses to hand it back for
 exactly this reason. The exposure is kept narrow: it runs only when the
 loaded policies signed nothing, the branch goes to a scratch wallet and

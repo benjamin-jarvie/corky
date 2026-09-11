@@ -1,8 +1,8 @@
 #!/bin/bash
-# Measure what corky/ has never executed, across the WHOLE suite.
+# Measure what coresigner/ has never executed, across the WHOLE suite.
 #
-# Most of Corky's code runs in a child process: every scripted device
-# session is `python3 corky/main.py --dev ...` under subprocess.run. A
+# Most of Core Signer's code runs in a child process: every scripted device
+# session is `python3 coresigner/main.py --dev ...` under subprocess.run. A
 # plain `coverage run run_tests.sh` sees none of it and reports a figure
 # that is wrong by about twenty points. The fix is coverage's documented
 # subprocess hook: a sitecustomize.py that every interpreter imports at
@@ -28,7 +28,7 @@ PY
 # finds an assertion that never executes: a check behind a guard that is
 # never true is an uncovered line in the test file, and nothing else
 # reports it.
-SRC=${SOURCE:-corky}
+SRC=${SOURCE:-coresigner}
 cat > "$HOOK/.coveragerc" <<PY
 [run]
 branch = True
@@ -45,11 +45,11 @@ RUN_NODE=1 ./run_tests.sh || echo "(suite reported failures; coverage below is s
 # figure by six points: it is the ONLY suite that reaches
 # qrchannel.decode_image and ImageQrSource.strings, which is every frame
 # the camera ever produces. A measurement that silently skips the QR
-# decoder is not a measurement of Corky.
+# decoder is not a measurement of Core Signer.
 M1="$ROOT/tests/m1"
 if [ -d "$M1/.build/py-x86" ] && [ -f "$M1/.build/py-x86/coverage/__init__.py" ]; then
   env PYTHONDONTWRITEBYTECODE=1 COVERAGE_PROCESS_START="$HOOK/.coveragerc" \
-      PYTHONPATH="$HOOK:$M1/.build/py-x86:$ROOT/corky:$ROOT/hw/vendor" \
+      PYTHONPATH="$HOOK:$M1/.build/py-x86:$ROOT/coresigner:$ROOT/hw/vendor" \
       arch -x86_64 /usr/bin/python3 -m coverage run \
       --rcfile="$HOOK/.coveragerc" "$M1/test_scan_loop.py" >/dev/null 2>&1 \
     && echo "PASS tests/m1/test_scan_loop.py (x86_64)" \

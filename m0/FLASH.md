@@ -18,7 +18,7 @@ on the primary build, not a gate.
 1. Raspberry Pi Imager, device **Raspberry Pi Zero 2 W** (or **CM4**), OS
    **Raspberry Pi OS Lite (64-bit)**. 64-bit is required: the official Core
    binary is aarch64.
-2. In Imager's settings (gear icon): hostname `corky`, enable SSH with a
+2. In Imager's settings (gear icon): hostname `coresigner`, enable SSH with a
    password, set locale. For the Zero 2 W add your **2.4GHz** WiFi. The
    Zero 2 W radio is single band and does not see a 5GHz network.
    Radios die at M3, not M0.
@@ -26,10 +26,10 @@ on the primary build, not a gate.
 4. Reinsert the card. macOS mounts the boot partition, then run:
 
    ```bash
-   cd ~/clawd/projects/corky && ./image/prepare-sd.sh
+   cd ~/clawd/projects/coresigner && ./image/prepare-sd.sh
    ```
 
-   This copies Corky, the pinned build tuple and the provisioning script to
+   This copies Core Signer, the pinned build tuple and the provisioning script to
    the card. Eject.
 
 ## 2. First boot
@@ -46,7 +46,7 @@ through the carrier's USB-C with the 15.3W supply.
 Then, from the Mac:
 
 ```bash
-ssh <user>@corky.local
+ssh <user>@coresigner.local
 ```
 
 ## 3. Provision
@@ -54,12 +54,12 @@ ssh <user>@corky.local
 On the Pi:
 
 ```bash
-sudo bash /boot/firmware/corky-provision.sh
+sudo bash /boot/firmware/coresigner-provision.sh
 ```
 
 This installs Bitcoin Core 31.1 against the hash pinned in `image/PINS`,
-installs the display, GPIO, camera and QR packages, unpacks Corky to
-`/opt/corky`, makes the ramdisk datadir, and turns on SPI for the hat. It is
+installs the display, GPIO, camera and QR packages, unpacks Core Signer to
+`/opt/coresigner`, makes the ramdisk datadir, and turns on SPI for the hat. It is
 idempotent. On a Zero 2 W over WiFi it takes about 15 minutes, most of it
 `python3-picamera2`.
 
@@ -76,7 +76,7 @@ Do all of it in **one** SSH session. Both commands revert at reboot.
 ```bash
 sudo systemctl stop dev-zram0.swap   # see below
 sudo swapoff -a                      # any disk swap as well
-cd /opt/corky && python3 m0/m0_gate.py --inputs 250
+cd /opt/coresigner && python3 m0/m0_gate.py --inputs 250
 ```
 
 RPi OS enables swap by default, and swap falsifies both gate numbers, so
@@ -99,7 +99,7 @@ The script prints `M0 PASS` or `M0 FAIL` with the numbers. Record:
 gate and both are unmeasured, which is why they are worth taking now
 rather than wishing for later:
 
-- **Boot time**, power to Corky's own splash. Never recorded. This flash
+- **Boot time**, power to Core Signer's own splash. Never recorded. This flash
   adds `boot_delay=0` and `disable_splash=1`, both taken from SeedSigner
   OS's config for this same board, so the number is worth having.
 - **MemAvailable with nothing running.** `free -m` before you start
@@ -120,7 +120,7 @@ All on `gpu_mem=32`, swap off. `--funding-batch` sets how many outputs each
 funding transaction has, which sets the PSBT size per input, because every
 input carries the whole transaction that paid it as its `non_witness_utxo`.
 
-| inputs | funding shape | PSBT | bitcoind | Corky | headroom | |
+| inputs | funding shape | PSBT | bitcoind | Core Signer | headroom | |
 |---|---|---|---|---|---|---|
 | 250 | 2 (ordinary payments) | 92KB | 65MB | 21MB | 226MB | PASS |
 | 500 | 2 | 184KB | 70MB | 26MB | 206MB | PASS |

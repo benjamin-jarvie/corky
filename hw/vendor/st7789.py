@@ -6,7 +6,7 @@ BOARD pins DC=22, RST=13, BL=18)."""
 
 import spidev
 import RPi.GPIO as GPIO
-from PIL import Image as _Image, ImageChops as _ImageChops   # CORKY: RGB565
+from PIL import Image as _Image, ImageChops as _ImageChops   # CORESIGNER: RGB565
 import time
 import array
 from dataclasses import dataclass
@@ -149,8 +149,8 @@ class ST7789:
         time.sleep(0.01)
         
     def SetWindows(self, Xstart, Ystart, Xend, Yend):
-        # CORKY MODIFICATION. Upstream hardcodes both high octets to 0x00,
-        # which is correct only while every coordinate is below 256. Corky's
+        # CORESIGNER MODIFICATION. Upstream hardcodes both high octets to 0x00,
+        # which is correct only while every coordinate is below 256. Core Signer's
         # primary panel is the SeedSigner+ 2.8" at 320x240 (HARDWARE.md), and
         # there (320 - 1) & 0xff is 63: the driver would send 320x240 pixels
         # into a 64-column window. Send the real 16-bit coordinates. For a
@@ -179,7 +179,7 @@ class ST7789:
         if imwidth != self.width or imheight != self.height:
             raise ValueError('Image must be same dimensions as display \
                 ({0}x{1}).' .format(self.width, self.height))
-        # CORKY MODIFICATION. Upstream did:
+        # CORESIGNER MODIFICATION. Upstream did:
         #     arr = array.array("H", Image.convert("BGR;16").tobytes())
         #     arr.byteswap()
         # Pillow 11 warns "BGR;16 is deprecated and will be removed in Pillow
@@ -191,7 +191,7 @@ class ST7789:
         # Same output, computed directly: RGB-8:8:8 to big-endian RGB-5:6:5.
         # tests/test_display_driver.py pins the bytes; equivalence with the
         # old path was checked on the board on 2026-09-03, all 65536 values.
-        # Pillow only, no numpy: hw/HARDWARE.md fixes Corky's third-party
+        # Pillow only, no numpy: hw/HARDWARE.md fixes Core Signer's third-party
         # surface at Pillow, pyzbar, qrcode, urtypes, picamera2, RPi.GPIO
         # and spidev, and numpy is not on it.
         #

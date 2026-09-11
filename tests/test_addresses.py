@@ -1,9 +1,9 @@
 """Cross-implementation address check.
 
 Derives mainnet addresses for the canonical test mnemonic through the full
-Corky path (xprv -> Core -> Core deriveaddresses) and compares them to the
+Core Signer path (xprv -> Core -> Core deriveaddresses) and compares them to the
 published BIP84/BIP86 test vectors that every other wallet (Sparrow, embit,
-Electrum, Trezor) derives. If these match, Corky's wallets are byte-for-byte
+Electrum, Trezor) derives. If these match, Core Signer's wallets are byte-for-byte
 interoperable with the ecosystem.
 
 Vectors: BIP84 reference vectors (bitcoin/bips bip-0084) and BIP86
@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "coresigner"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 import signer  # noqa: E402
 
@@ -39,7 +39,7 @@ BIP86_FIRST_CHANGE = "bc1p3qkhfews2uk44qtvauqyr2ttdsw7svhkl9nkm9s9c3x4ax5h60wqwr
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-derive-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-derive-")
     daemon = subprocess.Popen(
         ["bitcoind", f"-datadir={datadir}", "-networkactive=0", "-listen=0",
          "-server=1", "-dbcache=4", "-maxmempool=5"],

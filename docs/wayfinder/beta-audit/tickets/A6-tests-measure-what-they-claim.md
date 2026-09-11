@@ -58,7 +58,7 @@ catches and were discarded.
 **The paper backup check could not fail.** `_check_page` only returns a
 page when the typed text matches the backup character for character. So
 by the time `_confirm_typed_key` asked Core to confirm the whole key, it
-was comparing Corky's copy of a string with Corky's copy of the same
+was comparing Core Signer's copy of a string with Core Signer's copy of the same
 string. Deleting the comparison outright left every suite green.
 
 The screen says **"your paper opens key X"**. That is the strongest
@@ -99,7 +99,7 @@ that is stated where it is tested rather than left to be discovered.
   now names them, with what they need and when they last ran.
 - **Dead helpers in `tests/e2e_session.py`.** `grid_keys` and `BECH32`
   are codex32 leftovers, gone with the screen under A-22; `_pub` had no
-  caller. `vulture` only ever looked at `corky/`, so nothing was
+  caller. `vulture` only ever looked at `coresigner/`, so nothing was
   watching. Deleted.
 - **`run_device(card=...)` had never been passed.** The channel chooser
   had only ever been asked with one row, which is the case where the

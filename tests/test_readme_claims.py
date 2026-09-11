@@ -53,9 +53,9 @@ LAYER1 = []
 # carries the key as a string and computes nothing on it, which is the
 # definition. qrchannel.py stays layer 3 because it only ever handles
 # crypto-psbt frames (extracted 2026-09-08).
-LAYER2 = ["corky/main.py", "corky/screens.py", "corky/splash.py",
-          "corky/hal.py", "corky/signer.py", "corky/qrsource.py"]
-LAYER3 = ["corky/filechannel.py", "corky/qrchannel.py"]
+LAYER2 = ["coresigner/main.py", "coresigner/screens.py", "coresigner/splash.py",
+          "coresigner/hal.py", "coresigner/signer.py", "coresigner/qrsource.py"]
+LAYER3 = ["coresigner/filechannel.py", "coresigner/qrchannel.py"]
 
 #: Rewrite the numbers instead of reporting them. Every commit that
 #: touches a line of code or a line of test moves four of these, and
@@ -138,29 +138,29 @@ pin(r"Vendored, not ours: ([\d,]+) lines", "vendored", vend)
 # driver nothing imports (two-axis review, 2026-09-08). A count nobody
 # recomputes goes stale in one direction only: the flattering one.
 #
-# A vendored top-level name counts as reached when corky/ imports it. ur2
+# A vendored top-level name counts as reached when coresigner/ imports it. ur2
 # is a package, so every file in it rides on the one import. That rule is
 # coarse, and it is coarse in the safe direction: it can call a file
 # reached that is not, never the reverse, so the README can only ever
 # understate what is dead.
 VEND = ROOT / "hw" / "vendor"
-corky_src = "\n".join(f.read_text() for f in sorted((ROOT / "corky").glob("*.py")))
+coresigner_src = "\n".join(f.read_text() for f in sorted((ROOT / "coresigner").glob("*.py")))
 imported = {n for n in (p.name for p in VEND.iterdir())
             if re.search(rf"^\s*(from|import) {re.escape(n.removesuffix('.py'))}\b",
-                         corky_src, re.M)}
+                         coresigner_src, re.M)}
 dead = [f for f in sorted(VEND.rglob("*.py"))
         if f.relative_to(VEND).parts[0] not in imported]
 live = vend - sum(len(f.read_text().splitlines()) for f in dead)
 # The rule is stronger than a count now: NOTHING vendored may be
 # unreachable. The README used to state how many of the lines ran and how
 # many did not, which made carrying dead third-party code a thing you
-# could declare and then keep. Corky vendors only what it runs, so an
+# could declare and then keep. Core Signer vendors only what it runs, so an
 # unreachable vendored file is a defect and not a footnote (2026-09-08,
 # when SeedSigner's second display driver went: 383 lines, imported by
-# nothing, kept for a 2.4" board Corky does not ship).
+# nothing, kept for a 2.4" board Core Signer does not ship).
 if dead:
     bad(f"{len(dead)} vendored file(s) that no shipped module imports: "
-        f"{[str(f.relative_to(ROOT)) for f in dead]}. Corky vendors only "
+        f"{[str(f.relative_to(ROOT)) for f in dead]}. Core Signer vendors only "
         f"what it runs; delete them or import them.")
 elif live != vend:
     bad(f"the reachability sum does not add up: {live} live of {vend}")
@@ -319,10 +319,10 @@ else:
 
 # The backup section makes four checkable claims. It got the ARGUMENT
 # wrong for a long time (it attacked seed phrases for losing the
-# derivation path, which Corky's own xprv backup loses in exactly the
+# derivation path, which Core Signer's own xprv backup loses in exactly the
 # same way), so the facts under the new argument are pinned rather than
 # trusted (2026-09-09).
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import screens                                          # noqa: E402
 import signer as _signer                                # noqa: E402
 
@@ -337,7 +337,7 @@ else:
        "build_descriptors actually rebuilds")
 
 # 2. the account really is hardcoded, which is the stated edge
-_src = (ROOT / "corky" / "signer.py").read_text()
+_src = (ROOT / "coresigner" / "signer.py").read_text()
 if not re.search(r'f"\{xprv\}/\{purpose\}h/\{coin\}h/0h/', _src):
     bad("build_descriptors no longer hardcodes account 0h, so the "
         "README's stated recovery edge is wrong")
@@ -418,7 +418,7 @@ for doc in DOCS + ["PLAN.md"]:
         if doc == "PLAN.md" and any(w in window for w in EXCUSED):
             continue
         # A line that names SeedSigner is citing THEIR source, not ours.
-        # Corky vendors their drivers and steals their ideas, and a
+        # Core Signer vendors their drivers and steals their ideas, and a
         # reader has to be able to tell which tree a path lives in.
         external = "SeedSigner" in line or "seedsigner" in line
         for m in FILE.finditer(line):
@@ -451,7 +451,7 @@ CODE = [f for f in sorted(ROOT.rglob("*.py")) + sorted(ROOT.rglob("*.sh"))
         if not any(part in {".git", "vendor", ".build", "tmp"}
                    for part in f.relative_to(ROOT).parts)]
 IN_CODE = re.compile(
-    r"(?<![\w/.-])((?:docs|tests|image|corky|hw|m0|tools)"
+    r"(?<![\w/.-])((?:docs|tests|image|coresigner|hw|m0|tools)"
     r"/[\w./@-]+\.(?:py|sh|md|service|rules|conf|json|txt|toml|dat))")
 # A line that says a path is GONE is allowed to name it: test_integrity
 # asserts exactly that, file by file, and it is the check that keeps
@@ -487,7 +487,7 @@ else:
 # later, and seven in the font's NOTICE. The sign tile changed from a QR
 # to a signature on 2026-09-05 and one of the three was not updated
 # (audit A8, 2026-09-06).
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import screens                                        # noqa: E402
 WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
          "seven": 7, "eight": 8, "nine": 9, "ten": 10}

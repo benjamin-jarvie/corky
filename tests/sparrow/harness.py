@@ -1,10 +1,10 @@
 """Shared plumbing for the Sparrow interop suites.
 
-Three scripts here all need the same things: a throwaway regtest node, a Corky
+Three scripts here all need the same things: a throwaway regtest node, a Core Signer
 session, a miner wallet, a way to call the Java tools, and a pass/fail tally.
 They each grew their own copy. This is the one copy.
 
-Nothing in here is Corky's code under test. It is scaffolding.
+Nothing in here is Core Signer's code under test. It is scaffolding.
 """
 import re
 import socket
@@ -16,7 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "corky"))
+sys.path.insert(0, str(REPO / "coresigner"))
 import signer  # noqa: E402
 
 BUILD = Path(__file__).resolve().parent / ".build"
@@ -98,10 +98,10 @@ class Java:
 
 
 class Regtest:
-    """A throwaway regtest node with a Corky session and a miner wallet."""
+    """A throwaway regtest node with a Core Signer session and a miner wallet."""
 
     def __init__(self, txindex=True, mine=250):
-        self.datadir = tempfile.mkdtemp(prefix="corky-sparrow-")
+        self.datadir = tempfile.mkdtemp(prefix="coresigner-sparrow-")
         self.port = _free_port()
         self.txindex = txindex
         self.mine_blocks = mine
@@ -159,7 +159,7 @@ class Regtest:
         return self.rpc.call("getnewaddress", wallet=MINER)
 
     def account(self, script_type, branch=0):
-        """(fingerprint, path, xpub) for one of Corky's exported descriptors."""
+        """(fingerprint, path, xpub) for one of Core Signer's exported descriptors."""
         desc = self.descriptor(script_type, branch)
         m = re.search(r"\[([0-9a-f]{8})((?:/\d+h)+)\](\w+)", desc)
         return m.group(1), "m" + m.group(2), m.group(3)

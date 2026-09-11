@@ -1,4 +1,4 @@
-"""What Sparrow actually puts in an exported PSBT, and what survives Corky.
+"""What Sparrow actually puts in an exported PSBT, and what survives Core Signer.
 
 Core does the parsing, via decodepsbt. An earlier version of this file walked
 the PSBT key-value maps by hand, which is exactly what PLAN A-11 forbids and
@@ -72,7 +72,7 @@ def main():
                   " tip:", java.chain_height)
 
             signed = harness.signer.sign_psbt(net.rpc, psbt)
-            report(net.rpc, "after Corky signs:", signed["psbt"])
+            report(net.rpc, "after Core Signer signs:", signed["psbt"])
             final = net.rpc.call("finalizepsbt", signed["psbt"])
             ftx = net.rpc.call("decoderawtransaction", final["hex"])
             print("    final nLockTime:", ftx["locktime"],

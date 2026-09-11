@@ -1,18 +1,18 @@
-# Corky: the words
+# Core Signer: the words
 
 The ubiquitous language. The code, the tests, the tickets and Ben use these
 words for these things and no synonym. Implementation detail does not belong
 here.
 
-**Corky**: the device and its program: screens, buttons, camera, and the
-calls it makes to Bitcoin Core. Corky computes nothing on a key.
+**Core Signer**: the device and its program: screens, buttons, camera, and the
+calls it makes to Bitcoin Core. Core Signer computes nothing on a key.
 
 **Core**: Bitcoin Core, running wallet-only and offline on the device. Every
 operation on a key happens inside Core.
 
 **key**: one master private key, held by Core as one wallet for one session.
-A key is named by its **fingerprint**. Corky holds up to five keys at once.
-_Avoid_: seed (Corky's main build has no seed words), wallet (a Core term,
+A key is named by its **fingerprint**. Core Signer holds up to five keys at once.
+_Avoid_: seed (Core Signer's main build has no seed words), wallet (a Core term,
 not a screen word).
 
 **fingerprint**: the eight hex characters Core derives from a key's master
@@ -24,7 +24,7 @@ and nowhere else.
 
 **coordinator**: the software that watches the chain, builds transactions
 and broadcasts them: Sparrow, a Bitcoin Core laptop, or a phone wallet.
-Corky is never a coordinator.
+Core Signer is never a coordinator.
 
 **public key**: what a coordinator needs from a key: Core's watch-only
 descriptors. It holds no secret. _Also_: xpub, in chat. _Avoid_: watch-only
@@ -32,9 +32,9 @@ wallet as a screen word; it is what the coordinator makes from the public
 key.
 
 **descriptor**: Core's own text form of a key or of a public key, with its
-checksum. Corky passes descriptors through and never rewrites one.
+checksum. Core Signer passes descriptors through and never rewrites one.
 
-**transaction**: a PSBT, on screen and in the tickets. Corky reviews it with
+**transaction**: a PSBT, on screen and in the tickets. Core Signer reviews it with
 Core's numbers, signs it with Core, and hands it back.
 
 **backup**: the **paper backup**, and there is no other kind. It is the
@@ -61,11 +61,11 @@ implies.
 
 **quorum**: several keys that together control one wallet, and how many
 of them a spend needs. On screen as `2 of 3`. The coordinator holds it,
-never Corky. _In code_: `quorum`, a `(threshold, total)` pair. _Avoid_:
+never Core Signer. _In code_: `quorum`, a `(threshold, total)` pair. _Avoid_:
 multisig wallet, which names the software rather than the arrangement.
 
 **cosigner**: one key inside a quorum, and the record a coordinator needs
-to put it there: `[fingerprint/path]xpub`. Corky is one cosigner and
+to put it there: `[fingerprint/path]xpub`. Core Signer is one cosigner and
 never the quorum. _In code_: `cosigner_key`. _Avoid_: participant,
 member, signer, which is Core's role name for something else.
 
@@ -77,7 +77,7 @@ a screen word, and "incomplete", which reads as a fault.
 
 **tier**: one branch of a policy that changes what a spend needs as time
 passes, such as 3 keys now and 1 key after 20 blocks. The coordinator
-chooses the tier when it builds, with `nSequence`, and Corky can only
+chooses the tier when it builds, with `nSequence`, and Core Signer can only
 show it and refuse. On screen as `AFTER 20 BLOCKS`. _In code_:
 `timelocks` for what the policy holds and `spend_lock` for the one this
 spend enables. _Avoid_: decay path, recovery path, miniscript branch,

@@ -123,7 +123,7 @@ Zero 2 W with the 1.3" 240×240. Asked directly, on the board, on
 2026-09-06:
 
 ```
-$ ssh corky-zero 'python3 -c "...hal.DeviceDisplay()..."'
+$ ssh coresigner-zero 'python3 -c "...hal.DeviceDisplay()..."'
 panel 320 x 240
 ```
 
@@ -136,7 +136,7 @@ mine**, so no build was invented here.
 
 ### Verified, and by what
 
-- No cryptographic primitive imported in `corky/`: `test_integrity.py`,
+- No cryptographic primitive imported in `coresigner/`: `test_integrity.py`,
   29 checks, runs in `run_tests.sh`.
 - Vendored 2,251 lines: counted by `test_readme_claims.py` every run.
 - Core 31.1, sha256 `dcf1873f…`, 11 GPG signatures: `image/PINS`,
@@ -150,7 +150,7 @@ mine**, so no build was invented here.
 
 - `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
   `DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"` and
-  `CORKY_COMMIT="HEAD"` in `image/PINS`. The README already describes the
+  `CORESIGNER_COMMIT="HEAD"` in `image/PINS`. The README already describes the
   OS hash as "recorded on first flash", which is honest, but a tester's
   image cannot be reproduced from this file as it stands. That is A7's
   and A11's problem, not prose.

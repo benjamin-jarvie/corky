@@ -1,4 +1,4 @@
-# Map: Corky signs its share of a multivendor quorum
+# Map: Core Signer signs its share of a multivendor quorum
 
 Label: `wayfinder:map`. Tickets are in `tickets/`, one file each.
 Charted 2026-09-09.
@@ -6,9 +6,9 @@ Charted 2026-09-09.
 ## Destination
 
 **A key Bitcoin Core generated can be one cosigner in a multivendor
-quorum, and Corky signs its share air-gapped.**
+quorum, and Core Signer signs its share air-gapped.**
 
-The map is done when a person can put a Corky key into a 2-of-3 beside
+The map is done when a person can put a Core Signer key into a 2-of-3 beside
 two other vendors, and sign for it on the device, without the private
 key ever entering a hot wallet.
 
@@ -18,13 +18,13 @@ key ever entering a hot wallet.
   no single vendor's mistake loses your coins. Bitcoin Core is missing
   from that story and it is the most reviewed implementation there is,
   because everybody else's key is a BIP39 seed phrase and Core cannot
-  make or read one. A Corky key is a Core key, so it can go in the
+  make or read one. A Core Signer key is a Core key, so it can go in the
   quorum. If a vendor's key generation turns out to be wrong, and
   vendors differ enormously in how carefully they review a change, the
   quorum holds.
 - **Ben's scope cut, 2026-09-09:** "We just need to be able to sign. If
   they're doing multisig with Core, they'll back up outside of us, and
-  same in Sparrow." Corky holds ONE key and signs. The quorum belongs to
+  same in Sparrow." Core Signer holds ONE key and signs. The quorum belongs to
   the coordinator.
 - This repo carries execution IN the map, as every previous one has.
 - Skills: `/mp-tdd` for anything built, `/mp-code-review` before it
@@ -46,8 +46,8 @@ ticket needs to re-derive them.
 
 - **Core signs a multisig share with ONLY the BIP48 branch imported, as
   an ordinary single-sig descriptor.** `wpkh(xprv/48h/1h/0h/2h/{0,1}/*)`
-  produces one partial signature on a quorum PSBT. Corky's four standard
-  policies produce none. **So Corky never needs the quorum descriptor.**
+  produces one partial signature on a quorum PSBT. Core Signer's four standard
+  policies produce none. **So Core Signer never needs the quorum descriptor.**
   This is the finding the whole map is shaped around.
 - **The cosigner xpub Sparrow wants is reachable.** Core's
   `getdescriptorinfo` public form keeps hardened steps unexpanded and is
@@ -78,17 +78,17 @@ ticket needs to re-derive them.
   sign on these paths. Some can't even co-sign a multisig transaction
   with nonstandard BIP32 paths." **Core has no such limit.** Tested
   2026-09-09 with a 3-level, 93-bit random hardened path: the quorum
-  imports, and Core signs its share. That is a thing Corky can do that
+  imports, and Core signs its share. That is a thing Core Signer can do that
   most of the vendors in a multivendor quorum cannot.
 
 - **Sparrow keeps a partial signature it did not make.** Measured
   2026-09-10 against drongo 2.5.4. `wallet.sign(psbt)` signs the PSBT in
   place and adds to what is already there, so the CHAINED route works:
-  coordinator sends, Corky signs, the signed PSBT returns by QR, and the
+  coordinator sends, Core Signer signs, the signed PSBT returns by QR, and the
   coordinator signs on top. That is the air-gapped flow, and it needed
   proving rather than assuming. The COMBINED route, where both sign the
   original and `combinepsbt` merges, reaches **identical transaction
-  hex**. The two are interchangeable and Corky does not care which the
+  hex**. The two are interchangeable and Core Signer does not care which the
   coordinator uses.
 
 - **`analyzepsbt` answers "did WE add a signature", it just cannot
@@ -106,19 +106,19 @@ ticket needs to re-derive them.
   policies signed nothing, into a scratch wallet, dropped in a
   `finally`.
 
-- **The path is not a fixed set.** M1 settled it: Corky derives where it
+- **The path is not a fixed set.** M1 settled it: Core Signer derives where it
   is told. Every ticket after this one inherits that, and so does every
   test: "these four policies" is no longer a claim anything can check by
   enumeration.
 - **Miniscript, decay and blinding are all M1 in disguise.** Core signs
   a Liana-shaped timelock policy and finalises it alone; it imports a
-  three-tier decaying quorum and takes Corky's signature at every tier;
+  three-tier decaying quorum and takes Core Signer's signature at every tier;
   it signs on a 93-bit random hardened path. Every one of those is
   reachable by the same trick as plain multisig, which is importing
-  Corky's own key at the right path as an ordinary single-sig
+  Core Signer's own key at the right path as an ordinary single-sig
   descriptor. See M6.
 - **`analyzepsbt` cannot tell a finished PSBT from an unfinished one.**
-  It reports `next: signer` both before and after Corky's signature, so
+  It reports `next: signer` both before and after Core Signer's signature, so
   nothing derives "one of two present" from it. Counting
   `partial_signatures` would, and `_REVIEW_DROPS` drops that too.
 - **Bitcoin Core has no file import at all.** `importdescriptors` takes
@@ -128,7 +128,7 @@ ticket needs to re-derive them.
   believing Core would read it; half of that was wrong and M7 says which
   half.
 - **A cosigner branch derives a single-sig address, not the quorum's.**
-  The quorum's address needs every cosigner and Corky holds one. So an
+  The quorum's address needs every cosigner and Core Signer holds one. So an
   address is not available as a confirmation anywhere in this map, and
   Core's 8-character descriptor checksum is what a person compares
   instead. Measured: changing the path or the fingerprint changes it, and
@@ -142,7 +142,7 @@ ticket needs to re-derive them.
 
 <!-- one line per closed ticket -->
 
-- [M1 Which BIP48 script types does Corky offer?](tickets/M1-which-script-types.md):
+- [M1 Which BIP48 script types does Core Signer offer?](tickets/M1-which-script-types.md):
   arbitrary paths, told to the device, which opens miniscript, decay and
   blinding together. Signing reads its path out of the PSBT and shows it
   on the review screen, so none of those shapes needs setting up first.
@@ -159,11 +159,11 @@ ticket needs to re-derive them.
   refused, and the review screen carries what that screen no longer
   says: the threshold, the path and every cosigner's fingerprint. Undrops
   `witness_script`, which M5 must re-measure for.
-- [M4 Does Sparrow accept Corky's cosigner export?](tickets/M4-sparrow-accepts.md):
+- [M4 Does Sparrow accept Core Signer's cosigner export?](tickets/M4-sparrow-accepts.md):
   yes, in M7's format unchanged, and it signs beside us. 20 checks green
   in `tests/sparrow/test_cosigner.py` on both an ordinary BIP48 path and
   a 93-bit blinded one: Sparrow derives the same addresses Core does,
-  Corky signs one share, and the quorum finalises by either the chained
+  Core Signer signs one share, and the quorum finalises by either the chained
   or the combined route to identical hex. Proves the interop and the
   format, NOT the device flow, because the test stands in for M3's
   unbuilt "import the path out of the PSBT".
@@ -185,13 +185,13 @@ ticket needs to re-derive them.
 - [M6 Miniscript, decaying quorums, and blinded paths: one question or four?](tickets/M6-miniscript-and-decay.md):
   one, and two thirds of it was already answered. The tier belongs to the
   coordinator, set with `nSequence` at build time, which charting had
-  suspected and this measured. Corky already signs every branch it is in
+  suspected and this measured. Core Signer already signs every branch it is in
   from one pass, since M9. What was left is what the screen says: review
   shows `AFTER 20 BLOCKS`, and the result screen now separates `SIGNED ·
   ready to send` from `SHARE · needs another signature`. That closes
   M3's own reopen condition, because a miniscript screen never had a
   threshold to state.
-- [M8 Does Corky write the Coldcard JSON as well as the one-liner?](tickets/M8-one-format-or-two.md):
+- [M8 Does Core Signer write the Coldcard JSON as well as the one-liner?](tickets/M8-one-format-or-two.md):
   no. Export asks ONE question, QR or file, and each answer has one
   payload and one name to tell the person: **Specter DIY**, which is the
   format Krux and SeedSigner both extend. The two channels carry
@@ -216,7 +216,7 @@ ticket needs to re-derive them.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
-  us, so Corky strips it. Core reads no file either, which corrects half
+  us, so Core Signer strips it. Core reads no file either, which corrects half
   of M2's reasoning.
 
 ## Not yet specified
@@ -228,30 +228,30 @@ ticket needs to re-derive them.
 - **What the address screen does for a multisig key.** Today
   `_page_addresses` walks the four single-sig policies. A BIP48 branch
   derives cosigner keys, not addresses anyone can pay: an address needs
-  the whole quorum, which Corky does not hold. The screen probably has
+  the whole quorum, which Core Signer does not hold. The screen probably has
   to say something rather than show something, and what it says is not
   yet a sharp question.
-- **Several quorums at once.** Corky holds up to five keys. Whether one
+- **Several quorums at once.** Core Signer holds up to five keys. Whether one
   key can be a cosigner in more than one quorum, and whether that is
   visible anywhere, has not been thought about.
 - **Blinded xpubs as a supported flow rather than an accident.** Core
-  signs on these paths, which most hardware wallets cannot, so Corky
+  signs on these paths, which most hardware wallets cannot, so Core Signer
   could support the protocol properly: derive a cosigner key at a random
   hardened path, and export the blinded record. Two things are unclear
   and neither is sharp enough to ticket. Where does the 93 bits come
-  from, given PLAN A-19 says Corky ships no randomness and asks Core for
+  from, given PLAN A-19 says Core Signer ships no randomness and asks Core for
   every byte of it. And blinding breaks the property that the paper key
   alone recovers the wallet, in a way the standard paths do not, which
   is the descriptor argument at its strongest and needs its own thinking
-  about what Corky then owes the user.
+  about what Core Signer then owes the user.
 
 ## Out of scope
 
 - **Backing up the quorum, on paper or digitally.** Ruled out by Ben,
   2026-09-09: the coordinator holds it, in Sparrow or in Core, and backs
-  it up there. Corky's backup stays the 111-character key it is today.
+  it up there. Core Signer's backup stays the 111-character key it is today.
   Charting had gone some way into this (four printable QRs at 4px per
   module, or Core's own 435-character private descriptor) before the cut.
-- **Corky holding or displaying the quorum descriptor.** Follows from
+- **Core Signer holding or displaying the quorum descriptor.** Follows from
   the finding above: signing does not need it, so carrying it would be
   scope with no payer.

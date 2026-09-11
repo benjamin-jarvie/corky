@@ -7,9 +7,9 @@
   Fonticons, Inc. (https://fontawesome.com).
 - The font file format is licensed SIL OFL 1.1.
 
-Glyphs included and where Corky uses them:
+Glyphs included and where Core Signer uses them:
 
-| codepoint | name               | Corky use             |
+| codepoint | name               | Core Signer use             |
 |-----------|--------------------|-----------------------|
 | U+F5B7    | signature          | home: sign            |
 | U+F084    | key                | home: key             |

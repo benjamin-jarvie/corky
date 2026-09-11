@@ -20,10 +20,10 @@ is already there. What is undecided is everything the person sees.
   device. `walletprocesspsbt` returns `complete: false`, which today
   reaches "wallet cannot complete this PSBT" and refuses. That refusal is
   correct for single-sig and wrong for a quorum.
-- **Whether Corky says anything about the other cosigners.**
+- **Whether Core Signer says anything about the other cosigners.**
   `signer.owners` already reads all three fingerprints out of the PSBT.
   Showing them lets a person notice that a "2-of-3 with two friends" has
-  two fingerprints they do not recognise. Corky cannot verify a quorum it
+  two fingerprints they do not recognise. Core Signer cannot verify a quorum it
   does not hold, so this is the only check available, and whether it is
   worth a screen is a judgement.
 
@@ -54,7 +54,7 @@ loses that, this decision has to be reopened with it.
 ### 2. Review says the quorum and the threshold
 
 Stop dropping `witness_script` in `_REVIEW_DROPS`. Core already reports
-`type: "multisig"` and an `asm` beginning with the threshold, so Corky
+`type: "multisig"` and an `asm` beginning with the threshold, so Core Signer
 can show "2 of 3" without parsing a script itself, which keeps PLAN A-11
 intact.
 
@@ -76,7 +76,7 @@ scripts in the tree.
 needs no change. Three eight-character fingerprints on the review screen,
 this device's marked.
 
-It is the only check Corky can offer here. It cannot verify a quorum it
+It is the only check Core Signer can offer here. It cannot verify a quorum it
 does not hold, so the whole of what it can do is show you who else is in
 this one and let you notice two fingerprints you do not recognise.
 

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Corky: every way data could leave this board, and what the OS can prove.
+# Core Signer: every way data could leave this board, and what the OS can prove.
 #
-# Run this ON THE DEVICE, as root:   sudo bash /opt/corky/image/leak-check.sh
+# Run this ON THE DEVICE, as root:   sudo bash /opt/coresigner/image/leak-check.sh
 # On the device itself it is Tools, Check for leaks.
 #
 # READ THIS BEFORE YOU TRUST THE RESULT.
@@ -94,7 +94,7 @@ CFG=/boot/firmware/config.txt
 CMDLINE=/boot/firmware/cmdline.txt
 [ -f "$CMDLINE" ] || CMDLINE=/boot/cmdline.txt
 
-say "Corky leak check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
+say "Core Signer leak check, $(date -u '+%Y-%m-%d %H:%M UTC') on $(hostname)"
 say ""
 say "RADIO"
 
@@ -116,7 +116,7 @@ BT_MODS=$(lsmod 2>/dev/null | grep -cE "^(bluetooth|btbcm|hci_uart|btsdio)")
 if [ "$BT_MODS" -eq 0 ]; then ok "Bluetooth driver" "not loaded"
 else bad "Bluetooth driver" "loaded"; fi
 
-if [ -f /etc/modprobe.d/corky-no-radio.conf ]; then
+if [ -f /etc/modprobe.d/coresigner-no-radio.conf ]; then
     ok "Driver blacklist" "installed"
 else bad "Driver blacklist" "missing"; fi
 
@@ -223,7 +223,7 @@ if [ -n "$(ls /sys/class/udc 2>/dev/null)" ]; then
 else
     ok "USB device mode" "off, host only"
 fi
-if [ -f /etc/modprobe.d/corky-no-gadget.conf ]; then
+if [ -f /etc/modprobe.d/coresigner-no-gadget.conf ]; then
     ok "USB gadget blacklist" "installed"
 else bad "USB gadget blacklist" "missing"; fi
 
@@ -238,7 +238,7 @@ service_row "Remote login" ssh
 
 say ""
 say "BITCOIN CORE"
-if grep -q "^networkactive=0" /etc/corky-bitcoin.conf 2>/dev/null; then
+if grep -q "^networkactive=0" /etc/coresigner-bitcoin.conf 2>/dev/null; then
     ok "Core networking" "off"
 else bad "Core networking" "on"; fi
 
@@ -280,15 +280,15 @@ fi
 # Core, which reads no QR, had no way to be given anything.
 say ""
 say "-- provisioning, is the board current --"
-# All FIVE units, not four. corky-splash.service was missing from this
+# All FIVE units, not four. coresigner-splash.service was missing from this
 # list, and it is the one that paints the first thing anybody sees; a
 # board without it boots to a dark panel for the length of a bitcoind
 # start and looks broken (audit A7, 2026-09-06).
-for f in /etc/systemd/system/corky.service \
-         /etc/systemd/system/corky-bitcoind.service \
-         /etc/systemd/system/corky-splash.service \
-         /etc/systemd/system/corky-usb@.service \
-         /etc/udev/rules.d/99-corky-usb.rules; do
+for f in /etc/systemd/system/coresigner.service \
+         /etc/systemd/system/coresigner-bitcoind.service \
+         /etc/systemd/system/coresigner-splash.service \
+         /etc/systemd/system/coresigner-usb@.service \
+         /etc/udev/rules.d/99-coresigner-usb.rules; do
     if [ -f "$f" ]; then
         ok "$(basename "$f")" "installed"
     else

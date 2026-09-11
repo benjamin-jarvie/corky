@@ -1,11 +1,11 @@
-"""Corky <-> Sparrow interop matrix.
+"""Core Signer <-> Sparrow interop matrix.
 
 Every PSBT is built by Sparrow Wallet's own library (drongo), extracted from
 the signed Sparrow 2.5.4 release. Nothing is reimplemented: the wallet model,
 coin selection, change derivation, PSBT construction and the export downgrade
 are Sparrow's own code paths (HeadersController.savePSBT calls getForExport()).
 
-Corky signs with unmodified Bitcoin Core. Core then finalizes and broadcasts on
+Core Signer signs with unmodified Bitcoin Core. Core then finalizes and broadcasts on
 regtest. A case passes only when the transaction confirms.
 """
 import sys
@@ -28,7 +28,7 @@ def main():
     R = Results()
 
     with Regtest() as net:
-        print(f"Corky session open, {len(net.pubs)} public descriptors\n")
+        print(f"Core Signer session open, {len(net.pubs)} public descriptors\n")
 
         for script_type, _ in harness.SCRIPT_TYPES:
             fp, path, xpub = net.account(script_type)
@@ -101,21 +101,21 @@ def main():
                     info = harness.signer.describe_psbt(net.rpc, psbt)
 
                     # The M1 gate (PLAN.md:377) is "fee and outputs on screen
-                    # match Sparrow". Compare Corky's review numbers with the
+                    # match Sparrow". Compare Core Signer's review numbers with the
                     # ones Sparrow computed for the same transaction.
-                    corky = (sats(info["fee_btc"]),
+                    coresigner = (sats(info["fee_btc"]),
                              sorted((o["address"], sats(o["amount_btc"]))
                                     for o in info["outputs"]))
                     sparrow = (int(marks["FEE"][0]),
                                sorted((a, int(v)) for a, v in
                                       (m.split("\t") for m in marks["VOUT"])))
-                    R.record(f"{full} :: review matches Sparrow", corky == sparrow,
-                             f"fee {corky[0]} sat, {len(corky[1])} outputs"
-                             if corky == sparrow else f"corky {corky} | sparrow {sparrow}")
+                    R.record(f"{full} :: review matches Sparrow", coresigner == sparrow,
+                             f"fee {coresigner[0]} sat, {len(coresigner[1])} outputs"
+                             if coresigner == sparrow else f"coresigner {coresigner} | sparrow {sparrow}")
 
                     signed = harness.signer.sign_psbt(net.rpc, psbt)
                     if not signed["complete"]:
-                        R.record(full, False, "Corky returned an incomplete PSBT")
+                        R.record(full, False, "Core Signer returned an incomplete PSBT")
                         continue
                     final = net.rpc.call("finalizepsbt", signed["psbt"])
                     txid = net.rpc.call("sendrawtransaction", final["hex"])

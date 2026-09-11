@@ -32,9 +32,9 @@ public class SparrowGen {
 
         // The 3-arg constructor seeds one empty keystore in an immutable list,
         // exactly as Sparrow's own wallet-import path does; configure that one.
-        Wallet wallet = new Wallet("corky-test", PolicyType.SINGLE_HD, st);
+        Wallet wallet = new Wallet("coresigner-test", PolicyType.SINGLE_HD, st);
         Keystore ks = wallet.getKeystores().get(0);
-        ks.setLabel("Corky");
+        ks.setLabel("Core Signer");
         ks.setSource(KeystoreSource.HW_AIRGAPPED);
         ks.setWalletModel(WalletModel.SPARROW);
         ks.setKeyDerivation(new KeyDerivation(fingerprint, path));
@@ -128,7 +128,7 @@ public class SparrowGen {
         System.out.println("OUT\t" + out.toBase64String());
 
         // What Sparrow itself would put on its own review screen. Ticket 07
-        // compares Corky's describe_psbt against these, which is the M1 gate
+        // compares Core Signer's describe_psbt against these, which is the M1 gate
         // criterion in PLAN.md:377.
         System.out.println("FEE\t" + wtx.getFee());
         for (WalletTransaction.Output o : wtx.getOutputs()) {

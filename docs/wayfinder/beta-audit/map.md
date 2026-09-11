@@ -1,4 +1,4 @@
-# Map: the audit that decides whether Corky ships a beta
+# Map: the audit that decides whether Core Signer ships a beta
 
 Label: `wayfinder:map`. Tickets are in `tickets/`, one file each.
 
@@ -28,7 +28,7 @@ this device to a person who is not Ben, and why.
   the source before acting on it. Five reviewer claims have failed
   verification in this project so far. A finding that has not been
   reproduced is a rumour.
-- The board is `corky-zero`, and `corky-ip` in `~/.ssh/config` when mDNS
+- The board is `coresigner-zero`, and `coresigner-ip` in `~/.ssh/config` when mDNS
   is not resolving. Sync with the rsync in the previous map before
   touching it.
 
@@ -54,7 +54,7 @@ this device to a person who is not Ben, and why.
   counted allocations as though they were live.
 
 - [A5 What has never run, on anything](tickets/A5-never-run.md): 86% of
-  `corky/` executes, across both architectures; the arm64 suites alone
+  `coresigner/` executes, across both architectures; the arm64 suites alone
   report 84%. Exactly ONE statement is unreachable in any configuration,
   and it is a deliberate guard. The instrument was wrong three ways
   before it was right, once calling the first program the device runs
@@ -91,7 +91,7 @@ this device to a person who is not Ben, and why.
   of fixed history; seven of the eight items in its Open section were
   already fixed. Rewritten, 298 lines to 97. The other three candidates
   were KEPT on the ticket's own test: `docs/audit/ui-and-branding.md`
-  carries the D/S/I numbering cited twelve times from `corky/main.py`
+  carries the D/S/I numbering cited twelve times from `coresigner/main.py`
   alone, and both closed maps are cited by `PLAN.md` and `m0/m0_gate.py`.
   Each now says it is closed and what replaced it.
 
@@ -108,7 +108,7 @@ this device to a person who is not Ben, and why.
 
 - [A7 The image a tester flashes](tickets/A7-image-and-provisioning.md):
   the board was running TWO things the repository had already fixed.
-  `corky.service` had no `--card-dir`, so the card channel did not exist
+  `coresigner.service` had no `--card-dir`, so the card channel did not exist
   on the device; `bitcoin.conf` still had `debuglogfile=0`, which Core
   reads as a filename, and a file called `0` holding 5,736 bytes of
   Core's log was in the ramdisk. `image/verify-install.sh` now compares

@@ -1,4 +1,4 @@
-# How Corky is tested, and the rules that came from being wrong
+# How Core Signer is tested, and the rules that came from being wrong
 
 `./run_tests.sh` runs the fast suites. `RUN_NODE=1 ./run_tests.sh` adds the
 suites that need a real `bitcoind`. Both must be green before a commit.
@@ -78,8 +78,8 @@ is still counting wrongly.
 Audit A5 found the same failure in the coverage instrument, twice, and the
 instrument is the thing you would otherwise trust to find the others:
 
-- **A subprocess is invisible by default.** Most of Corky runs as
-  `python3 corky/main.py --dev` under `subprocess.run`, and a plain
+- **A subprocess is invisible by default.** Most of Core Signer runs as
+  `python3 coresigner/main.py --dev` under `subprocess.run`, and a plain
   `coverage run` sees none of it. Without the `COVERAGE_PROCESS_START`
   hook the figure is about twenty points low.
 - **A clean environment drops the hook.** `test_splash.py` builds its
@@ -172,12 +172,12 @@ code.
 
 ## Rule 8: test against the other implementation's decoder, not your own
 
-Every QR test Corky had decoded with `pyzbar`, because that is what the device
+Every QR test Core Signer had decoded with `pyzbar`, because that is what the device
 runs. That felt right and it hid a defect for as long as it existed.
 
-Corky renders 244-character UR frames as a 49x49 QR. With the quiet zone that
+Core Signer renders 244-character UR frames as a 49x49 QR. With the quiet zone that
 is 53 modules, and the 320x240 panel allows `box_size = 240 // 53 = 4`. So
-Corky renders at exactly **4.0 pixels per module** and cannot go higher without
+Core Signer renders at exactly **4.0 pixels per module** and cannot go higher without
 fewer modules. Measured over 375 frames, three of them (0.8%) cannot be decoded
 by **zxing**, which is the library Sparrow uses. `pyzbar` reads the same three
 without trouble.
@@ -193,7 +193,7 @@ and USB needs an adapter and a hole in the case, so QR is the only channel
 that closes a signing loop. Run `tests/m1/outbound_margin.py` after
 anything that touches frame size.
 
-No suite could have found this, because every suite asked Corky's own decoder.
+No suite could have found this, because every suite asked Core Signer's own decoder.
 The fix is `tests/sparrow`, which runs Sparrow 2.5.4's real library out of the
 sha256-verified release, and `tests/m1/outbound_margin.py`, which keeps
 measuring the rate so the day it gets worse is a day somebody notices.
@@ -212,7 +212,7 @@ Rule 7 says "needs hardware" is a claim that needs checking, and it stands.
 This is its opposite number: sometimes the hardware really is the only place
 a defect can appear, and no amount of care on the Mac will surface it.
 
-`corky/signer.py` passed the base64 PSBT to `bitcoin-cli` as one argv entry.
+`coresigner/signer.py` passed the base64 PSBT to `bitcoin-cli` as one argv entry.
 Linux caps a **single** argument at `MAX_ARG_STRLEN`, 32 pages, 128KB, and
 that cap is separate from the 2MB `ARG_MAX` total. A PSBT carries a whole
 previous transaction per input, so the M0 stress case at 250 inputs went past
@@ -296,7 +296,7 @@ CPython caches by source size and mtime. A mutation script that writes a
 mutant, runs a suite, and writes the original back can produce a `.pyc`
 the interpreter then reuses for the ORIGINAL file, because the restored
 source is the same length and the mtime moved within the same coarse
-tick. On 2026-09-10 that left `corky/main.py` executing a mutant for
+tick. On 2026-09-10 that left `coresigner/main.py` executing a mutant for
 three suite runs after the script printed "restored", and
 `test_menu_wiring.py` failed with the mutation's exact symptoms against
 a source file that was correct on disk.
@@ -328,7 +328,7 @@ fixed lives in git, and what it taught lives here as a numbered rule.
 D17 and D18 are both closed. The standing milestone work (M1 to M3)
 genuinely does need the board; M0 passed on 2026-09-03.
 
-Coverage across both architectures is 86% of statements in `corky/`; the
+Coverage across both architectures is 86% of statements in `coresigner/`; the
 arm64 suites alone report 84%. One statement is unreachable in any
 configuration, `main.py:113`, and it is a deliberate abstract-method
 guard. See `docs/wayfinder/beta-audit/tickets/A5-never-run.md`.

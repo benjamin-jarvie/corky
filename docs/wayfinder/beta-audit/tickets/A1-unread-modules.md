@@ -52,7 +52,7 @@ refused, so there is no window.
 
 **The file channel's safety rested on a decision in another file.**
 `find_unsigned` trusts a filename off a stick and calls `is_file()`, which
-follows symlinks. It is safe only because `image/corky-usb@.service`
+follows symlinks. It is safe only because `image/coresigner-usb@.service`
 mounts `-t vfat,exfat`, neither of which has symlinks. Neither file
 mentioned the other. Both do now, and a test fails if the mount admits a
 filesystem that does.

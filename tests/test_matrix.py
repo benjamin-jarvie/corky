@@ -1,11 +1,11 @@
-"""Exhaustive signing coverage matrix for Corky, on regtest.
+"""Exhaustive signing coverage matrix for Core Signer, on regtest.
 
 Proves a valid, broadcast-able SIGHASH_ALL signature for every meaningful
 combination of seed-entry mode x script type x input count x output shape.
 
 The pattern mirrors tests/e2e_regtest.py and tests/e2e_session.py:
-spin bitcoind -regtest in a tempdir, open a Corky session via signer.py,
-let a watch-only coordinator fund and build the PSBT, Corky describes and
+spin bitcoind -regtest in a tempdir, open a Core Signer session via signer.py,
+let a watch-only coordinator fund and build the PSBT, Core Signer describes and
 signs, then finalize + broadcast + confirm on regtest.
 
 Matrix axes
@@ -39,7 +39,7 @@ from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 # A-22: the pure signer has no BIP39. This is exactly the key the old
@@ -53,7 +53,7 @@ MINER = "miner"
 
 
 def open_mode(rpc, mode):
-    """Open the Corky wallet through one seed-entry mode."""
+    """Open the Core Signer wallet through one seed-entry mode."""
     if mode == "words" or mode == "xprv":
         signer.open_session_xprv(rpc, XPRV)
     elif mode == "desc":
@@ -81,7 +81,7 @@ def run_cell(rpc, watch, miner_addr, mode, script, n_inputs, shape):
     """One matrix cell. Returns the confirmed txid. Raises on any failure."""
     addr_type = "bech32" if script == 84 else "bech32m"
 
-    # Coordinator hands out Corky-owned receive addresses of the chosen type,
+    # Coordinator hands out Core Signer-owned receive addresses of the chosen type,
     # the miner funds each with exactly 1.0 rBTC in one funding tx.
     addrs = [rpc.call("getnewaddress", "", addr_type, wallet=watch)
              for _ in range(n_inputs)]
@@ -124,12 +124,12 @@ def run_cell(rpc, watch, miner_addr, mode, script, n_inputs, shape):
         f"{shape}: {len(decoded['tx']['vout'])} outputs, want {want_out}"
     assert len(decoded["tx"]["vin"]) == n_inputs
 
-    # Corky review screen + signature (the security boundary).
+    # Core Signer review screen + signature (the security boundary).
     review = signer.describe_psbt(rpc, psbt)
     assert review["input_count"] == n_inputs
     assert review["fee_btc"] is not None, "review lost the fee"
     signed = signer.sign_psbt(rpc, psbt)
-    assert signed["complete"], "Corky did not fully sign"
+    assert signed["complete"], "Core Signer did not fully sign"
 
     # Finalize, inspect the witness for SIGHASH type, broadcast, confirm.
     final = rpc.call("finalizepsbt", signed["psbt"])
@@ -157,7 +157,7 @@ def run_cell(rpc, watch, miner_addr, mode, script, n_inputs, shape):
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-matrix-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-matrix-")
     import random as _rnd
     _port = _rnd.randint(20000, 60000)
     (Path(datadir) / "bitcoin.conf").write_text(

@@ -7,7 +7,7 @@ Claimed and resolved 2026-09-10. Ben's call, from four options.
 
 M9 built `sign_at_told_paths`. A descriptor is the only way Core imports
 a derivation and a descriptor carries the key, so signing a share at a
-path the PSBT names pulls the master xprv into Corky for the length of
+path the PSBT names pulls the master xprv into Core Signer for the length of
 one signature.
 
 That door is already open three times: the paper backup reads the key to

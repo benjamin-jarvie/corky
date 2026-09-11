@@ -7,17 +7,17 @@ Type: `wayfinder:grilling`, HITL. **Blocked by M1.**
 Ben, 2026-09-09: look at miniscript, Liana, Nunchuk, decaying keys and
 blinded xpubs. Charting did, against Core 31.1, with both wallets cloned
 and read. The finding is that **they are all the same question wearing
-different clothes**, and the question is M1's: what paths may Corky hold
+different clothes**, and the question is M1's: what paths may Core Signer hold
 a key at?
 
 What was established, so this ticket starts from facts:
 
 - **Core signs a Liana-shaped policy.** `wsh(or_d(pk(primary),and_v(
-  v:pkh(recovery),older(20))))` imports, and Corky's key alone signs AND
+  v:pkh(recovery),older(20))))` imports, and Core Signer's key alone signs AND
   FINALISES the primary path: `final_scriptwitness` present, two witness
   items, `testmempoolaccept` allowed.
 - **Core imports a three-tier decaying quorum.** 3-of-3 now, 2-of-3 after
-  10 blocks, one key after 20. Corky contributes one signature at every
+  10 blocks, one key after 20. Core Signer contributes one signature at every
   tier, holding only its own branch, exactly as it does for plain
   multisig.
 - **A descriptor may hold at most ONE private key.** Two xprvs in one
@@ -29,8 +29,8 @@ What was established, so this ticket starts from facts:
   model says so: "one or more recovery paths with any number of key
   checks, behind increasing relative timelocks. No two recovery paths may
   have the same timelock", with `DuplicateKey` and
-  `DuplicateOriginSamePath` as separate errors. So one Corky key can
-  appear in several tiers, at several accounts, and **Corky may need
+  `DuplicateOriginSamePath` as separate errors. So one Core Signer key can
+  appear in several tiers, at several accounts, and **Core Signer may need
   several branches imported for one wallet.** That is the sharpest thing
   this ticket has to decide.
 - **Nunchuk takes arbitrary miniscript**, `set_miniscript_template(
@@ -40,12 +40,12 @@ What was established, so this ticket starts from facts:
   chosen from a list.
 
 **What is NOT established, and this ticket should not assume it.** None
-of the three tiers finalised on Corky's signature alone, including the
+of the three tiers finalised on Core Signer's signature alone, including the
 one-key tier past its timelock. The likely cause is `nSequence`: the
 coordinator's `walletcreatefundedpsbt` builds for the first satisfiable
 path, so the input's sequence never enables the timelocked branch. If
 that is right, **which tier a spend uses is the coordinator's choice at
-build time and not the signer's**, and Corky's job is unchanged. It has
+build time and not the signer's**, and Core Signer's job is unchanged. It has
 not been proven, and proving it is the first thing to do here.
 
 So the decision:
@@ -53,7 +53,7 @@ So the decision:
 - Does M1's answer cover an arbitrary path, or a list? An arbitrary path
   makes miniscript, decay and blinding all reachable with no further
   work. A list closes all three.
-- If a key can be in several tiers, does Corky import several branches
+- If a key can be in several tiers, does Core Signer import several branches
   for one wallet, and what does the key screen then show? One key with
   four branches is a different object from the four script policies.
 - Does the review screen have to say which tier is being spent? It can
@@ -82,7 +82,7 @@ With the sequence set and the coin 25 blocks old, the one-key tier
 finalises and the network accepts it. Tiers 1 and 2 stay unfinished
 because a STRANGER's signature is missing, which is correct.
 
-**So the tier is the coordinator's choice at build time, and Corky's job
+**So the tier is the coordinator's choice at build time, and Core Signer's job
 does not change.** That was the ticket's first question and it is now a
 fact rather than a guess.
 
@@ -91,9 +91,9 @@ fact rather than a guess.
 Core refuses the policy outright otherwise: "not sane: contains
 duplicate public keys". That is Liana's `DuplicateOriginSamePath` seen
 from the other side, and it is a rule the coordinator must follow, not
-Corky.
+Core Signer.
 
-### 3. Corky already imports several branches, and M9 did it
+### 3. Core Signer already imports several branches, and M9 did it
 
 Our key sits at three accounts. One signing pass imported all three
 branches and produced **three signatures in one action**. `_branches`
@@ -103,7 +103,7 @@ nothing has to be set up first.
 
 ### 4. A one-key tier comes back FINISHED, not partial
 
-`walletprocesspsbt` finalises by default, so when Corky's own key
+`walletprocesspsbt` finalises by default, so when Core Signer's own key
 satisfies the branch the device hands back a broadcastable transaction.
 That is the correct outcome and it is a different outcome from a share.
 
@@ -124,7 +124,7 @@ with it." For this class of wallet it never had it.
 Core does give the timelocks readably. The decoded `asm` for the policy
 above yields `['10', '20']` before `OP_CHECKSEQUENCEVERIFY`, and two
 `OP_CHECKMULTISIG`, so a tier line is reachable the same way the
-threshold is, without Corky parsing a script itself.
+threshold is, without Core Signer parsing a script itself.
 
 ## Answer, 2026-09-10. Two of the three questions were already answered.
 
@@ -135,7 +135,7 @@ that Ben answered.
 ### 1. Arbitrary path or a list? Already M1, and M9 built it
 
 Arbitrary. Nothing here reopens it, and the measurement above shows why:
-Corky signed a Liana policy and all three tiers of a decaying quorum
+Core Signer signed a Liana policy and all three tiers of a decaying quorum
 holding only its own branches, which is the same trick as plain
 multisig.
 
@@ -157,7 +157,7 @@ than of the key.
   the policy holds locks that this spend does not use. `describe_psbt`
   gains `timelocks`, read from the same `asm` the threshold comes from,
   and `spend_lock`, the highest lock the input's `nSequence` enables.
-  Corky parses no script.
+  Core Signer parses no script.
 - **After signing**, the result screen separates the two outcomes. A
   finished transaction says `SIGNED · ready to send`. One share of a
   quorum says `SHARE · needs another signature`. Until now both said

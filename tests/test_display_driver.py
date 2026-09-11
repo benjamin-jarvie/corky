@@ -2,7 +2,7 @@
 
 The driver is vendored from SeedSigner, where it only ever drove a 240x240
 hat, so both high octets of the column and row address were hardcoded to
-0x00. Corky's primary panel is the SeedSigner+ 2.8" at 320x240
+0x00. Core Signer's primary panel is the SeedSigner+ 2.8" at 320x240
 (hw/HARDWARE.md), and 320 does not fit in one octet. This suite exists
 because that defect is silent: the SPI writes all succeed and the panel
 simply shows nonsense.
@@ -83,7 +83,7 @@ def main():
     sys.path.insert(0, str(ROOT / "hw" / "vendor"))
     from st7789 import ST7789
 
-    # ---- the panel Corky actually ships: 320x240 ----
+    # ---- the panel Core Signer actually ships: 320x240 ----
     lcd = ST7789(width=320, height=240)
     spi = lcd._spi
     w = window_bytes(lcd, spi)

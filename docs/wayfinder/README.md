@@ -9,7 +9,7 @@ tickets, worked one at a time.
 - **multisig-cosigner** — **open.** A Core key as one cosigner in a
   multivendor quorum, signed for on the device. Five tickets. Charted
   2026-09-09, after charting found that Core signs a quorum share with
-  only the BIP48 branch imported, so Corky never needs the quorum
+  only the BIP48 branch imported, so Core Signer never needs the quorum
   descriptor and the map is a fifth of the size it looked.
 
 ## The closed maps are archived, not lost

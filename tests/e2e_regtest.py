@@ -1,13 +1,13 @@
-"""End-to-end proof of the Corky pipeline on regtest, no hardware needed.
+"""End-to-end proof of the Core Signer pipeline on regtest, no hardware needed.
 
 Simulates the full production flow:
-  coordinator (watch-only wallet, like Sparrow)  <->  Corky (signer wallet)
+  coordinator (watch-only wallet, like Sparrow)  <->  Core Signer (signer wallet)
 
-  1. Corky opens a session from the canonical test mnemonic (via the shim).
-  2. The coordinator imports Corky's PUBLIC descriptors only.
+  1. Core Signer opens a session from the canonical test mnemonic (via the shim).
+  2. The coordinator imports Core Signer's PUBLIC descriptors only.
   3. Coins are mined to the coordinator's watch address.
   4. Coordinator builds a funded PSBT (this is what would cross as a QR).
-  5. Corky describes it (review screen data) and signs it.
+  5. Core Signer describes it (review screen data) and signs it.
   6. Coordinator finalizes and broadcasts. Confirmed = pipeline proven.
 
 Run: python3 tests/e2e_regtest.py
@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "coresigner"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "shim"))
 import signer  # noqa: E402
 
@@ -32,7 +32,7 @@ WATCH = "watcher"
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-regtest-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-regtest-")
     import random as _rnd
     _port = _rnd.randint(20000, 60000)
     (Path(datadir) / "bitcoin.conf").write_text(
@@ -50,7 +50,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        # 1. Corky session from an xprv
+        # 1. Core Signer session from an xprv
         signer.open_session_xprv(rpc, XPRV)
         pubs = signer.public_descriptors(rpc)
         # Two claims, two messages. They used to share one, so a change in
@@ -65,7 +65,7 @@ def main():
         print(f"ok   session open; {len(pubs)} public descriptors exported")
 
         # The README's reason for refusing seed words is that CORE cannot
-        # take them, so accepting them would mean Corky running a key
+        # take them, so accepting them would mean Core Signer running a key
         # derivation function itself, which is the one thing this
         # repository does not do. That is a claim about a named
         # counterpart, so TESTING.md rule 8 says run the counterpart
@@ -77,12 +77,12 @@ def main():
         assert not wordy, \
             (f"Core {rpc.call('getnetworkinfo')['subversion']} offers "
              f"{wordy}, so the README is wrong that seed words would have "
-             "to be turned into a key by Corky")
+             "to be turned into a key by Core Signer")
         assert "importdescriptors" in helptext, \
             "Core no longer offers importdescriptors, which is the only "\
-            "way Corky puts a key in"
+            "way Core Signer puts a key in"
         print("ok   Core takes descriptors and has no way in for seed "
-              "words, which is why Corky has no BIP39")
+              "words, which is why Core Signer has no BIP39")
 
         # 2. Coordinator: watch-only wallet from public descriptors
         rpc.call("createwallet", WATCH, True, True, "", False, True)
@@ -108,7 +108,7 @@ def main():
                           wallet=WATCH)
         psbt = funded["psbt"]
 
-        # 5. Corky review screen + signature
+        # 5. Core Signer review screen + signature
         review = signer.describe_psbt(rpc, psbt)
         assert review["fee_btc"] is not None
         # Verify the fee VALUE against Core's own decodepsbt fee, so a
@@ -120,8 +120,8 @@ def main():
         print(f"ok   review screen: {len(review['outputs'])} outputs, "
               f"fee {review['fee_btc']} rBTC ({review['fee_note']})")
         signed = signer.sign_psbt(rpc, psbt)
-        assert signed["complete"], "Corky did not fully sign"
-        print("ok   Corky signed; PSBT complete")
+        assert signed["complete"], "Core Signer did not fully sign"
+        print("ok   Core Signer signed; PSBT complete")
 
         # 6. Coordinator finalizes and broadcasts
         final = rpc.call("finalizepsbt", signed["psbt"])

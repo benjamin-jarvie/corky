@@ -24,9 +24,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import hal                          # noqa: E402
-import main as corky_main           # noqa: E402
+import main as coresigner_main           # noqa: E402
 
 fails = []
 
@@ -62,7 +62,7 @@ def calls_in(node):
 
 
 for mod in ("main.py", "signer.py"):
-    tree = ast.parse((ROOT / "corky" / mod).read_text())
+    tree = ast.parse((ROOT / "coresigner" / mod).read_text())
     for fn in [n for n in ast.walk(tree)
                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
         names = calls_in(fn)
@@ -78,7 +78,7 @@ ok("no function drops a key anywhere near a clock, timer or deadline")
 
 # --- 2. the three deliberate drops, and only those ----------------------
 
-src = (ROOT / "corky" / "main.py").read_text()
+src = (ROOT / "coresigner" / "main.py").read_text()
 tree = ast.parse(src)
 sites = []
 for node in ast.walk(tree):
@@ -118,7 +118,7 @@ class CountingRpc:
 
     def __init__(self):
         self.dropped = []
-        self.loaded = ["corky"]
+        self.loaded = ["coresigner"]
 
     def call(self, method, *a, **k):
         if method in ("unloadwallet",):
@@ -139,7 +139,7 @@ class CountingRpc:
 # over, then leave without powering off.
 script = ("ra" + "a" + "b" + "b") * 2 + "b"
 rpc = CountingRpc()
-sess = corky_main.Session(NullDisplay(), hal.DevButtons(script), rpc,
+sess = coresigner_main.Session(NullDisplay(), hal.DevButtons(script), rpc,
                           animate=False, on_device=False)
 try:
     sess.state_home()
@@ -153,7 +153,7 @@ if rpc.dropped:
 else:
     ok("walking in and out of a key's menu never unloads it")
 
-if rpc.loaded != ["corky"]:
+if rpc.loaded != ["coresigner"]:
     bad(f"the loaded key changed: {rpc.loaded}")
 else:
     ok("the key is still loaded after the walk")

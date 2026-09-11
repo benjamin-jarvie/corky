@@ -9,7 +9,7 @@ import java.util.*;
  * addresses from it. Nothing here is a reimplementation: OutputDescriptor
  * and Wallet are the same classes Sparrow's own import path drives.
  *
- * This is what proves Corky's export lands: Sparrow must accept the string
+ * This is what proves Core Signer's export lands: Sparrow must accept the string
  * Core wrote, verbatim, and agree with Core about the addresses.
  *
  * usage: SparrowDesc <NETWORK> <descriptor> <count>

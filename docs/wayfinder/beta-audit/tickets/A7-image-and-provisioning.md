@@ -42,14 +42,14 @@ Asked it directly rather than reading the scripts.
 
 | installed file | verdict |
 |---|---|
-| `corky-bitcoind.service` | matches |
-| `corky-splash.service` | matches |
-| `corky-usb@.service` | matches |
-| `99-corky-usb.rules` | matches |
-| **`corky.service`** | **differs** |
-| **`/etc/corky-bitcoin.conf`** | **differs** |
+| `coresigner-bitcoind.service` | matches |
+| `coresigner-splash.service` | matches |
+| `coresigner-usb@.service` | matches |
+| `99-coresigner-usb.rules` | matches |
+| **`coresigner.service`** | **differs** |
+| **`/etc/coresigner-bitcoin.conf`** | **differs** |
 
-- **`corky.service` had no `--card-dir`.** The card channel did not exist
+- **`coresigner.service` had no `--card-dir`.** The card channel did not exist
   on the device. That is ISSUES **E-5**, "Core's file has nowhere to go",
   fixed in the repository and never installed. With no stick mounted
   either, the board had nowhere at all to write a watch-only wallet.
@@ -70,7 +70,7 @@ at power-off, so it cannot outlive a session.
 The answer to this ticket and to "what can a tester verify for
 themselves". It runs **on the device**, reads only, changes nothing:
 
-- every installed file against the repository at `/opt/corky`, by sha256,
+- every installed file against the repository at `/opt/coresigner`, by sha256,
   printing the diff when they disagree;
 - both Core binaries against pinned hashes;
 - each channel against what is actually mounted;
@@ -118,7 +118,7 @@ The dev image fails **13 of 26** leak rows. Each one maps to a step:
 | failing rows | closed by |
 |---|---|
 | Wi-Fi and Bluetooth overlays | 1/5, `disable-wifi` and `disable-bt` |
-| both drivers loaded, blacklist missing | 2/5, `corky-no-radio.conf` |
+| both drivers loaded, blacklist missing | 2/5, `coresigner-no-radio.conf` |
 | radio firmware on the card | 3/5, moves `/lib/firmware/brcm` |
 | Wi-Fi and Bluetooth services, network manager | 4/5, masks nine units |
 | **remote login running** | 4/5, masks `ssh` and `sshd` |
@@ -131,7 +131,7 @@ this audit is blocked on it.
 
 ### One gap found in the leak check itself
 
-It verified four of the five units. `corky-splash.service` was missing,
+It verified four of the five units. `coresigner-splash.service` was missing,
 and it is the one that paints the first thing anybody sees; a board
 without it boots to a dark panel for the length of a bitcoind start and
 looks broken. 26 rows now, not 25.
@@ -140,8 +140,8 @@ looks broken. 26 rows now, not 25.
 
 `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
 `DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"` and
-`CORKY_COMMIT="HEAD"` are placeholders. A tester's card cannot be
-reproduced from `image/PINS` as it stands, and `CORKY_COMMIT=HEAD` means
+`CORESIGNER_COMMIT="HEAD"` are placeholders. A tester's card cannot be
+reproduced from `image/PINS` as it stands, and `CORESIGNER_COMMIT=HEAD` means
 two testers flashing a week apart get different signers. A11 has to weigh
 that.
 

@@ -1,0 +1,16 @@
+[Unit]
+Description=Core Signer signing session
+Requires=coresigner-bitcoind.service
+Wants=coresigner-splash.service
+After=coresigner-splash.service coresigner-bitcoind.service
+RequiresMountsFor=/run/coresigner
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/coresigner/coresigner/main.py --datadir=/run/coresigner --stick-dir=/mnt/usb --card-dir=/boot/firmware
+Restart=on-failure
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target

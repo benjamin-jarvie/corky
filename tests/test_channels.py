@@ -24,9 +24,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import hal                      # noqa: E402
-import main as corky_main       # noqa: E402
+import main as coresigner_main       # noqa: E402
 
 fails = []
 
@@ -56,13 +56,13 @@ class NullRpc:
 
 
 def session(on_device, stick=None, card=None, script="a"):
-    s = corky_main.Session(NullDisplay(), hal.DevButtons(script), NullRpc(),
+    s = coresigner_main.Session(NullDisplay(), hal.DevButtons(script), NullRpc(),
                            animate=False, on_device=on_device,
                            stick_dir=stick, card_dir=card)
     return s
 
 
-work = Path(tempfile.mkdtemp(prefix="corky-channels-"))
+work = Path(tempfile.mkdtemp(prefix="coresigner-channels-"))
 stick = work / "usb"
 stick.mkdir()
 card = work / "card"
@@ -132,7 +132,7 @@ shutil.rmtree(work, ignore_errors=True)
 # mentioned each other until the A1 audit; this is the check that keeps
 # them in step.
 
-UNIT = ROOT / "image" / "corky-usb@.service"
+UNIT = ROOT / "image" / "coresigner-usb@.service"
 SYMLINKLESS = {"vfat", "exfat", "msdos"}
 
 unit = UNIT.read_text()
@@ -199,7 +199,7 @@ stick6 = tempfile.mkdtemp()
 # remembered, so a single "d" half way through moves every later round to
 # the stick. Without it _load_by_stick is never entered at all and its
 # recursion mutation survives (2026-09-08).
-sess6 = corky_main.Session(NullDisplay(),
+sess6 = coresigner_main.Session(NullDisplay(),
                            hal.DevButtons("ab" * 1000 + "d" + "ab" * 1000),
                            rpc=NullRpc(), animate=False, on_device=False,
                            stick_dir=stick6)
@@ -216,8 +216,8 @@ sess6.qr = type("Camera", (), {
 # at all (2026-09-08).
 depths = []
 entered = {"stick": 0, "qr": 0}
-real_stick = corky_main.Session._load_by_stick
-real_qr = corky_main.Session._load_by_qr
+real_stick = coresigner_main.Session._load_by_stick
+real_qr = coresigner_main.Session._load_by_qr
 
 
 def _watch(name, real):
@@ -239,8 +239,8 @@ def _watch(name, real):
     return spy
 
 
-corky_main.Session._load_by_stick = _watch("stick", real_stick)
-corky_main.Session._load_by_qr = _watch("qr", real_qr)
+coresigner_main.Session._load_by_stick = _watch("stick", real_stick)
+coresigner_main.Session._load_by_qr = _watch("qr", real_qr)
 try:
     sess6.state_load()
     bad("state_load returned instead of looping until the presses ran out")
@@ -264,8 +264,8 @@ except hal.ScriptExhausted:
            f"(qr {entered['qr']}, stick {entered['stick']}), every one at "
            f"the same stack depth of {depths[0]}")
 finally:
-    corky_main.Session._load_by_stick = real_stick
-    corky_main.Session._load_by_qr = real_qr
+    coresigner_main.Session._load_by_stick = real_stick
+    coresigner_main.Session._load_by_qr = real_qr
     shutil.rmtree(stick6, ignore_errors=True)
 
 print()

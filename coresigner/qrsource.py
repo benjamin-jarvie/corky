@@ -1,6 +1,6 @@
 """Where QR frames come from: a camera on the device, files in dev mode.
 
-One seam, and the only one in Corky where the dev harness stands in for
+One seam, and the only one in Core Signer where the dev harness stands in for
 hardware. `main.py` never learns which it has: it asks a source whether
 it is `available`, then reads strings from it. That substitution is what
 makes every screen reachable without a board, and it is why these three

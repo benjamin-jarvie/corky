@@ -5,18 +5,18 @@
 # nothing compared them. On 2026-09-05 the board had never had the USB
 # mount rule installed, and every suite stayed green while the file
 # channel could not work at all. On 2026-09-06 this script found two more
-# on the same board: corky.service had no --card-dir, so the card channel
+# on the same board: coresigner.service had no --card-dir, so the card channel
 # did not exist, and bitcoin.conf still carried debuglogfile=0, which
 # Core reads as a FILENAME and which had written 5,736 bytes of log to a
 # file called `0` in the ramdisk.
 #
-# Run it on the device:  sudo bash /opt/corky/image/verify-install.sh
+# Run it on the device:  sudo bash /opt/coresigner/image/verify-install.sh
 #
 # It reads only. It changes nothing. A tester can run it and check this
 # device against the repository they can read on GitHub, without taking
 # anybody's word for what was flashed.
 set -u
-REPO=${REPO:-/opt/corky}
+REPO=${REPO:-/opt/coresigner}
 FAILED=0
 say() { printf '%-6s %s\n' "$1" "$2"; }
 bad() { say FAIL "$1"; FAILED=1; }
@@ -24,12 +24,12 @@ bad() { say FAIL "$1"; FAILED=1; }
 echo "== files installed from the repository"
 # repo path : installed path
 PAIRS="
-image/corky.service:/etc/systemd/system/corky.service
-image/corky-bitcoind.service:/etc/systemd/system/corky-bitcoind.service
-image/corky-splash.service:/etc/systemd/system/corky-splash.service
-image/corky-usb@.service:/etc/systemd/system/corky-usb@.service
-image/99-corky-usb.rules:/etc/udev/rules.d/99-corky-usb.rules
-m0/bitcoin.conf:/etc/corky-bitcoin.conf
+image/coresigner.service:/etc/systemd/system/coresigner.service
+image/coresigner-bitcoind.service:/etc/systemd/system/coresigner-bitcoind.service
+image/coresigner-splash.service:/etc/systemd/system/coresigner-splash.service
+image/coresigner-usb@.service:/etc/systemd/system/coresigner-usb@.service
+image/99-coresigner-usb.rules:/etc/udev/rules.d/99-coresigner-usb.rules
+m0/bitcoin.conf:/etc/coresigner-bitcoin.conf
 "
 for pair in $PAIRS; do
     src="$REPO/${pair%%:*}"; dst="${pair##*:}"
@@ -79,7 +79,7 @@ done
 
 echo
 echo "== the ramdisk holds no log"
-DATADIR=/run/corky
+DATADIR=/run/coresigner
 if [ -d "$DATADIR" ]; then
     # `0` is the file debuglogfile=0 produces. Anything ending .log too.
     # ls -ld runs INSIDE find, so a name with a space stays one argument.
@@ -91,7 +91,7 @@ if [ -d "$DATADIR" ]; then
         bad "Core is writing a log into the ramdisk:"
         printf '%s\n' "$strays" | sed 's/^/       /'
         echo "       Core's own first log line warns it may hold private data."
-        echo "       The fix is nodebuglogfile=1 in /etc/corky-bitcoin.conf."
+        echo "       The fix is nodebuglogfile=1 in /etc/coresigner-bitcoin.conf."
     else
         say ok "no log file in $DATADIR"
     fi

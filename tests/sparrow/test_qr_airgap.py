@@ -1,18 +1,18 @@
-"""The air gap itself: Sparrow's QR out, Corky's QR back.
+"""The air gap itself: Sparrow's QR out, Core Signer's QR back.
 
 test_sparrow_interop.py passes base64 PSBTs between the two, which skips the
 channel. This one drives the real one:
 
   Sparrow UREncoder    upper-cased ur:crypto-psbt parts, exactly as
                        QRDisplayDialog animates them
-  Corky PsbtScan       reassembles under the real scan rules, Corky signs
-  Corky frames_to_images  real PNG QR codes at the SeedSigner+ hat's panel size
+  Core Signer PsbtScan       reassembles under the real scan rules, Core Signer signs
+  Core Signer frames_to_images  real PNG QR codes at the SeedSigner+ hat's panel size
   Sparrow zxing        reads those PNGs
   Sparrow URDecoder    reassembles
   Sparrow drongo PSBT  parses and counts signatures
   Bitcoin Core         finalizes and broadcasts
 
-The scan direction stops at the string. Corky's camera is the M1 deliverable
+The scan direction stops at the string. Core Signer's camera is the M1 deliverable
 and CameraQrSource yields nothing until it lands, so there is no capture path
 on the device to test. Everything the device does with a frame once it has one
 is covered here and in tests/m1.
@@ -34,7 +34,7 @@ PANEL = (320, 240)   # SeedSigner+ hat, the primary control surface (PLAN A-15c)
 def main():
     java = Java()
     R = Results()
-    tmp = Path(tempfile.mkdtemp(prefix="corky-qr-png-"))
+    tmp = Path(tempfile.mkdtemp(prefix="coresigner-qr-png-"))
 
     with Regtest() as net:
         for script_type, _ in harness.SCRIPT_TYPES:
@@ -55,7 +55,7 @@ def main():
                           for i, t, v, r in utxos])[0]
             print(f"     Sparrow PSBT: {len(psbt)} base64 chars, 6 inputs")
 
-            # 1 + 2. Sparrow animates it; Corky's scan rules read it back
+            # 1 + 2. Sparrow animates it; Core Signer's scan rules read it back
             for density, maxfrag in (("NORMAL", 400), ("LOW", 80)):
                 parts = java("SparrowQr", "urencode", psbt, maxfrag)
                 R.record(f"{script_type} Sparrow emits {len(parts)} UR parts "
@@ -66,22 +66,22 @@ def main():
                 for p in parts:
                     if scan.feed(p):
                         break
-                R.record(f"{script_type} Corky reads Sparrow's {density} frames",
+                R.record(f"{script_type} Core Signer reads Sparrow's {density} frames",
                          scan.psbt_b64 == psbt,
                          "byte-identical PSBT" if scan.psbt_b64 == psbt
                          else "assembled but differs" if scan.psbt_b64
                          else "never completed")
 
-            # 3. Corky signs what came off the wire
+            # 3. Core Signer signs what came off the wire
             scan = qrchannel.PsbtScan()
             for p in java("SparrowQr", "urencode", psbt, 400):
                 if scan.feed(p):
                     break
             signed = harness.signer.sign_psbt(net.rpc, scan.psbt_b64)
-            R.record(f"{script_type} Corky signs the QR-delivered PSBT",
+            R.record(f"{script_type} Core Signer signs the QR-delivered PSBT",
                      signed["complete"])
 
-            # 4. Corky renders its answer as real QR images
+            # 4. Core Signer renders its answer as real QR images
             frames = qrchannel.psbt_to_frames(signed["psbt"])
             images = qrchannel.frames_to_images(frames, panel=PANEL)
             paths = []
@@ -89,13 +89,13 @@ def main():
                 q = tmp / f"{script_type}_{n:03d}.png"
                 screens.qr_frame(*PANEL, img).save(q)
                 paths.append(str(q))
-            R.record(f"{script_type} Corky renders {len(frames)} frames onto a "
+            R.record(f"{script_type} Core Signer renders {len(frames)} frames onto a "
                      f"{PANEL[0]}x{PANEL[1]} panel", len(paths) == len(frames),
                      f"{images[0].size[0]}px QR on the gold card")
 
             # 5. Sparrow's scanner reads those images.
             #
-            # Not every frame will decode. Corky renders at exactly 4.0 pixels
+            # Not every frame will decode. Core Signer renders at exactly 4.0 pixels
             # per module and about 1 in 125 frames is deterministically
             # unreadable by zxing, which is Sparrow's decoder (ticket 09,
             # measured by tests/m1/outbound_margin.py). pyzbar reads the same
@@ -111,7 +111,7 @@ def main():
                     texts.append(java("SparrowQr", "qrdecode", path)[0])
                 except RuntimeError:
                     missed.append(n)
-            R.record(f"{script_type} Sparrow's zxing reads enough of Corky's "
+            R.record(f"{script_type} Sparrow's zxing reads enough of Core Signer's "
                      f"{len(frames)} frames", len(texts) >= len(frames) // 2,
                      f"{len(texts)}/{len(frames)} decoded"
                      + (f", {len(missed)} unreadable, fountain parts cover it"
@@ -122,7 +122,7 @@ def main():
             R.record(f"{script_type} Sparrow's URDecoder rebuilds the signed PSBT",
                      back == signed["psbt"],
                      "byte-identical" if back == signed["psbt"]
-                     else "differs from what Corky signed")
+                     else "differs from what Core Signer signed")
             info = java("SparrowQr", "inspect", back)[0]
             R.record(f"{script_type} Sparrow's drongo parses it and sees the "
                      f"signatures", "signed=6" in info, info)

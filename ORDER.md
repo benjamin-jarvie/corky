@@ -1,4 +1,4 @@
-# Corky order list — US Amazon
+# Core Signer order list — US Amazon
 *2026-08-18. Five items, ~US$130. Display/controls/case NOT needed: Ben's
 SeedSigner+ hat (MadBo/Rothery v1.0.1 pill PCB) is the front end.*
 
@@ -137,7 +137,7 @@ Cooling options that fit inside 5.9mm, in order of preference:
    there is room.
 2. **A heatsink of 3mm or less**, plus pad. Leaves ~2.4mm clear.
 3. **No cooling at all.** A Pi 4 class SoC with no heatsink idles near 61C and
-   throttles above 81C. Corky idles, then signs for seconds. Throttling costs
+   throttles above 81C. Core Signer idles, then signs for seconds. Throttling costs
    sign time and nothing else. A sealed case makes this worse, so M0 must log
    SoC temperature, not only MemAvailable.
 

@@ -5,7 +5,7 @@ Claimed 2026-09-09.
 
 ## Question
 
-A coordinator needs `[xfp/48h/coin'/0h/script']tpub…` to put Corky in a
+A coordinator needs `[xfp/48h/coin'/0h/script']tpub…` to put Core Signer in a
 quorum. Charting proved Core will produce exactly that, via the scratch
 wallet round trip `write_watch_only` already uses.
 
@@ -57,7 +57,7 @@ it and no new rendering work exists.
 This ticket was written assuming a derived test address would catch a
 mistyped path. It will not, and the reason is worth keeping: **a cosigner
 branch derives a single-sig address, not the quorum's.** The quorum's
-address needs every cosigner and Corky holds one. An address shown there
+address needs every cosigner and Core Signer holds one. An address shown there
 would be a thing nobody should ever pay, offered as a safety check.
 
 Core's descriptor checksum does the job instead. Eight characters over

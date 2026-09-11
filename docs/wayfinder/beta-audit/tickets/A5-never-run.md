@@ -11,7 +11,7 @@ the flag and run it. Rule 7: "needs hardware" is a claim that needs
 checking.
 
 Find the code that has never executed. Not by reading: by measuring.
-Instrument a full suite run and list every function and branch in `corky/`
+Instrument a full suite run and list every function and branch in `coresigner/`
 that no test reaches, then sort them into three piles:
 
 - reachable in a test and simply untested;
@@ -26,8 +26,8 @@ does not find a live function whose second branch nobody has entered.
 ## Answer (2026-09-06)
 
 Measured, not read. `tools/coverage_run.sh` runs every suite with
-coverage's subprocess hook, because most of Corky runs in a child
-process (`python3 corky/main.py --dev ...` under `subprocess.run`); a
+coverage's subprocess hook, because most of Core Signer runs in a child
+process (`python3 coresigner/main.py --dev ...` under `subprocess.run`); a
 plain `coverage run` sees none of it. `tools/coverage_piles.py` sorts
 what is left into the three piles and **asserts that every uncovered
 line falls in exactly one of them**, so the classification has no gap.
@@ -35,7 +35,7 @@ Both are in the repo, so the numbers below can be reproduced.
 
 ### The number
 
-**86%** of statements in `corky/`, 224 never executed out of 1,956.
+**86%** of statements in `coresigner/`, 224 never executed out of 1,956.
 
 That is the union of two architectures. The arm64 suites alone report
 **84%**, and the gap is not rounding: `libzbar` on this Mac is x86_64
@@ -43,7 +43,7 @@ only, so `pyzbar` cannot load under arm64, and the whole QR decode path
 (`qrchannel.decode_image`, `ImageQrSource.strings`) is unreachable in
 the main suite. It is covered, under Rosetta, by `tests/m1`. A
 measurement that quietly omits the QR decoder is not a measurement of
-Corky, so `coverage_run.sh` now runs that suite too and says so when the
+Core Signer, so `coverage_run.sh` now runs that suite too and says so when the
 Rosetta build is missing.
 
 ### The three piles
@@ -59,7 +59,7 @@ By file: `main.py` 151/12/1, `screens.py` 30/0/0, `qrchannel.py`
 
 ### Pile 3, which is the one the ticket wanted
 
-One statement. `corky/main.py:113`:
+One statement. `coresigner/main.py:113`:
 
 ```python
 class ImageQrSource:
@@ -69,7 +69,7 @@ class ImageQrSource:
 
 Nothing instantiates `ImageQrSource`, and its only subclass,
 `CameraQrSource`, overrides `images()`. So the line cannot run in any
-configuration Corky ships or tests. It stays, because it is the contract
+configuration Core Signer ships or tests. It stays, because it is the contract
 that makes `strings()` safe to inherit, and a future source that forgets
 to override would otherwise fail somewhere less obvious. It is a guard,
 and it is correctly the only one.
@@ -164,7 +164,7 @@ cheap half (that every named function exists) on every run.
 
 Today's figures, from the same two-architecture run:
 
-**86%** of statements in `corky/`, **222 never executed out of 2,028**,
+**86%** of statements in `coresigner/`, **222 never executed out of 2,028**,
 across **61 functions**.
 
 | pile | statements | what it is |

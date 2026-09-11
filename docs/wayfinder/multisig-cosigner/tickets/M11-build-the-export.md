@@ -20,7 +20,7 @@ Build it:
    the bare one-liner. The two payloads differ and the person never sees
    that. (Corrected from `wsh([xfp/path]tpub)`, which Core refuses.)
 5. Both screens say to choose **Specter DIY** in the coordinator, which
-   is Ben's requirement: the coordinator asks what device type, so Corky
+   is Ben's requirement: the coordinator asks what device type, so Core Signer
    has to say which to pick.
 6. The typed path echoes Core's 8-character descriptor checksum rather
    than a test address, which is M2: a cosigner branch derives a
@@ -54,7 +54,7 @@ mutations, all detected.
 
 - `signer.cosigner_path(rpc, script, account)` builds `48h/{coin}h/…`
   from the chain, so a regtest key never offers a mainnet path.
-- `signer.write_cosigner` writes `corky-<xfp>-cosigner.txt`, one line,
+- `signer.write_cosigner` writes `coresigner-<xfp>-cosigner.txt`, one line,
   **no trailing newline**.
 - `signer.cosigner_qr` returns
   `wsh(sortedmulti(1,<record>/0/*))#<checksum>`.

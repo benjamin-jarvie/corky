@@ -1,7 +1,7 @@
 """The boot splash, which had no test at all.
 
-`corky/splash.py` is 27 lines and it is the FIRST thing the device runs:
-`corky-splash.service` paints it before `corky-bitcoind.service` starts, so
+`coresigner/splash.py` is 27 lines and it is the FIRST thing the device runs:
+`coresigner-splash.service` paints it before `coresigner-bitcoind.service` starts, so
 the panel says something within seconds rather than staying dark through a
 node launch. Nothing tested it, and it was in neither suite (audit A1,
 2026-09-06).
@@ -22,7 +22,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SPLASH = ROOT / "corky" / "splash.py"
+SPLASH = ROOT / "coresigner" / "splash.py"
 
 fails = []
 
@@ -39,7 +39,7 @@ def _child_env():
     set, and nothing else.
     """
     import os
-    env = {"PYTHONPATH": str(ROOT / "corky"), "PATH": "/usr/bin:/bin",
+    env = {"PYTHONPATH": str(ROOT / "coresigner"), "PATH": "/usr/bin:/bin",
            "PYTHONDONTWRITEBYTECODE": "1"}
     hook = os.environ.get("COVERAGE_PROCESS_START")
     if hook:
@@ -99,7 +99,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # And the frame is the branded one, not an empty panel.
     if frames:
-        sys.path.insert(0, str(ROOT / "corky"))
+        sys.path.insert(0, str(ROOT / "coresigner"))
         import screens                          # noqa: E402
         from PIL import Image                   # noqa: E402
         want = screens.splash(320, 240)

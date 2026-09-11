@@ -11,8 +11,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
-import main as corky_main  # noqa: E402
+sys.path.insert(0, str(ROOT / "coresigner"))
+import main as coresigner_main  # noqa: E402
 import signer  # noqa: E402
 
 # The key every other suite uses (the old "abandon x11 about" on regtest).
@@ -57,23 +57,23 @@ def fresh_xprv(rpc):
 def test_wallet_dir_without_wallets_subdir():
     """Core keeps wallets directly in the datadir when no wallets/ directory
     exists, which is what the Zero 2 W's ramdisk datadir looks like. Seen on
-    the board 2026-09-04: /run/corky/probe2, no /run/corky/wallets.
+    the board 2026-09-04: /run/coresigner/probe2, no /run/coresigner/wallets.
     _drop_wallet must delete the directory Core actually used."""
     datadir = Path(tempfile.mkdtemp(prefix="keys-dir-"))
     rpc = signer.Rpc(str(datadir), chain="regtest",
                      cli="false")     # every call fails as a refused RPC would
-    root_style = datadir / "regtest" / "corky"
+    root_style = datadir / "regtest" / "coresigner"
     root_style.mkdir(parents=True)
     (root_style / "wallet.dat").write_bytes(b"x")
-    signer._drop_wallet(rpc, "corky")
+    signer._drop_wallet(rpc, "coresigner")
     if not root_style.exists():
         ok("_drop_wallet deletes a wallet Core kept in the datadir root")
     else:
         bad("_drop_wallet missed the datadir-root wallet directory")
-    sub_style = datadir / "regtest" / "wallets" / "corky"
+    sub_style = datadir / "regtest" / "wallets" / "coresigner"
     sub_style.mkdir(parents=True)
     (sub_style / "wallet.dat").write_bytes(b"x")
-    signer._drop_wallet(rpc, "corky")
+    signer._drop_wallet(rpc, "coresigner")
     if not sub_style.exists():
         ok("_drop_wallet deletes a wallet Core kept under wallets/")
     else:
@@ -94,8 +94,8 @@ def main():
         keys = signer.loaded_keys(rpc)
         names = [k.name for k in keys]
         xfps = [k.xfp for k in keys]
-        if names == ["corky", "corky-2"] and name_a == "corky" and name_b == "corky-2":
-            ok("two keys occupy slots corky and corky-2, in load order")
+        if names == ["coresigner", "coresigner-2"] and name_a == "coresigner" and name_b == "coresigner-2":
+            ok("two keys occupy slots coresigner and coresigner-2, in load order")
         else:
             bad(f"slots {names}, returned {name_a}, {name_b}")
         if len(set(xfps)) == 2 and all(len(x) == 8 for x in xfps):
@@ -136,7 +136,7 @@ def main():
         for k in five[2:]:
             signer.close_key(rpc, k.name)
         keys = signer.loaded_keys(rpc)
-        if [k.name for k in keys] == ["corky", "corky-2"]:
+        if [k.name for k in keys] == ["coresigner", "coresigner-2"]:
             ok("close_key drops one key at a time; two remain")
         else:
             bad(f"after close_key: {keys}")
@@ -170,8 +170,8 @@ def main():
         name_c = signer.generate_wallet(rpc)
         xprv_c = signer.master_xprv(rpc, wallet=name_c)
         after = signer.loaded_keys(rpc)
-        if name_c == "corky-3" and [k.name for k in after] == ["corky", "corky-2", "corky-3"]:
-            ok("generate_wallet took slot corky-3 and kept the other two")
+        if name_c == "coresigner-3" and [k.name for k in after] == ["coresigner", "coresigner-2", "coresigner-3"]:
+            ok("generate_wallet took slot coresigner-3 and kept the other two")
         else:
             bad(f"generate gave {name_c}; loaded {after}")
         if xprv_c.startswith("tprv8ZgxMBicQKsP") and after[2].xfp == signer.master_fingerprint(rpc, wallet=name_c):
@@ -205,7 +205,7 @@ def main():
                 lo, hi = (mid, hi) if owns(wallet, desc, mid) else (lo, mid)
             return lo
 
-        want = corky_main.ADDRESS_CHECK_DEPTH - 1
+        want = coresigner_main.ADDRESS_CHECK_DEPTH - 1
         fresh = signer.open_session_xprv(rpc, fresh_xprv(rpc))
         for shape, wallet in (("freshly imported", fresh),
                               ("freshly generated", name_c)):

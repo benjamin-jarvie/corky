@@ -10,7 +10,7 @@
 > description of the device.
 >
 > It survives deletion because its D, S and I numbering is cited from
-> shipped code and from TESTING.md: `corky/main.py` alone carries twelve
+> shipped code and from TESTING.md: `coresigner/main.py` alone carries twelve
 > such references, and TESTING.md's rules 1, 6 and 7 are only
 > comprehensible with the items they came from. Audit A9 checked that
 > before keeping it. `tasks/audit-ui-and-branding.md`, named below, was
@@ -23,7 +23,7 @@ only; none of them changed.
 
 Measurements were produced by rendering every screen with `ImageDraw.text`
 instrumented to report each string's bounding box, and by replaying the real
-key-handling loops in `corky/main.py` against real BIP39 and codex32 strings.
+key-handling loops in `coresigner/main.py` against real BIP39 and codex32 strings.
 Both are now permanent suites: `tests/test_screen_fit.py` and
 `tests/test_ui_cost.py`.
 
@@ -39,7 +39,7 @@ baseline and current tree differ.
 Fifteen software items can be worked before or independently of that
 validation.
 
-`corky/qrchannel.py`, `corky/seedqr.py` and `corky/filechannel.py` were read
+`coresigner/qrchannel.py`, `coresigner/seedqr.py` and `coresigner/filechannel.py` were read
 in full and contain no stubs or unfinished branches; their gaps are in how
 `main.py` drives them (D11, D12).
 
@@ -47,35 +47,35 @@ in full and contain no stubs or unfinished branches; their gaps are in how
 
 | Item | Evidence | Gate |
 |---|---|---|
-| Camera focus, lighting, capture timing, and end-to-end QR validation | `corky/main.py:48-56`, `CameraQrSource.scan_key` raises, `scan_psbt_frames` returns an empty iterator | M1 |
-| Display and GPIO physical bring-up | `corky/hal.py:52-84`, `DeviceDisplay`/`DeviceButtons` import `st7789` and `RPi.GPIO`; neither has ever run | M0/M2 |
+| Camera focus, lighting, capture timing, and end-to-end QR validation | `coresigner/main.py:48-56`, `CameraQrSource.scan_key` raises, `scan_psbt_frames` returns an empty iterator | M1 |
+| Display and GPIO physical bring-up | `coresigner/hal.py:52-84`, `DeviceDisplay`/`DeviceButtons` import `st7789` and `RPi.GPIO`; neither has ever run | M0/M2 |
 | 320x240 ST7789 geometry and rotation validation | `hw/vendor/st7789.py:3` still says "fixed 240x240"; its `MADCTL` byte is `0x70` (MV set, so landscape is plausible) but nothing proves the geometry on the panel | M0 |
 | Peak RSS, boot budget, and power-off RAM wipe | PLAN A-2, A-8, A-12 | M0/M2 |
 
 The zbar decode step is *not* fully blocked: decoding a QR from an image file
 needs no camera, so the parse-and-cap path (`_scan_key_guarded`,
-`corky/main.py:242-251`) can be exercised against fixture images today.
+`coresigner/main.py:242-251`) can be exercised against fixture images today.
 
 ### Not hardware-blocked, software work that remains
 
 - **S1. At the audit baseline, the image could not load a PSBT at all.**
-  `image/corky.service` ran `main.py --datadir=/run/corky` with no
+  `image/coresigner.service` ran `main.py --datadir=/run/coresigner` with no
   `--stick-dir`, so
-  `Session.stick_dir` is `None` (`corky/main.py:85`) and `state_load`
+  `Session.stick_dir` is `None` (`coresigner/main.py:85`) and `state_load`
   (`471-509`) skips the file channel entirely and polls the QR source, which
   on the device is the stub above. Both v1 transfer channels are therefore
   unreachable in the shipped unit. This is a unit-file line, not hardware.
-- **S2. No passphrase entry UI.** Only `--passphrase` (`corky/main.py:577`).
+- **S2. No passphrase entry UI.** Only `--passphrase` (`coresigner/main.py:577`).
   Named in PLAN's post-v1 todo for M2.
 - **S3. No typed xprv or descriptor entry.** `screens.SEED_MENU_OPTIONS`
   offers "Scan descriptor QR" and "Scan xprv QR" only, and both route to
   `_keymaterial` -> the camera. With SeedQR and codex32-scan, **four of the six
   seed modes dead-end on the device today**, and they fail invisibly (D6).
 - **S4. Secret-bearing RPC parameters travel as argv.** `signer.Rpc.call`
-  (`corky/signer.py:52-59`) builds a `bitcoin-cli` command line; the xprv is an
+  (`coresigner/signer.py:52-59`) builds a `bitcoin-cli` command line; the xprv is an
   argument during `importdescriptors`. The `-stdin` migration is already
   written down in PLAN's hardening backlog.
-- **S5. There is no testnet4 chain option.** `corky/signer.py:40-50` accepts
+- **S5. There is no testnet4 chain option.** `coresigner/signer.py:40-50` accepts
   `test` and maps it to `-testnet` plus `testnet3`; PLAN's hardening backlog
   explicitly says to revisit the mapping for testnet4. This is a compatibility
   gap, not a claim that the current `-testnet` path selects the wrong directory.
@@ -86,7 +86,7 @@ needs no camera, so the parse-and-cap path (`_scan_key_guarded`,
   written.
 - **S8. At the audit baseline there was no branding or splash.** See section 3.
 - **S9. A finished session stops the service.** `main()` returns after one
-  signature, and `image/corky.service` is `Type=simple` with
+  signature, and `image/coresigner.service` is `Type=simple` with
   `Restart=on-failure`, so a clean exit leaves the unit stopped. See D8.
 - **S10. The hardened release image is not implemented.**
   `image/provision.sh:6-7` says the current scripts build only the dev image
@@ -94,10 +94,10 @@ needs no camera, so the parse-and-cap path (`_scan_key_guarded`,
   A-12 additionally requires the RAM-resident image. Building those artifacts
   is software work that can start without the panel. Hardware is needed to
   validate memory, boot time, persistence, and physical radio claims.
-- **S11. There is no user-facing public-descriptor export.** README says Corky
+- **S11. There is no user-facing public-descriptor export.** README says Core Signer
   exports public descriptors for the paper/watch-only half of the backup, and
-  `corky/signer.py:134-137` implements `public_descriptors`, but no production
-  caller in `corky/main.py` displays or transfers them. Repository references
+  `coresigner/signer.py:134-137` implements `public_descriptors`, but no production
+  caller in `coresigner/main.py` displays or transfers them. Repository references
   outside the definition are tests only. Sparrow onboarding therefore lacks a
   device flow even though the underlying Core query exists.
 - **S12. The third transfer channel and removable-media mounting are absent.**
@@ -113,7 +113,7 @@ needs no camera, so the parse-and-cap path (`_scan_key_guarded`,
   driver variant, fixture-image decode tests, and service/mount configuration
   can be written first.
 - **S14. README overstates the file channels as unlimited.** It says the file
-  channels have no size limit, while `corky/filechannel.py:18` enforces a
+  channels have no size limit, while `coresigner/filechannel.py:18` enforces a
   4 MiB cap. The cap is a reasonable hostile-input guard, but the public claim
   must state it.
 - **S15. README names the wrong generated-backup format.** The v1 scope says
@@ -139,19 +139,19 @@ baseline error visibility; D4, D5, D7, D8, and D11-D18 remain.
 ### Readability
 
 **D1. The backup screens run off the bottom of the display.**
-`screens.codex32_share_display` (`corky/screens.py`) draws `len(share)//4`
+`screens.codex32_share_display` (`coresigner/screens.py`) draws `len(share)//4`
 four-character groups, three to a row, from `y = 0.26h` with a `0.13h` row
 pitch. A 64-byte BIP39 seed encodes to a **127-character** codex32 secret =
 32 groups = **11 rows**, ending near `y = 1.56h`. Measured on 320x240, the
 master xprv from the A-19 generate flow (111 chars) draws four of its rows
 between y=242 and y=350 on a 240-tall panel. Both `_tool_backup`
-(`corky/main.py:376-381`) and `_tool_generate` (`411-412`) are therefore
+(`coresigner/main.py:376-381`) and `_tool_generate` (`411-412`) are therefore
 unusable on hardware: the user is told to write down a string whose last third
 is not on the screen.
 
 **D2. The first-address confirmation is off both edges.** `_tool_generate`
 passes `f"first address {address}"` into `codex32_verified`
-(`corky/main.py:417-418`). A bech32 address at `0.06h` measures 390px wide,
+(`coresigner/main.py:417-418`). A bech32 address at `0.06h` measures 390px wide,
 centred: bounding box `[-36 .. 354]` on a 320px screen. The A-19 verification
 step cannot be read at all.
 
@@ -164,7 +164,7 @@ invisible until it is on a panel.
 
 ### Presses per task
 
-Counted by replaying `_collect_words` (`corky/main.py:435-467`) and
+Counted by replaying `_collect_words` (`coresigner/main.py:435-467`) and
 `_codex32_entry_one` (`290-311`) against real strings:
 
 | Task | Presses |
@@ -190,13 +190,13 @@ letters would cut D4's 546 to roughly a third.
 
 **D5. There is no word-level undo.** `B` deletes one letter of the *current*
 prefix. A word committed wrongly at position 3 of 24 cannot be corrected; `C`
-abandons the whole entry (`corky/main.py:460`) and returns to the seed menu
+abandons the whole entry (`coresigner/main.py:460`) and returns to the seed menu
 with all 546 presses lost.
 
 ### Error recovery
 
 **D6. Seed-entry errors flash and vanish.** `state_seed_menu`
-(`corky/main.py:139-142`) shows the FAILED screen and returns immediately;
+(`coresigner/main.py:139-142`) shows the FAILED screen and returns immediately;
 `state_home` repaints home on the next line (`110`) with no button wait.
 `state_tools` does wait (`332`), so the two menus behave differently. On the
 device this is what the user sees when they choose any of the four camera-fed
@@ -249,7 +249,7 @@ repeat after the user re-enters the seed until the file is removed.
 ### The QR return channel
 
 **D11. The signed-PSBT QR is stretched out of square.** `state_sign`
-(`corky/main.py`) renders frames with `qrchannel.frames_to_images` (square, at
+(`coresigner/main.py`) renders frames with `qrchannel.frames_to_images` (square, at
 `box_size=4`) and then calls `img.resize((self.w, self.h))`, 320x240 on the
 primary panel. A QR stretched to 4:3 has non-square modules and interpolated
 edges; the coordinator's scanner has to recover a code that is no longer a
@@ -270,7 +270,7 @@ M1 bring-up rather than guessed at now. They are software work, not
 hardware-blocked design work: the fix is known for both.
 
 **D13. A stalled Core can leave BUSY on screen forever.** `Rpc.call`
-(`corky/signer.py:52-59`) invokes `subprocess.run` without a timeout. Seed
+(`coresigner/signer.py:52-59`) invokes `subprocess.run` without a timeout. Seed
 opening, generation, PSBT description, and signing all paint a BUSY screen
 before making one or more RPC calls, and none polls a button while the child
 process is blocked. A wedged `bitcoin-cli` therefore has no UI recovery path;
@@ -311,17 +311,17 @@ service restart instead of a recoverable screen.
 ## 3. Does the start screen show a Bitcoin Butlers logo and title?
 
 **At the audit baseline: no. After the justified changes below: yes.** The
-current boot path paints `screens.splash` through `corky-splash.service` before
+current boot path paints `screens.splash` through `coresigner-splash.service` before
 bitcoind. Physical-panel rendering remains a hardware bring-up check.
 
 Evidence:
 
-- The baseline's first frame was `screens.home` (`corky/main.py:103`), which
-  painted the word `CORKY` in PIL's default bitmap font plus the tagline.
+- The baseline's first frame was `screens.home` (`coresigner/main.py:103`), which
+  painted the word `CORESIGNER` in PIL's default bitmap font plus the tagline.
   There was no mark and no house name.
 - The baseline had no image asset or generated logo path.
-- The baseline had no boot splash. `image/corky.service` was ordered
-  `After=corky-bitcoind.service`, so nothing paints the panel until bitcoind is
+- The baseline had no boot splash. `image/coresigner.service` was ordered
+  `After=coresigner-bitcoind.service`, so nothing paints the panel until bitcoind is
   up. The display is dark for the whole 60-90s boot budget (PLAN A-8).
 
 ### Proposed design: `screens.splash(w, h)`
@@ -338,7 +338,7 @@ Fits 320x240 and 240x240, renders correctly in one bit.
 |                                          |
 |       B I T C O I N  B U T L E R S       |   house name, letterspaced
 |   -------------------------------------  |   1px rule
-|                CORKY                     |   product, 0.10h
+|                CORESIGNER                     |   product, 0.10h
 |        Core's keys, nothing kept         |   tagline, 0.045h
 +------------------------------------------+
 ```
@@ -356,8 +356,8 @@ Rules that make it monochrome-safe and panel-safe:
    `0.79h` to `0.91h`, so the same code drives the 240x240 pocket build.
 4. **Every string measured** against the canvas before it ships
    (`tests/test_screen_fit.py`), so it cannot repeat D3.
-5. **Shown before bitcoind, not after.** `corky.service` pulls in a
-   `corky-splash.service` ordered `Before=corky-bitcoind.service`, so the brand
+5. **Shown before bitcoind, not after.** `coresigner.service` pulls in a
+   `coresigner-splash.service` ordered `Before=coresigner-bitcoind.service`, so the brand
    is on the panel for the whole boot instead of a dark screen.
 
 ---
@@ -376,10 +376,10 @@ broader image/onboarding work (S10-S13), or hardware validation.
 2. **Error visibility**, the seed menu waits for a key on failure like the
    tools menu does (D6), and the review screen says why it will not sign yet
    (D9). Guarded by `tests/test_ui_cost.py`.
-3. **Branding**, `screens.splash` and `image/corky-splash.service` per the
+3. **Branding**, `screens.splash` and `image/coresigner-splash.service` per the
    design above; the signing unit activates the splash, and the render uses
    one cream foreground tone on the ink ground.
-4. **The USB channel**, `image/corky.service` passes `--stick-dir=/mnt/usb`
+4. **The USB channel**, `image/coresigner.service` passes `--stick-dir=/mnt/usb`
    and `provision.sh` creates that directory (S1). Mounting the stick there is
    still an operator step; until it is mounted the directory is empty and the
    flow behaves as it does today, so this closes the code half of S1 only.
@@ -398,7 +398,7 @@ path are untouched; `tests/test_integrity.py` still passes on the pinned hashes.
 
 | Operator requirement | Evidence |
 |---|---|
-| Reassess “no software work remains” from PLAN, README, and every `corky/*.py` | Section 1 separates four hardware-validation groups, fifteen software items, and explicit out-of-scope/watch items. |
+| Reassess “no software work remains” from PLAN, README, and every `coresigner/*.py` | Section 1 separates four hardware-validation groups, fifteen software items, and explicit out-of-scope/watch items. |
 | Judge 320x240, four-button usability by presses, recovery, readability, and traps | Section 2 records measured entry and navigation costs plus named defects D1-D18, including the A-15b control-surface mismatch, one-way flows, an indefinite BUSY state, unverified backups, misleading recovery/shutdown controls, silent teardown failure, and unhandled IO/RPC errors. |
 | Find boot/splash branding and propose a monochrome-safe 320x240 design | Section 3 traces the baseline boot path, specifies the design, and states the current post-change path. |
 | Report before changing code | Audit commit `1187e3a` precedes implementation commit `c81b528`. |

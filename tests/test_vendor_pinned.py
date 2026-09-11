@@ -26,7 +26,7 @@ against a branch that moves:
     st7789.py differs, and says so at the top
 
 (It was 15 of 17 until ili9341.py went, hours later: a driver for a 2.4"
-panel no code path could select, kept for a board Corky does not ship.)
+panel no code path could select, kept for a board Core Signer does not ship.)
 
 Anybody who does not want to take that on trust can repeat it:
     python3 tests/test_vendor_pinned.py --verify-upstream

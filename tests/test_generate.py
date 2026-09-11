@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 fails = []
@@ -87,18 +87,18 @@ def main():
         # imports random internally; screens never sees entropy).
         # A-22: codex32 and seedqr left main with the rest of Layer 1.
         for mod in ["signer", "filechannel", "qrchannel", "main", "hal"]:
-            src = (ROOT / ("corky/%s.py" % mod)).read_text()
+            src = (ROOT / ("coresigner/%s.py" % mod)).read_text()
             for bad_import in ["os.urandom", "import random", "import secrets"]:
                 if bad_import in src:
                     bad(f"{mod}.py contains {bad_import}")
-        # A-22: shim/ is gone. There is no shipped module outside corky/.
+        # A-22: shim/ is gone. There is no shipped module outside coresigner/.
         ok("no Python RNG in any shipped module")
 
         # A-19b: Core's RNG is the ONLY way to create a key here, and the
         # README says so. What makes that true is that Core offers no door
         # for raw entropy: `sethdseed` went with the legacy wallets. Dice
         # cannot make a key without one, because turning rolls into a key
-        # is HMAC-SHA512 and nothing in corky/ may import it.
+        # is HMAC-SHA512 and nothing in coresigner/ may import it.
         #
         # If a future Core reopens that door, this fails, and the dice
         # question is worth reopening with it. That is the point of the

@@ -1,6 +1,6 @@
 """The row you press must be the thing that happens.
 
-Corky's menus are a list of labels in `screens.py` and an `if selected ==
+Core Signer's menus are a list of labels in `screens.py` and an `if selected ==
 N` cascade in `main.py`. Nothing joined the two, so on 2026-09-05 the
 BACKUP menu drew "On paper" as row 0 and ran the FILE backup for it.
 Choosing paper asked for an encryption passphrase, which is the "back
@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import hal                          # noqa: E402
-import main as corky_main           # noqa: E402
+import main as coresigner_main           # noqa: E402
 import screens                      # noqa: E402
 
 fails = []
@@ -59,7 +59,7 @@ class NullRpc:
 
 
 def session(script):
-    return corky_main.Session(NullDisplay(), hal.DevButtons(script),
+    return coresigner_main.Session(NullDisplay(), hal.DevButtons(script),
                               NullRpc(), animate=False, on_device=False)
 
 
@@ -103,11 +103,11 @@ def run_key_menu(sess):
     ran = []
     recorder(sess, ("_export", "_browse_addresses", "_backup_paper",
                     "_discard"), ran)
-    sess.state_key_menu("corky")
+    sess.state_key_menu("coresigner")
     return ran[0] if ran else "nothing"
 
 
-corky_main.signer.master_fingerprint = lambda *a, **k: "73c5da0a"
+coresigner_main.signer.master_fingerprint = lambda *a, **k: "73c5da0a"
 pin("KEY", screens.KEY_MENU_OPTIONS, run_key_menu, {
     "Export public key": "_export",
     "Receiving addresses": "_browse_addresses",
@@ -144,11 +144,11 @@ def run_export(sess):
     # A finished export goes on to the addresses, which is D2's decision
     # and not this suite's business: what is under test is WHICH route ran.
     sess._page_addresses = lambda *a, **k: None
-    sess._export_one("corky", "wpkh")
+    sess._export_one("coresigner", "wpkh")
     return ran[0] if ran else "nothing"
 
 
-corky_main.signer.export_descriptor = lambda *a, **k: "wpkh(tpubX)#aaaaaaaa"
+coresigner_main.signer.export_descriptor = lambda *a, **k: "wpkh(tpubX)#aaaaaaaa"
 pin("EXPORT AS", screens.EXPORT_OPTIONS, run_export, {
     "QR code": "_export_qr",
     "Text to type": "_export_text",
@@ -162,7 +162,7 @@ pin("EXPORT AS", screens.EXPORT_OPTIONS, run_export, {
 # which is the two-lists shape this whole file exists for. They now share
 # `screens.script_rows`, and this is what says so.
 
-SCRIPT_ROWS = screens.script_rows(corky_main.signer.EXPORT_ORDER, "m/48'/0'/0'/2'")
+SCRIPT_ROWS = screens.script_rows(coresigner_main.signer.EXPORT_ORDER, "m/48'/0'/0'/2'")
 
 
 def _stub(target, **values):
@@ -183,11 +183,11 @@ def run_script_menu(sess):
     ran = []
     recorder(sess, ("_export_one", "_export_cosigner", "_export_advanced"),
              ran)
-    undo = _stub(corky_main.signer,
-                 available_kinds=lambda *a, **k: corky_main.signer.EXPORT_ORDER,
+    undo = _stub(coresigner_main.signer,
+                 available_kinds=lambda *a, **k: coresigner_main.signer.EXPORT_ORDER,
                  cosigner_path=lambda *a, **k: "48h/0h/0h/2h")
     try:
-        sess._export("corky")
+        sess._export("coresigner")
     finally:
         undo()
     return ran[0] if ran else "nothing"
@@ -209,10 +209,10 @@ def run_cosigner(sess):
     # The file route calls no method of its own, so watch the channel
     # chooser instead: reaching it IS the file branch.
     sess._choose_channel = lambda: ran.append("file")
-    undo = _stub(corky_main.signer,
+    undo = _stub(coresigner_main.signer,
                  cosigner_qr=lambda *a, **k: "wsh(x)#aaaaaaaa")
     try:
-        sess._export_cosigner("corky", "48h/0h/0h/2h")
+        sess._export_cosigner("coresigner", "48h/0h/0h/2h")
     finally:
         undo()
     return ran[0] if ran else "nothing"
@@ -227,16 +227,16 @@ def run_advanced(sess):
     recorder(sess, ("_export_cosigner", "_export_typed_path"), ran)
     # The account row opens a menu rather than calling a handler, so the
     # SCREEN is what says the right row ran.
-    undo = _stub(corky_main.signer,
+    undo = _stub(coresigner_main.signer,
                  cosigner_path=lambda *a, **k: "48h/0h/0h/1h")
-    # The REAL one, captured first: corky_main.screens is this module's
+    # The REAL one, captured first: coresigner_main.screens is this module's
     # own `screens`, so a stub that calls it by name calls itself.
     real = screens.account_menu
-    undo2 = _stub(corky_main.screens,
+    undo2 = _stub(coresigner_main.screens,
                   account_menu=lambda *a, **k: (ran.append("account")
                                                 or real(*a, **k)))
     try:
-        sess._export_advanced("corky")
+        sess._export_advanced("coresigner")
     except hal.ScriptExhausted:
         pass            # the account menu asks again; the row still ran
     finally:
@@ -274,7 +274,7 @@ pin("TOOLS", screens.TOOLS_OPTIONS, run_tools, {
 # wallet imported as a bare descriptor need not hold any of the four
 # script policies, and signer.available_kinds says so in its own
 # docstring (found reading main.py, 2026-09-07).
-sess = corky_main.Session(NullDisplay(), hal.DevButtons("dudua"),
+sess = coresigner_main.Session(NullDisplay(), hal.DevButtons("dudua"),
                           rpc=NullRpc())
 try:
     got = sess._pick(lambda sel: None, 0)
@@ -307,9 +307,9 @@ class Painted:
 
 
 disp2 = Painted()
-sess2 = corky_main.Session(disp2, hal.DevButtons("a"), rpc=NoPolicies())
+sess2 = coresigner_main.Session(disp2, hal.DevButtons("a"), rpc=NoPolicies())
 try:
-    sess2._export("corky-x")
+    sess2._export("coresigner-x")
 except ZeroDivisionError:
     bad("_export still reaches the empty menu")
 except hal.ScriptExhausted:
@@ -335,9 +335,9 @@ else:
 # Fixed alongside the export menu; missed on the first pass through it
 # (2026-09-07).
 disp3 = Painted()
-sess3 = corky_main.Session(disp3, hal.DevButtons("a"), rpc=NoPolicies())
+sess3 = coresigner_main.Session(disp3, hal.DevButtons("a"), rpc=NoPolicies())
 try:
-    sess3._browse_addresses("corky-x")
+    sess3._browse_addresses("coresigner-x")
 except IndexError:
     bad("_page_addresses still indexes an empty policy list, which ends "
         "the process")
@@ -372,11 +372,11 @@ class Keys:
     pressed = read
 
 
-sess4 = corky_main.Session(NullDisplay(), Keys("b"), rpc=NullRpc())
+sess4 = coresigner_main.Session(NullDisplay(), Keys("b"), rpc=NullRpc())
 try:
     got = sess4._state_signed("1 input signed")
     ok("BACK leaves the signed screen and goes home") \
-        if got == corky_main.TO_HOME else \
+        if got == coresigner_main.TO_HOME else \
         bad(f"BACK on the signed screen returned {got!r}, not TO_HOME")
 except hal.ScriptExhausted:
     bad("BACK is still dead on the signed screen: the loop repainted and "
@@ -386,7 +386,7 @@ except hal.ScriptExhausted:
 # A real 111-character master key is three pages, so two DOWNs reach the
 # last one and A finishes.
 _pages = len(screens.text_pages("x" * 111))
-sess5 = corky_main.Session(NullDisplay(), Keys("d" * (_pages - 1) + "a"),
+sess5 = coresigner_main.Session(NullDisplay(), Keys("d" * (_pages - 1) + "a"),
                            rpc=NullRpc())
 try:
     got5 = sess5._show_backup("x" * 111, "KEY  ABCD1234")
@@ -399,7 +399,7 @@ except hal.ScriptExhausted:
 # did. Its only caller is guarded, so this is defence rather than a live
 # bug; three instances of one mistake is enough to stop finding a fourth
 # by accident.
-if corky_main._next_kind("wpkh", "r", ()) != "wpkh":
+if coresigner_main._next_kind("wpkh", "r", ()) != "wpkh":
     bad("_next_kind on an empty policy list does not return the kind it "
         "was given")
 else:

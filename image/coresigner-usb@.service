@@ -1,6 +1,6 @@
 [Unit]
-Description=Mount a USB stick at /mnt/usb for Corky's PSBT channel
-# Started and stopped by udev (see 99-corky-usb.rules) as sticks come and go.
+Description=Mount a USB stick at /mnt/usb for Core Signer's PSBT channel
+# Started and stopped by udev (see 99-coresigner-usb.rules) as sticks come and go.
 
 [Service]
 Type=oneshot

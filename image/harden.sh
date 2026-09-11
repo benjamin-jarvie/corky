@@ -1,7 +1,7 @@
 #!/bin/bash
-# Corky: turn a dev image into a signing image. ONE WAY.
+# Core Signer: turn a dev image into a signing image. ONE WAY.
 #
-#   sudo bash /opt/corky/image/harden.sh
+#   sudo bash /opt/coresigner/image/harden.sh
 #
 # provision.sh builds a board you can work on: it keeps SSH, the radios and
 # the serial console, because without them you cannot develop on it. That is
@@ -13,7 +13,7 @@
 #   - there is no serial console on the GPIO header
 #   - the only way in is the panel, the buttons and the camera
 #
-# TO UNDO IT: `sudo bash /opt/corky/image/unharden.sh`, and reboot.
+# TO UNDO IT: `sudo bash /opt/coresigner/image/unharden.sh`, and reboot.
 #
 # That line used to read "to undo it you reflash the card, that is the
 # point", and it was true when it was written and false by 2026-09-06,
@@ -59,8 +59,8 @@ for ov in disable-wifi disable-bt; do
 done
 
 echo "== 2/5 drivers cannot load"
-cat > /etc/modprobe.d/corky-no-radio.conf <<'MODEOF'
-# Corky: this device has no use for a radio.
+cat > /etc/modprobe.d/coresigner-no-radio.conf <<'MODEOF'
+# Core Signer: this device has no use for a radio.
 blacklist brcmfmac
 blacklist brcmutil
 blacklist cfg80211
@@ -76,8 +76,8 @@ MODEOF
 echo "== 3/5 no firmware for the chip"
 # Moved, not deleted, so the change is auditable and a reflash is not the
 # only way to inspect what was there.
-if [ -d /lib/firmware/brcm ] && [ ! -d /lib/firmware/brcm.corky-disabled ]; then
-    mv /lib/firmware/brcm /lib/firmware/brcm.corky-disabled
+if [ -d /lib/firmware/brcm ] && [ ! -d /lib/firmware/brcm.coresigner-disabled ]; then
+    mv /lib/firmware/brcm /lib/firmware/brcm.coresigner-disabled
 fi
 
 echo "== 4/5 nothing brings a network up, and nothing offers a login"
@@ -97,6 +97,6 @@ done
 
 echo
 echo "Done. REBOOT, then check it with:"
-echo "  sudo bash /opt/corky/image/leak-check.sh"
+echo "  sudo bash /opt/coresigner/image/leak-check.sh"
 echo "You will have to read that on the HDMI console or the panel, because"
 echo "SSH is gone."

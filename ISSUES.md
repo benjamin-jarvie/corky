@@ -62,7 +62,7 @@ naming the third combination is Ben's call. Recorded in
 
 `image/PINS` carries `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
 `DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"` and
-`CORKY_COMMIT="HEAD"`. The README describes the OS hash honestly as
+`CORESIGNER_COMMIT="HEAD"`. The README describes the OS hash honestly as
 "recorded on first flash", so this is a gap and not a false claim, but a
 tester's card cannot be reproduced from that file as it stands. Audit
 A7 owns it.
@@ -99,7 +99,7 @@ ordinary inputs (PLAN A-21).
 - **I-1 to I-11**, the two-axis reviews of 2026-09-02 and 2026-09-03, and
   the test gaps they found. All fixed. The rules they produced are
   TESTING.md 1 to 11; the cropped-QR and silent-power-off pair is rule 7,
-  and the zxing frame that Corky's own decoder could read is rule 8.
+  and the zxing frame that Core Signer's own decoder could read is rule 8.
 - **D17** (teardown failure is silent) and **D18** (load, review and
   signing errors bypass UI recovery). Both fixed. `Session.run` reports a
   failed teardown as "key not cleared" instead of discarding it, and

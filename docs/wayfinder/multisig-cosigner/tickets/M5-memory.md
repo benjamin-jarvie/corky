@@ -24,7 +24,7 @@ numbers or one conservative one.
 **M3 made this worse and it is the reason to measure rather than
 estimate.** The review screen now shows the threshold, which means
 `witness_script` comes back out of `_REVIEW_DROPS`. That field was
-dropped deliberately: dropping the review's unread fields took Corky's
+dropped deliberately: dropping the review's unread fields took Core Signer's
 own process from 56MB to 45MB. A witness script per input, at 150
 inputs, is 150 scripts back in the decoded tree, on the board where the
 headroom between 175 inputs and 200 was 36MB. Measure with the undrop in
@@ -68,10 +68,10 @@ rather than a search.
 
     python3 m0/m0_gate.py --inputs 150 --quorum 2-of-3
 
-It builds a watch-only 2-of-3 holding Corky's cosigner key and two
+It builds a watch-only 2-of-3 holding Core Signer's cosigner key and two
 strangers, funds it, and signs a share through the path that SHIPS:
 `sign_psbt(..., xfp=…)` falls through to `sign_at_told_paths`, which
-imports the branch the PSBT names into a scratch wallet. Corky's own
+imports the branch the PSBT names into a scratch wallet. Core Signer's own
 session wallet keeps the four standard policies, which is what a loaded
 key really has.
 
@@ -153,8 +153,8 @@ MemAvailable never below 100MB.
 
 Ben turned the board on, so this stopped being a prediction. Run on a
 Pi Zero 2 W Rev 1.0, 447MB, swap off (`/proc/swaps` empty), the device's
-own `corky`, `corky-bitcoind` and `corky-splash` stopped for the
-measurement and started again after. No key was loaded; `/run/corky` was
+own `coresigner`, `coresigner-bitcoind` and `coresigner-splash` stopped for the
+measurement and started again after. No key was loaded; `/run/coresigner` was
 empty, so nothing was discarded. SoC peaked at 42.9C and
 `vcgencmd get_throttled` read `0x0` throughout.
 

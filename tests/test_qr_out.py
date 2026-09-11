@@ -1,7 +1,7 @@
 """The QR return channel: what the coordinator's scanner actually sees.
 
 This suite exists because the review found D11 and D12 shipped untested.
-A signed PSBT leaves Corky as pixels on a panel, so the properties that
+A signed PSBT leaves Core Signer as pixels on a panel, so the properties that
 matter are geometric, not logical: modules must stay square, the quiet zone
 must survive, and a multi-frame animation must repeat at a steady rate.
 
@@ -14,12 +14,12 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 from PIL import Image  # noqa: E402
 import qrchannel  # noqa: E402
 import screens  # noqa: E402
 import hal  # noqa: E402
-import main as corky_main  # noqa: E402
+import main as coresigner_main  # noqa: E402
 
 fails = []
 
@@ -195,7 +195,7 @@ class _Buttons:
         return "a"
 
 
-boom = corky_main.Session(_Display(), _Buttons(), _Rpc())
+boom = coresigner_main.Session(_Display(), _Buttons(), _Rpc())
 boom.animate = False
 real_frames = qrchannel.frames_to_images
 
@@ -213,7 +213,7 @@ try:
                                              "added": True,
                                              "psbt": _fake}
     try:
-        outcome = boom._sign_and_deliver(_fake, None, "corky")
+        outcome = boom._sign_and_deliver(_fake, None, "coresigner")
     finally:
         _signer.sign_psbt = real_sign
 except qrchannel.QrChannelError:
@@ -223,7 +223,7 @@ except qrchannel.QrChannelError:
 finally:
     qrchannel.frames_to_images = real_frames
 
-if outcome == corky_main.TO_HOME:
+if outcome == coresigner_main.TO_HOME:
     ok("a QR that cannot be shown reports the failure and keeps the session, "
        "rather than throwing the signature away")
 elif outcome is not None:
@@ -265,7 +265,7 @@ class FakeRpc:
 frames = [f"ur:crypto-psbt/{i}-4/abcdefgh" for i in range(4)]
 display = CountingDisplay()
 buttons = BlockingButtons()
-session = corky_main.Session(display, buttons, FakeRpc())
+session = coresigner_main.Session(display, buttons, FakeRpc())
 session.animate = True             # the path that ships to the device
 
 worker = threading.Thread(target=session._show_qr_loop,
@@ -300,7 +300,7 @@ else:
 # A single-frame PSBT is a static QR, and must wait rather than animate.
 single_display = CountingDisplay()
 single_buttons = hal.DevButtons("a")
-single = corky_main.Session(single_display, single_buttons, FakeRpc())
+single = coresigner_main.Session(single_display, single_buttons, FakeRpc())
 single.animate = True
 single._show_qr_loop([frames[0]])
 if len(single_display.shown) != 1:
@@ -359,10 +359,10 @@ def _panel_after_core_refuses():
 
     hal.DevButtons.read = slow_read
     _painted.clear()
-    sess = corky_main.Session(_Disp(), hal.DevButtons("aa"), rpc=object(),
+    sess = coresigner_main.Session(_Disp(), hal.DevButtons("aa"), rpc=object(),
                               animate=True)
     try:
-        sess._confirm_typed_key("tprvWHATEVER", "corky-x", "73c5da0a")
+        sess._confirm_typed_key("tprvWHATEVER", "coresigner-x", "73c5da0a")
     finally:
         signer.opens_wallet = real_opens
         hal.DevButtons.read = real_read
@@ -469,12 +469,12 @@ for _W, _H in ((320, 240), (240, 240)):
 # The worst descriptor of 120 had 7 of 8 masks readable, which is why
 # showing all eight is the fix.
 _painted.clear()
-_sess = corky_main.Session(_Disp(), hal.DevButtons("a"), rpc=object(),
+_sess = coresigner_main.Session(_Disp(), hal.DevButtons("a"), rpc=object(),
                            animate=False)
 _DESC = ("wpkh([73c5da0a/84h/1h/0h]tpubDC3Amaq5HtW8qxGoTwyDBaD12LoZ6xXuHGKo3"
          "34cLm2yJAze7kU9fmKkfYgMy6jvCRUxQxQ9FruBfEytY5sQE5RBex8X4nEY8W26B9"
          "KYvzF/0/*)#85lfyknl")
-_took = _sess._export_qr("corky", _DESC, "wpkh")
+_took = _sess._export_qr("coresigner", _DESC, "wpkh")
 _distinct = {i.tobytes() for i in _painted}
 if len(_painted) != len(qrchannel.QR_MASKS):
     bad(f"the export screen painted {len(_painted)} frame(s), not one per "

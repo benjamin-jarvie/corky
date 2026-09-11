@@ -75,7 +75,7 @@ git history is where the detail belongs.
 
 The ticket flagged it for deletion and said to check the numbering
 first. Checked: the D, S and I numbering is cited from **shipped code**
-(twelve references in `corky/main.py` alone), from `tests/`, and from
+(twelve references in `coresigner/main.py` alone), from `tests/`, and from
 TESTING.md rules 1, 6 and 7, which are only comprehensible with the
 items they came from. Deleting it orphans all of that.
 

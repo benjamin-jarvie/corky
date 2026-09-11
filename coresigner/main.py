@@ -1,4 +1,4 @@
-"""Corky's session state machine: the program the device boots into.
+"""Core Signer's session state machine: the program the device boots into.
 
 States. Every tile is a JOB, not a device (Ben, 2026-09-05). The camera is
 a means: Sign uses it for a transaction, Keys for a key, Tools to check an
@@ -25,7 +25,7 @@ in dev mode it reads payloads from files so every state is exercisable
 without hardware.
 
 Dev mode:
-    python3 corky/main.py --dev --datadir <dir> --chain regtest \
+    python3 coresigner/main.py --dev --datadir <dir> --chain regtest \
         --script "<keys>" [--stick-dir DIR] [--qr-psbt FILE]
         [--qr-key FILE] [--frames-dir DIR]
 Keys (PLAN A-15c, eight controls): u/d/l/r = d-pad, p = centre press,
@@ -48,8 +48,8 @@ import screens
 import filechannel
 import qrchannel
 import hal
-# The QR sources moved to corky/qrsource.py on 2026-09-08. They are the
-# one place in Corky where the dev harness substitutes for hardware,
+# The QR sources moved to coresigner/qrsource.py on 2026-09-08. They are the
+# one place in Core Signer where the dev harness substitutes for hardware,
 # which is a real seam; the other groupings inside Session are not,
 # because they all reach into the same shared session state. Only the two
 # main() picks between are imported: re-exporting the base class as well
@@ -115,7 +115,7 @@ def _classify_qr(payload):
 #: cliff between 175 and 200 is 36MB, so the line is drawn below it
 #: rather than on it.
 #:
-#: This is bitcoind's memory and not Corky's. Corky's own process was cut
+#: This is bitcoind's memory and not Core Signer's. Core Signer's own process was cut
 #: from 56MB to 45MB by not reading previous transactions it never used,
 #: and the headroom moved 2MB. No further work of ours raises this
 #: number; a board with more RAM does.
@@ -165,7 +165,7 @@ SIGN_AGAIN, POWER_OFF, TO_HOME = "again", "off", "home"
 #:   has signed                                             1000
 #:
 #: Three facts fall out of that. The declared `range` in
-#: signer._desc_entry is [0, 200] and does not bind, because Corky sets
+#: signer._desc_entry is [0, 200] and does not bind, because Core Signer sets
 #: no keypool and Core's default is 1000. The two ways in are bounded by
 #: different things and agree only at those defaults. And the reach GROWS
 #: with use, because Core tops the keypool up ahead of the highest index
@@ -189,9 +189,9 @@ ADDRESS_CHECK_DEPTH = 1000
 BACK_TO_CHANNELS = "channels"
 
 # How the board is halted. Under systemd the poweroff is the whole teardown:
-# it stops corky-bitcoind.service by that unit's own ExecStop, which runs
+# it stops coresigner-bitcoind.service by that unit's own ExecStop, which runs
 # bitcoin-cli stop and waits up to TimeoutStopSec=30. FALLBACK_HALT_CMD and
-# an explicit node stop cover a board that runs Corky without systemd.
+# an explicit node stop cover a board that runs Core Signer without systemd.
 HALT_CMD = ["systemctl", "poweroff"]
 FALLBACK_HALT_CMD = ["halt", "-p"]
 
@@ -346,18 +346,18 @@ class Session:
         """Cover the screen, then halt the board and its node (I-2).
 
         Leaving Python is not a power off. bitcoind keeps running under its
-        own unit, /run/corky stays mounted, and the ST7789 holds its last
+        own unit, /run/coresigner stays mounted, and the ST7789 holds its last
         frame, so the operator reads POWER OFF on a device that is still
         live and still holding a wallet-shaped ramdisk.
 
         Under systemd the poweroff is the whole teardown, so this does not
-        stop the node itself: corky-bitcoind.service does that in its own
+        stop the node itself: coresigner-bitcoind.service does that in its own
         ExecStop, in shutdown order, with a 30 second timeout. Without
         systemd nothing else will, so the fallback stops the node first.
 
         The ramdisk is NOT wiped here. close_session already deletes the
         wallet directory, which is the only secret-bearing path under
-        /run/corky, and the rest is a wallet-only node's own state. The
+        /run/coresigner, and the rest is a wallet-only node's own state. The
         tmpfs itself dies with power. Cold-boot RAM remanence stays an M3
         question.
 
@@ -502,7 +502,7 @@ class Session:
         SIGN ANOTHER repeats, back goes home (D7, key still loaded), POWER
         OFF ends the session.
 
-        Nothing in here may take the process down. `corky.service` has
+        Nothing in here may take the process down. `coresigner.service` has
         `Restart=on-failure`, so an exception here becomes a restart loop
         that lasts as long as the file is on the stick (D18).
         """
@@ -829,7 +829,7 @@ class Session:
         The echo is M2's, and the reason is M1's: a typed path is the only
         route to a blinded xpub, and blinding is where a typo cannot be
         recovered from. Core builds the checksum, so the thing being
-        checked is Core's reading of the path and not Corky's.
+        checked is Core's reading of the path and not Core Signer's.
         """
         typed = self._text_entry("DERIVATION  PATH", "path")
         if not typed:
@@ -1179,7 +1179,7 @@ class Session:
         Flat, with no LOAD A KEY screen between (Ben, 2026-09-05). The
         order matches screens.KEYS_ACTIONS: make one, or bring one in two
         ways. PLAN A-22: every way in hands Core a string it understands,
-        and Corky transforms none of them.
+        and Core Signer transforms none of them.
 
         Restore from file went with the encrypted backup (A-24). Paper is
         the only way the key leaves, so paper is the only way it comes
@@ -1468,7 +1468,7 @@ class Session:
         when you want it.
 
         A-19 still holds underneath: `createwallet` makes the master key
-        with Core's own RNG and Corky signs with that very wallet. Nothing
+        with Core's own RNG and Core Signer signs with that very wallet. Nothing
         of ours sits between Core's RNG and your paper.
         """
         stop = self._busy("Bitcoin Core is generating your key…")
@@ -1528,7 +1528,7 @@ class Session:
 
         Page by page, because a page is what the writer copied and a
         mistake should cost one page and not all 111 characters. The
-        per-character comparison is Corky's, because only Corky is holding
+        per-character comparison is Core Signer's, because only Core Signer is holding
         both strings; the verdict on the WHOLE key is Core's, and it is
         put as "do the addresses this key derives match the ones this
         wallet hands out". Both must agree before this says the paper is
@@ -1550,14 +1550,14 @@ class Session:
         """Core reads what was typed and says whether it is the same key.
 
         The pages already matched character by character, so a comparison
-        against Corky's own copy of the backup could only ever agree: it
+        against Core Signer's own copy of the backup could only ever agree: it
         would ask whether a string equals itself. Audit A6 (2026-09-06)
         deleted that comparison and every suite stayed green, which is the
         proof it was checking nothing.
 
         So the question is put to the wallet instead. Core derives receive
         addresses from what was typed, Core reports what the loaded wallet
-        hands out, and Corky compares the two lists Core returned (PLAN
+        hands out, and Core Signer compares the two lists Core returned (PLAN
         A-11). That is the claim the screen makes.
         """
         stop = self._busy("Bitcoin Core is reading what you typed…")

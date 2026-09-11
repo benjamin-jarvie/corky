@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
-import main as corky_main  # noqa: E402
+sys.path.insert(0, str(ROOT / "coresigner"))
+import main as coresigner_main  # noqa: E402
 import qrsource  # noqa: E402
 import screens  # noqa: E402
 
@@ -80,11 +80,11 @@ class FakeRpc:
 
 
 # --- boot splash: the signing unit must activate the ordered unit ---------
-service = (ROOT / "image" / "corky.service").read_text()
-if "Wants=corky-splash.service" not in service:
-    bad("corky.service orders after the splash but does not activate it")
+service = (ROOT / "image" / "coresigner.service").read_text()
+if "Wants=coresigner-splash.service" not in service:
+    bad("coresigner.service orders after the splash but does not activate it")
 else:
-    ok("enabling corky.service also activates the brand splash")
+    ok("enabling coresigner.service also activates the brand splash")
 
 
 # --- boot splash: the dedicated entrypoint paints exactly one frame -------
@@ -98,19 +98,19 @@ class SplashDisplay:
         painted.append(image)
 
 
-import splash as corky_splash  # noqa: E402  (dedicated boot entrypoint)
+import splash as coresigner_splash  # noqa: E402  (dedicated boot entrypoint)
 
 real_argv = sys.argv
-real_dev_display = corky_splash.hal.DevDisplay
+real_dev_display = coresigner_splash.hal.DevDisplay
 real_splash = screens.splash
 try:
     sys.argv = ["splash.py", "--dev", "--frames-dir", "unused"]
-    corky_splash.hal.DevDisplay = lambda _path: SplashDisplay()
+    coresigner_splash.hal.DevDisplay = lambda _path: SplashDisplay()
     screens.splash = lambda w, h: ("splash", w, h)
-    corky_splash.main()
+    coresigner_splash.main()
 finally:
     sys.argv = real_argv
-    corky_splash.hal.DevDisplay = real_dev_display
+    coresigner_splash.hal.DevDisplay = real_dev_display
     screens.splash = real_splash
 
 if painted != [("splash", 320, 240)]:
@@ -127,13 +127,13 @@ try:
         lambda _w, _h, page_text, _label, page, pages, actions_sel=0:
         backup_calls.append((page_text, page, pages)) or "backup")
     buttons = ScriptedButtons("aac")
-    session = corky_main.Session(RecordingDisplay(), buttons, FakeRpc())
+    session = coresigner_main.Session(RecordingDisplay(), buttons, FakeRpc())
     completed = session._show_backup("x" * 97, "KEY  D2B7E45C")
     abort_calls = list(backup_calls)
 
     backup_calls.clear()
     success_buttons = ScriptedButtons("aa")
-    success_session = corky_main.Session(
+    success_session = coresigner_main.Session(
         RecordingDisplay(), success_buttons, FakeRpc())
     succeeded = success_session._show_backup("y" * 49, "KEY  D2B7E45C")
     success_calls = list(backup_calls)
@@ -141,7 +141,7 @@ try:
     # The last page's bar is live: DONE is pre-selected and CHECK IT is
     # one press right of it. Both must reach the caller.
     backup_calls.clear()
-    check_session = corky_main.Session(
+    check_session = coresigner_main.Session(
         RecordingDisplay(), ScriptedButtons("ara"), FakeRpc())
     chose_check = check_session._show_backup("z" * 49, "KEY  D2B7E45C")
 
@@ -151,7 +151,7 @@ try:
     # backup, and the user meant "next page". The `continue` that stops
     # that had no assertion behind it until 2026-09-08.
     backup_calls.clear()
-    down_session = corky_main.Session(
+    down_session = coresigner_main.Session(
         RecordingDisplay(), ScriptedButtons("dda"), FakeRpc())
     down_result = down_session._show_backup("w" * 49, "KEY  D2B7E45C")
     down_calls = list(backup_calls)
@@ -200,7 +200,7 @@ display = named_screens(RecordingDisplay())
 # script runs out.
 buttons = ScriptedButtons(["r", "a"] + ["d", "a"] + ["a"] + ["a"] +
                           ["c"] + ["d", "r", "a", "a"])
-session = corky_main.Session(display, buttons, FakeRpc())
+session = coresigner_main.Session(display, buttons, FakeRpc())
 session.qr = qrsource.CameraQrSource()
 raised = None
 try:
@@ -242,7 +242,7 @@ class Recorder:
 
 
 def entry(keys):
-    sess = corky_main.Session(Recorder(), ScriptedButtons(keys), FakeRpc())
+    sess = coresigner_main.Session(Recorder(), ScriptedButtons(keys), FakeRpc())
     return sess._text_entry("MASTER  PRIVATE  KEY", "xprv", secret=True)
 
 
@@ -299,11 +299,11 @@ for label, got, budget in (
 # because a change that quietly restored the old behaviour would double
 # the numbers above and still read as a small diff.
 _pages = screens.charset_pages("xprv")
-if corky_main._grid_move("d", _pages, 0, 24) != (1, 0):
+if coresigner_main._grid_move("d", _pages, 0, 24) != (1, 0):
     bad("DOWN from the last row does not cross to the next page")
-elif corky_main._grid_move("u", _pages, 1, 3) != (0, 27):
+elif coresigner_main._grid_move("u", _pages, 1, 3) != (0, 27):
     bad("UP from the top row does not cross to the previous page")
-elif corky_main._grid_move("d", _pages, 1, 24) != (1, 25):
+elif coresigner_main._grid_move("d", _pages, 1, 24) != (1, 25):
     bad("DOWN past the last page moved off the end of the charset")
 else:
     ok("up and down cross a page boundary and stop at the charset's ends")
@@ -328,14 +328,14 @@ class Rec:
 
 def signed_outcome(keys):
     d = Rec()
-    sess = corky_main.Session(d, ScriptedButtons(list(keys)), FakeRpc())
+    sess = coresigner_main.Session(d, ScriptedButtons(list(keys)), FakeRpc())
     return sess._state_signed("x.psbt written")
 
 
-cases = [("a", corky_main.SIGN_AGAIN, "A on the default choice signs another"),
-         ("ra", corky_main.POWER_OFF, "R then A powers off"),
-         ("rla", corky_main.SIGN_AGAIN, "R then L returns to sign another"),
-         ("c", corky_main.POWER_OFF, "C on the result powers off")]
+cases = [("a", coresigner_main.SIGN_AGAIN, "A on the default choice signs another"),
+         ("ra", coresigner_main.POWER_OFF, "R then A powers off"),
+         ("rla", coresigner_main.SIGN_AGAIN, "R then L returns to sign another"),
+         ("c", coresigner_main.POWER_OFF, "C on the result powers off")]
 for keys, want, why in cases:
     got = signed_outcome(keys)
     if got != want:

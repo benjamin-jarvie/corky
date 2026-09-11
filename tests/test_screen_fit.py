@@ -16,7 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 from PIL import ImageDraw  # noqa: E402
 import screens  # noqa: E402
 import qrchannel  # noqa: E402
@@ -120,7 +120,7 @@ CASES = {
     # and a path on the screen you sign from is the most crowded this
     # screen gets, and the worst case is all of it at once: the widest
     # amount, a paged transaction, unseen pages, and a blinded path,
-    # which is longer than any BIP48 one and is the case Corky can sign
+    # which is longer than any BIP48 one and is the case Core Signer can sign
     # that most vendors cannot.
     "review-quorum": lambda w, h: screens.review(
         w, h, OUTPUTS[:2], Decimal("20999999.99999999"),
@@ -154,7 +154,7 @@ CASES = {
     # can move the money, which is the whole point of the note line.
     "result-share": lambda w, h: screens.result(
         w, h, ok=True, label="SHARE", note="needs another signature",
-        detail="corky-73c5da0a-signed.psbt written", actions_sel=0),
+        detail="coresigner-73c5da0a-signed.psbt written", actions_sel=0),
     "result-complete": lambda w, h: screens.result(
         w, h, ok=True, label="SIGNED", note="ready to send",
         detail="shown as 12 QR frames", actions_sel=1),
@@ -199,9 +199,9 @@ CASES = {
         w, h, ok=False, detail="PSBT lacks input data; fee unknown"),
 
     "keys-menu": lambda w, h: screens.keys_menu(
-        w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
-               ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
-               ("corky-5", "ba4c8bd5")], 5),
+        w, h, [("coresigner", "d2b7e45c"), ("coresigner-2", "668b2262"),
+               ("coresigner-3", "1df2e0b2"), ("coresigner-4", "73c5da0a"),
+               ("coresigner-5", "ba4c8bd5")], 5),
     "keys-menu-empty": lambda w, h: screens.keys_menu(w, h, [], 0),
     "key-menu": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 3),
     "tools-menu": lambda w, h: screens.tools_menu(w, h, 1),
@@ -241,9 +241,9 @@ CASES = {
     "script-menu": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "choose-key": lambda w, h: screens.choose_key(
-        w, h, [("corky", "d2b7e45c"), ("corky-2", "668b2262"),
-               ("corky-3", "1df2e0b2"), ("corky-4", "73c5da0a"),
-               ("corky-5", "ba4c8bd5")], {"1df2e0b2"}, 2),
+        w, h, [("coresigner", "d2b7e45c"), ("coresigner-2", "668b2262"),
+               ("coresigner-3", "1df2e0b2"), ("coresigner-4", "73c5da0a"),
+               ("coresigner-5", "ba4c8bd5")], {"1df2e0b2"}, 2),
     "busy": lambda w, h: screens.busy(w, h, "Bitcoin Core is generating your key…"),
     "keymaterial-warning": lambda w, h: screens.keymaterial_warning(w, h,
                                                                     "descriptor"),
@@ -256,7 +256,7 @@ CASES = {
 # highlight colour above the divider, which is what that bug looks like in
 # pixels, and pins that the first row lands identically on every menu.
 MENUS = {
-    "keys": lambda w, h: screens.keys_menu(w, h, [("corky", "d2b7e45c")], 0),
+    "keys": lambda w, h: screens.keys_menu(w, h, [("coresigner", "d2b7e45c")], 0),
     "key": lambda w, h: screens.key_menu(w, h, "d2b7e45c", 0),
     "tools": lambda w, h: screens.tools_menu(w, h, 0),
     "settings": lambda w, h: screens.settings_menu(w, h, 0),
@@ -331,7 +331,7 @@ for w, h in [(320, 240), (240, 240)]:
 # are w and h. That leaves out scrollbar (which draws onto a canvas it is
 # handed), and charset_pages, echo_window and text_pages, which return
 # data rather than a frame.
-_tree = ast.parse((ROOT / "corky" / "screens.py").read_text())
+_tree = ast.parse((ROOT / "coresigner" / "screens.py").read_text())
 _screens = [n.name for n in _tree.body
             if isinstance(n, ast.FunctionDef)
             and not n.name.startswith("_")

@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "coresigner"))
 import filechannel  # noqa: E402
 
 FAILURES = []
@@ -37,7 +37,7 @@ def check_raises(name, fn, *a):
         print(f"FAIL {name}")
 
 
-tmp = Path(tempfile.mkdtemp(prefix="corky-fc-unit-"))
+tmp = Path(tempfile.mkdtemp(prefix="coresigner-fc-unit-"))
 
 # ---- wait_stable ------------------------------------------------------
 

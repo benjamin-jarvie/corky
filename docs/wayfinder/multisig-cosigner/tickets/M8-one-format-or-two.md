@@ -1,4 +1,4 @@
-# M8 Does Corky write the Coldcard JSON as well as the one-liner?
+# M8 Does Core Signer write the Coldcard JSON as well as the one-liner?
 
 Type: `wayfinder:grilling`, HITL. **Blocked by M7 (closed).**
 
@@ -11,7 +11,7 @@ Coldcard omits.
 
 It also established that Coldcard's generic JSON is the only shape four
 Sparrow importer classes and Nunchuk's JSON path both name by that name.
-A user importing from Corky would pick "Coldcard Multisig" in Sparrow's
+A user importing from Core Signer would pick "Coldcard Multisig" in Sparrow's
 list rather than "Specter DIY", which is a smaller lie about what the
 device is than it sounds, and a lie nonetheless.
 
@@ -29,7 +29,7 @@ So: **one file or two?**
   one-liner. Loses Nunchuk's simplest path and the BSMS line-3 case.
 
 Worth deciding alongside: whether the file names itself after the
-fingerprint the way `write_watch_only` does (`corky-<xfp>-watch.dat`),
+fingerprint the way `write_watch_only` does (`coresigner-<xfp>-watch.dat`),
 so two of them on one stick can be told apart.
 
 ## Measured, 2026-09-10, against Sparrow 2.5.4's own importers
@@ -62,7 +62,7 @@ Every accepted import lands at `m/48'/1'/0'/2'`, the path asked for.
    accepted by all four. This matters more than it looks: producing a
    `Vpub` means swapping version bytes and recomputing a base58check
    double-SHA256, which is a crypto primitive PLAN A-22 forbids inside
-   `corky/` and which Core will not do for us. **That objection is
+   `coresigner/` and which Core will not do for us. **That objection is
    gone**, so the JSON is a plain formatting job.
 
 ### What the decision now costs
@@ -72,7 +72,7 @@ The JSON is five fields and one nesting level, built from the record
 re-encoding.
 
 Whichever way this goes, **the person picks another vendor's name from
-the list**. Corky is not a Krux, a SeedSigner or a Coldcard. There is no
+the list**. Core Signer is not a Krux, a SeedSigner or a Coldcard. There is no
 generic "descriptor" cosigner importer: `Descriptor` is a whole-wallet
 importer and exposes no keystore method.
 
@@ -92,7 +92,7 @@ drongo parsers.
 
 | QR payload | what Sparrow gets |
 |---|---|
-| `[xfp/48h/1h/0h/2h]tpub…` (what Corky writes) | **REFUSED** |
+| `[xfp/48h/1h/0h/2h]tpub…` (what Core Signer writes) | **REFUSED** |
 | the same with `/0/*` | **REFUSED** |
 | a bare `tpub` | a key with **no origin**: no fingerprint, no path |
 | `wsh([xfp/48h/1h/0h/2h]tpub)` | fingerprint, path and key, all correct, **but Core refuses to write it** |
@@ -113,7 +113,7 @@ and by file" without asking what the QR must hold.
 An importer that PARSES a format is not the same as a menu entry a
 person can hand a file to. Three entries are scan-only:
 
-| Corky writes | menu entries that accept it AS A FILE |
+| Core Signer writes | menu entries that accept it AS A FILE |
 |---|---|
 | the one-liner | Specter DIY, Krux |
 | the flat JSON | Coldcard Multisig, Passport Multisig, Keystone Multisig, Cobo Vault, BlueWallet Vault |
@@ -142,7 +142,7 @@ this cannot drive without a camera, and it belongs with the board work.
 payload and one name to tell the person. No second question, no second
 file, and no mention of Coldcard.
 
-| channel | what Corky shows or writes | what the screen says to choose |
+| channel | what Core Signer shows or writes | what the screen says to choose |
 |---|---|---|
 | QR | `wsh(sortedmulti(1,[xfp/48h/1h/0h/2h]tpub/0/*))#cs` | Specter DIY |
 | file | `[xfp/48h/1h/0h/2h]tpub` on one line | Specter DIY |
@@ -151,7 +151,7 @@ file, and no mention of Coldcard.
 there's only two, why would we choose something that extends it". Krux
 and SeedSigner are both subclasses of `SpecterDIY` in Sparrow, so the
 one-liner IS the Specter DIY format and the other two are that format
-under other names. Corky names the one they all extend. A person using
+under other names. Core Signer names the one they all extend. A person using
 Krux picks Krux and it still works, because it is the same parser.
 
 **Why the JSON is not written.** It would reach Passport, Keystone, Cobo
@@ -193,7 +193,7 @@ in `tests/sparrow/.build`.
   DIY has both true, which is why the test pins those two flags.
 
 So the person picks the device FIRST and then chooses how to feed it,
-and Corky's wording is the same shape on both paths:
+and Core Signer's wording is the same shape on both paths:
 
     choose Specter DIY, then Scan...
     choose Specter DIY, then Import File...
@@ -205,14 +205,14 @@ Nothing here is left for the board.
 
 The QR payload recorded above as `wsh([xfp/path]tpub)` is one **Core
 refuses**: `getdescriptorinfo` answers "A function is needed within
-P2WSH". Sparrow parses it, and that is the trap. Corky emitting a string
+P2WSH". Sparrow parses it, and that is the trap. Core Signer emitting a string
 its own brain calls invalid is how a format rots, and PLAN A-11 puts
 Core in charge of what a descriptor is.
 
 The payload is therefore
 `wsh(sortedmulti(1,[xfp/48h/1h/0h/2h]tpub/0/*))#<checksum>`, 167
 characters, which Core checksums and Sparrow reads with the fingerprint
-and path intact. The `1` is a placeholder because Corky holds one key
+and path intact. The `1` is a placeholder because Core Signer holds one key
 and the quorum belongs to the coordinator. It also keeps the script type
 honest, where `wpkh(...)` would also satisfy both and would claim
 single-sig native segwit about a key that is neither.

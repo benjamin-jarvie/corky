@@ -1,4 +1,4 @@
-"""Corky's session flow: everything between loading a key and a signed PSBT.
+"""Core Signer's session flow: everything between loading a key and a signed PSBT.
 
 This module performs no cryptography. It hands Core what the user supplied,
 then drives Bitcoin Core over RPC. Core does all key derivation, all PSBT
@@ -26,7 +26,7 @@ from pathlib import Path
 # Anything that looks like an extended private key, in any network's
 # prefix. Core quotes the offending key back in its own error messages
 # (verified against 31.1 on 2026-09-05: getdescriptorinfo answers
-# "wpkh(): key 'tprv8Zgx...' is not valid"), and Corky puts Core's message
+# "wpkh(): key 'tprv8Zgx...' is not valid"), and Core Signer puts Core's message
 # on the panel. Unredacted, that message also reaches stderr, which systemd
 # captures into the journal on the SD card. A key on the card is the one
 # thing this device must never do.
@@ -38,7 +38,7 @@ from pathlib import Path
 #: missing until 2026-09-08, and the list is used for two different jobs,
 #: so a Zprv escaped both of them: it was not redacted out of Core's
 #: refusal, and it did not trip the stdin guard in Rpc.call, so it went
-#: into argv where `ps` reads it. Corky does not accept a multisig key and
+#: into argv where `ps` reads it. Core Signer does not accept a multisig key and
 #: Core refuses one, but the refusal quotes the key back, and by then it
 #: had already been on the process list.
 XPRV_PREFIXES = ("xprv", "tprv", "yprv", "zprv", "vprv", "uprv",
@@ -48,7 +48,7 @@ XPRV_PREFIXES = ("xprv", "tprv", "yprv", "zprv", "vprv", "uprv",
 #: character for network and compression, then 50 or 51 base58 characters.
 #: 5 and 9 are the uncompressed forms, K, L and c the compressed ones.
 #:
-#: Corky never asks for a WIF, but a person typing a key on a five-way pad
+#: Core Signer never asks for a WIF, but a person typing a key on a five-way pad
 #: can paste or mistype one, and Core echoes what it refused: "key
 #: 'cVjzvdHG…' is not valid" reached the panel and the journal in full
 #: until audit A2 (2026-09-06). Redaction is defence in depth, so it
@@ -74,7 +74,7 @@ def _json_decimal(obj):
     raise TypeError
 
 
-WALLET = "corky"
+WALLET = "coresigner"
 
 # Several keys in one session (map e2e-before-testers, ticket 03): one Core
 # wallet per key, up to MAX_KEYS. The first key keeps the historic wallet
@@ -97,7 +97,7 @@ Key = namedtuple("Key", "name xfp")
 #: It was (84, 86) until 2026-09-05, which meant restoring your own paper
 #: backup gave you two of the four policies the key controls. Coins on a
 #: legacy or nested address were still the key's and still spendable by
-#: anyone who imported the right descriptor, and Corky showed neither the
+#: anyone who imported the right descriptor, and Core Signer showed neither the
 #: address nor the balance. Measured on the board: four pairs is a 44kB
 #: wallet against 20kB for two, and the node's RSS does not move. 24kB per
 #: key against 512MB of RAM is not a reason to hide half a wallet.
@@ -135,7 +135,7 @@ class Rpc:
         """Where Core keeps this node's wallets, decided the way Core decides
         it: the wallets/ directory when one exists, else the datadir itself.
         On the Zero 2 W's ramdisk datadir there is no wallets/ directory, so
-        the board's wallets sit at /run/corky/<name>. A fixed wallets/ path
+        the board's wallets sit at /run/coresigner/<name>. A fixed wallets/ path
         would have left every wallet directory behind on close (seen
         2026-09-04)."""
         sub = self.net_dir / "wallets"
@@ -289,7 +289,7 @@ def _next_slot(rpc: "Rpc") -> str:
     already exists", and no key could be loaded until the board rebooted
     (found 2026-09-05 by auditing every createwallet call site).
     """
-    taken = set(_corky_wallets(rpc))
+    taken = set(_coresigner_wallets(rpc))
     for name in SLOTS:
         if name not in taken:
             return name
@@ -324,7 +324,7 @@ def _import(rpc: "Rpc", descriptors: list[dict]) -> str:
 
 def open_session_xprv(rpc: "Rpc", xprv: str) -> str:
     """Input mode 2: a raw BIP32 xprv (typed or from a static QR).
-    Pure Core from the first byte; Corky applies the BIP84/86 paths.
+    Pure Core from the first byte; Core Signer applies the BIP84/86 paths.
     Returns the wallet name of the new key."""
     return _import(rpc, build_descriptors(rpc, xprv.strip()))
 
@@ -363,10 +363,10 @@ def open_session_descriptors(rpc: "Rpc", descriptors: list[str]) -> str:
 #: receive chain inactive. Nothing is lost, because `ismine` still answers
 #: True on both. But `public_descriptors` filters on `active`, so the
 #: public key handed to a coordinator would have described the change
-#: chain as the receive chain, and Corky's address screen would have shown
+#: chain as the receive chain, and Core Signer's address screen would have shown
 #: the change chain.
 #:
-#: Corky's own keys were never affected: `build_descriptors` sets internal
+#: Core Signer's own keys were never affected: `build_descriptors` sets internal
 #: explicitly. This is the scanned-descriptor path only.
 #:
 #: Multipath (`/<0;1>/*`) still returns False, as it did before. Core
@@ -393,7 +393,7 @@ def public_descriptors(rpc: "Rpc", wallet: str = WALLET) -> list[str]:
 # (native segwit) and tr at 86h (taproot). One master private key opens
 # all four, so a paper backup covers them whatever the export shows.
 #
-# Corky offered two of the four until T0 of the export map, which meant
+# Core Signer offered two of the four until T0 of the export map, which meant
 # coins sent to a legacy or nested address of this wallet were spendable
 # by this key and invisible on the panel. Which of the four the SHIPPED
 # flow offers is map ticket D1, decided once T1 to T3 say what each
@@ -432,7 +432,7 @@ def origin_of(descriptor: str) -> "tuple[str, str]":
 def available_kinds(rpc: "Rpc", wallet: str = WALLET) -> tuple[str, ...]:
     """The script policies THIS key actually has, in EXPORT_ORDER.
 
-    Every key Corky opens has all four now: `createwallet` makes them and
+    Every key Core Signer opens has all four now: `createwallet` makes them and
     `build_descriptors` builds them, so a key restored from its own paper
     backup presents what the key that made it presented (map ticket D6).
 
@@ -505,7 +505,7 @@ def cosigner_key(rpc: "Rpc", wallet: str, path: str) -> str:
 
     `path` is hardened steps only, no `m/` and no `/0/*`, as
     `48h/1h/0h/2h`. It is not checked against a list: map M1 settled that
-    Corky derives where it is told, which is what makes a blinded path
+    Core Signer derives where it is told, which is what makes a blinded path
     reachable at all.
 
     **Why the round trip.** `getdescriptorinfo`'s public form keeps
@@ -548,7 +548,7 @@ def cosigner_key(rpc: "Rpc", wallet: str, path: str) -> str:
 #: What the watch-only wallet file is called. It carries no private key,
 #: which is why it is the one file the private-key-on-paper rule (A-24)
 #: still allows off this device.
-WATCH_PREFIX = "corky-"
+WATCH_PREFIX = "coresigner-"
 
 
 #: BIP48's script-type step. 2h is P2WSH, which is what a modern quorum
@@ -564,7 +564,7 @@ def cosigner_path(rpc: "Rpc", script: str = "wsh", account: int = 0) -> str:
     `build_descriptors` does, so a regtest key never offers a mainnet
     path and the person cannot pick the wrong one by reading it.
 
-    M1 settled that Corky derives where it is TOLD, so this is a
+    M1 settled that Core Signer derives where it is TOLD, so this is a
     convenience for the common case and never a limit: the typed row
     reaches any path at all, which is the only route to a blinded xpub.
     """
@@ -588,7 +588,7 @@ def write_cosigner(rpc: "Rpc", wallet: str, path: str,
     """
     record = cosigner_key(rpc, wallet, path)
     xfp = master_fingerprint(rpc, wallet=wallet) or "unknown"
-    out = Path(dest_dir) / f"corky-{xfp}-cosigner.txt"
+    out = Path(dest_dir) / f"coresigner-{xfp}-cosigner.txt"
     # NO TRAILING NEWLINE, and this is measured rather than tidy.
     # Sparrow's Specter DIY importer refuses the file with one: `\n`,
     # `\r\n` and two newlines all fail, where a LEADING space is
@@ -618,7 +618,7 @@ def cosigner_qr(rpc: "Rpc", wallet: str, path: str) -> str:
     second one, and Core refuses it: "A function is needed within P2WSH".
     Emitting a string this device's own brain calls invalid is how a
     format rots, so the wrapper is one both agree on. The `1` is a
-    placeholder because Corky holds ONE key and the quorum belongs to
+    placeholder because Core Signer holds ONE key and the quorum belongs to
     the coordinator, which is the scope Ben set for this map.
 
     It also keeps the SCRIPT TYPE honest. Sparrow hands the scan result
@@ -734,8 +734,8 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
     an air-gapped signer cannot verify those amounts against the chain.
     The screen must say so.
 
-    **The total going in is Core's fee plus the outputs, not a sum Corky
-    makes.** Corky used to add up every input's own amount, which meant
+    **The total going in is Core's fee plus the outputs, not a sum Core Signer
+    makes.** Core Signer used to add up every input's own amount, which meant
     reading the whole previous transaction for every legacy input. Those
     previous transactions are 20.7MB of the 21.1MB this call used to
     build at the 250-input batch case, and they exist in the answer only
@@ -743,7 +743,7 @@ def describe_psbt(rpc: "Rpc", psbt_b64: str) -> dict:
     the outputs.
 
     It costs nothing in trust. Core computed the fee from exactly the
-    amounts Corky was summing, so the two were never independent; this
+    amounts Core Signer was summing, so the two were never independent; this
     only stops pretending they were. What checks it is
     `tests/test_export.py` 1c, which compares the total against the
     node's own UTXO set with `gettxout`, and that is a genuinely separate
@@ -824,7 +824,7 @@ def _cosigners(inputs: list) -> "list[tuple[str, str]]":
 
 
 #: BIP68 packs a relative timelock into nSequence. Bit 31 set disables
-#: it; bit 22 set counts 512-second units instead of blocks. Corky reads
+#: it; bit 22 set counts 512-second units instead of blocks. Core Signer reads
 #: BLOCK units only and says nothing about the rest, because comparing a
 #: block count to a duration is a consensus rule and not a reading.
 _SEQUENCE_UNITS = 1 << 22
@@ -854,7 +854,7 @@ def _spend_lock(vin: list, locks: "tuple[int, ...]") -> "int | None":
 
     M6 measured that the tier belongs to the coordinator: it sets
     `nSequence` when it builds, and the same policy finalises on one key
-    or refuses to, depending only on that. Corky cannot change it. A
+    or refuses to, depending only on that. Core Signer cannot change it. A
     person can refuse it, which is the whole reason the screen has to
     show it: a spend at a tier nobody asked for looks exactly like a
     normal one today.
@@ -904,7 +904,7 @@ def owners(rpc: "Rpc", psbt_b64: str) -> set[str]:
     decodepsbt lists bip32_derivs on every input a coordinator described,
     and taproot_bip32_derivs on taproot inputs. Each carries the master
     fingerprint of the key that owns it. That is how a transaction names
-    its key (ticket 03); Corky matches, Core decides.
+    its key (ticket 03); Core Signer matches, Core decides.
     """
     decoded = rpc.call("decodepsbt", psbt_b64, stdin=True,
                        drop=_OWNER_DROPS)
@@ -931,7 +931,7 @@ def _missing_signatures(rpc: "Rpc", psbt_b64: str) -> int:
                for i in analysis.get("inputs", []))
 
 
-_SIGN_SCRATCH = "corky-sign-branch"
+_SIGN_SCRATCH = "coresigner-sign-branch"
 
 
 def _branches(inputs: list, xfp: str) -> "dict[tuple[str, str], int]":
@@ -969,7 +969,7 @@ def sign_at_told_paths(rpc: "Rpc", wallet: str, psbt_b64: str,
 
     **The master key is read, and that is the cost.** Building a
     descriptor is the only way Core imports a derivation, and a
-    descriptor needs the key, so this pulls the master xprv into Corky
+    descriptor needs the key, so this pulls the master xprv into Core Signer
     for the length of one signature. `generate_wallet` refuses to hand it
     back for exactly this reason, so the exposure is kept as narrow as it
     can be: this runs ONLY when a plain sign added nothing, the branch
@@ -1056,14 +1056,14 @@ def generate_wallet(rpc: "Rpc") -> str:
 
     `createwallet` makes Core generate its master key with its own RNG
     (GetStrongRandBytes) and derive the standard descriptor set, exactly
-    as any Core wallet is born. Corky then simply USES that wallet, and
+    as any Core wallet is born. Core Signer then simply USES that wallet, and
     the backup shown to the user is Core's own master xprv, read verbatim
     out of the descriptors Core wrote. Nothing of ours sits between
     Core's RNG and the backup: no extraction, no hashing, no reshaping.
 
     Returns the wallet name, and NOTHING ELSE (Ben, 2026-09-05). It used to
     return the master xprv too, so a key Core had just made was pulled back
-    out into Corky's memory at the moment of birth, whether or not anyone
+    out into Core Signer's memory at the moment of birth, whether or not anyone
     ever asked to see it. A key generated here and backed up to an
     encrypted file is now never read out of Core at all. `master_xprv` is
     still there for the paper backup, which asks for it when the user
@@ -1097,7 +1097,7 @@ def master_xprv(rpc: "Rpc", wallet: str = WALLET) -> str:
     `sh(wpkh(k/...))`, and would find the wrong key in a descriptor whose
     innermost `(` belonged to a script leaf rather than to the key, such
     as `tr(k,pk(other))`. Core 31.1 refuses every such shape with a
-    private key, tested 2026-09-08, so Corky cannot hold one. If a future
+    private key, tested 2026-09-08, so Core Signer cannot hold one. If a future
     Core accepted one, the eight descriptors would disagree about the
     master and this raises. It shows the right key or no key; there is no
     shape that makes it show a wrong one silently.
@@ -1123,7 +1123,7 @@ def opens_wallet(rpc: "Rpc", wallet: str, key: str, count: int = 2) -> bool:
 
     The question "does my paper open this wallet" asked the only way that
     can answer it: Core derives receive addresses from the TYPED key, Core
-    reports the addresses the LOADED wallet gives, and Corky compares two
+    reports the addresses the LOADED wallet gives, and Core Signer compares two
     lists of strings Core returned (PLAN A-11).
 
     Audit A6 (2026-09-06) found the check it replaces could not fail.
@@ -1195,19 +1195,19 @@ def master_fingerprint(rpc: "Rpc", wallet: str = WALLET) -> "str | None":
     return None
 
 
-def _corky_wallets(rpc: "Rpc") -> list[str]:
-    """Every wallet on this node that belongs to Corky, loaded or not.
+def _coresigner_wallets(rpc: "Rpc") -> list[str]:
+    """Every wallet on this node that belongs to Core Signer, loaded or not.
 
     The five key slots, and also the scratch wallets the export and the
-    file backup build (`corky-watch`, `corky-2-backup`, ...). A scratch
+    file backup build (`coresigner-watch`, `coresigner-2-backup`, ...). A scratch
     holds the PRIVATE descriptors between `createwallet` and the `finally`
     that deletes it, so a crash in that window used to leave a plaintext
     key on the ramdisk that nothing ever dropped: not close_session, not
     the next session's clear_on_start, because both walked SLOTS only.
     Found by the two-axis review, 2026-09-05, and reproduced.
 
-    Ownership is by name: `corky`, or anything beginning `corky-`. On the
-    device Corky owns the whole node; in the test harness the
+    Ownership is by name: `coresigner`, or anything beginning `coresigner-`. On the
+    device Core Signer owns the whole node; in the test harness the
     coordinator's wallets are named otherwise and must survive.
     """
     names = set()
@@ -1220,21 +1220,21 @@ def _corky_wallets(rpc: "Rpc") -> list[str]:
 
 
 def clear_on_start(rpc: "Rpc") -> list[str]:
-    """Drop every key Corky did not load in THIS session, before the first
+    """Drop every key Core Signer did not load in THIS session, before the first
     screen is drawn. Returns the slot names it dropped.
 
-    bitcoind runs under its own systemd unit (`corky-bitcoind.service`) and
-    keeps running when `corky.service` restarts. `Restart=on-failure` means
+    bitcoind runs under its own systemd unit (`coresigner-bitcoind.service`) and
+    keeps running when `coresigner.service` restarts. `Restart=on-failure` means
     a crashed session comes straight back, and the ramdisk and the node
     both survive it, so without this the new session would adopt a key its
     user never entered and show it as loaded on the home screen.
 
-    Only Corky's own wallets are dropped, slots and scratches alike. On the
+    Only Core Signer's own wallets are dropped, slots and scratches alike. On the
     device the datadir is a fresh tmpfs at every boot, so no other wallet
     can be there; in the test harness the coordinator's wallets share the
     datadir and must survive.
     """
-    dropped = _corky_wallets(rpc)
+    dropped = _coresigner_wallets(rpc)
     for name in dropped:
         _drop_wallet(rpc, name)
     return dropped
@@ -1246,11 +1246,11 @@ def close_key(rpc: "Rpc", name: str) -> None:
 
 
 def close_session(rpc: "Rpc") -> None:
-    """Unload AND delete every wallet Corky owns: the key slots and any
+    """Unload AND delete every wallet Core Signer owns: the key slots and any
     scratch left by an export or a backup. On the device the datadir is a
     ramdisk and power-off is the real teardown; deleting here keeps every
     environment (and every test) as stateless as the hardware."""
-    for name in _corky_wallets(rpc):
+    for name in _coresigner_wallets(rpc):
         _drop_wallet(rpc, name)
 
 

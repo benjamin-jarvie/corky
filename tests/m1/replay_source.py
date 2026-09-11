@@ -16,7 +16,7 @@ import itertools
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "coresigner"))
 import qrchannel  # noqa: E402
 import screens     # noqa: E402
 
@@ -96,7 +96,7 @@ def with_garbage(frames, at=1):
 
 
 def _selftest():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "coresigner"))
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hw" / "vendor"))
     import qrchannel
 
@@ -141,7 +141,7 @@ def _selftest():
     # Dropping a whole pure part used to strand the transfer. Since ticket 09
     # the frame list carries fountain parts past the pure cycle, so the mixed
     # parts reconstruct what was lost. This is the property that keeps a
-    # transfer alive when zxing cannot read one of Corky's frames.
+    # transfer alive when zxing cannot read one of Core Signer's frames.
     got, err, n = assemble(ReplaySource(frames[1:]))
     checks.append(("missing pure part recovers from fountain parts",
                    got == psbt, "ticket 09"))
@@ -183,7 +183,7 @@ def scan_psbt(source, clock=None, timeout=qrchannel.NO_PROGRESS_TIMEOUT,
               on_event=None, abort=None):
     """Drive a QR source to completion and return the base64 PSBT.
 
-    A test-side loop over PsbtScan. It lived in corky/qrchannel.py until
+    A test-side loop over PsbtScan. It lived in coresigner/qrchannel.py until
     2026-09-05, when a dead-code pass found the device never calls it:
     state_load drives PsbtScan itself, because it must also watch the
     buttons and paint the viewfinder. Shipped code that exists only for a

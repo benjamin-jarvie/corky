@@ -130,7 +130,7 @@ def main():
     scan_psbt(ReplaySource(fa), on_event=on_event)
     check("short frames raise no advisory",
           not any(k == "advisory" for k, _ in log),
-          f"Corky's own frames are {max(len(f) for f in fa)} chars")
+          f"Core Signer's own frames are {max(len(f) for f in fa)} chars")
 
     # --- the real decode path, images through pyzbar ---
     tmp = Path(tempfile.mkdtemp(prefix="scanloop-"))
@@ -148,7 +148,7 @@ def main():
     # ImageQrSource is what CameraQrSource inherits; only images() needs the
     # board. Drive the real class over the same PNGs, including the None it
     # must emit for a tick with nothing in view.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "corky"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "coresigner"))
     from qrsource import ImageQrSource, CameraQrSource
     from PIL import Image
 

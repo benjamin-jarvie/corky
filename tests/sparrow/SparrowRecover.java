@@ -9,12 +9,12 @@ import java.util.*;
 
 /**
  * RECOVERY, not export. Rebuilds a spending wallet in Sparrow Wallet's own
- * library from nothing but Corky's paper backup: the 111-character master
+ * library from nothing but Core Signer's paper backup: the 111-character master
  * private key, and the script type.
  *
- * This is the question the paper backup exists to answer. If Corky is lost,
+ * This is the question the paper backup exists to answer. If Core Signer is lost,
  * broken or thrown in a river, does that string get the money back out
- * through software that is not Corky?
+ * through software that is not Core Signer?
  *
  * Keystore.fromMasterPrivateExtendedKey is the same call Sparrow's own
  * "master private key" import drives, so what passes here is what a person
@@ -44,9 +44,9 @@ public class SparrowRecover {
         // IMMUTABLE list, so the recovered keystore is copied onto that one
         // rather than swapped in. SparrowGen does the same; replacing the
         // element throws UnsupportedOperationException.
-        Wallet wallet = new Wallet("corky-recovered", PolicyType.SINGLE_HD, st);
+        Wallet wallet = new Wallet("coresigner-recovered", PolicyType.SINGLE_HD, st);
         Keystore slot = wallet.getKeystores().get(0);
-        slot.setLabel("Corky paper backup");
+        slot.setLabel("Core Signer paper backup");
         slot.setSource(KeystoreSource.SW_SEED);
         slot.setWalletModel(WalletModel.SPARROW);
         slot.setMasterPrivateExtendedKey(ks.getMasterPrivateExtendedKey());

@@ -1,13 +1,13 @@
-"""COSIGNER. Does Sparrow take a Corky key as one member of a quorum?
+"""COSIGNER. Does Sparrow take a Core Signer key as one member of a quorum?
 
 Map multisig-cosigner, ticket M4. Every other Sparrow suite here proves
-Corky's SINGLE-SIG export lands. This one proves the thing the map exists
+Core Signer's SINGLE-SIG export lands. This one proves the thing the map exists
 for: a key Bitcoin Core generated, sitting in a multivendor quorum beside
 keys that are not ours, signed for on this side of an air gap.
 
 TESTING.md rule 8: an interop claim tested with your own tools is not an
 interop claim. Sparrow's own drongo, out of the sha256-verified 2.5.4
-release, parses the record Corky exports and derives the addresses. Core
+release, parses the record Core Signer exports and derives the addresses. Core
 derives them too, independently, and the two must agree.
 
 Run: python3 tests/sparrow/test_cosigner.py
@@ -19,7 +19,7 @@ import harness
 from harness import Java, Regtest, Results
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 # Ordinary BIP48 for P2WSH, and a BLINDED path: 3 hardened levels of the
@@ -101,7 +101,7 @@ def main():
             # --- and now the half the map exists for --------------------
             #
             # A coordinator that holds no private key at all builds the
-            # transaction; Corky signs its share; Sparrow, holding a
+            # transaction; Core Signer signs its share; Sparrow, holding a
             # DIFFERENT key of the same quorum, adds the second; and Core
             # is asked whether the network would take the result. Nothing
             # in this stretch is our own arithmetic: Core builds, Core
@@ -135,7 +135,7 @@ def main():
 
             # COUNT THE SIGNATURE, do not just check `complete`. The first
             # version of this asserted `complete is False`, which is also
-            # true when Corky signs NOTHING, and it passed for exactly
+            # true when Core Signer signs NOTHING, and it passed for exactly
             # that reason: net.wallet holds the four standard policies and
             # has no key at a BIP48 path at all. A check that cannot tell
             # "signed one of two" from "signed nothing" is not a check.
@@ -143,23 +143,23 @@ def main():
                 return net.rpc.call("decodepsbt", p, stdin=True)["inputs"][0]\
                     .get("partial_signatures", {})
             n_ours = len(sigs(ours_signed["psbt"]))
-            r.record(f"{label}: Corky signs its share, and only its share",
+            r.record(f"{label}: Core Signer signs its share, and only its share",
                      n_ours == 1 and ours_signed["complete"] is False,
                      f"{n_ours} signature, complete={ours_signed['complete']}")
 
             # CHAINED, which is the air-gapped flow this device is for.
-            # Sparrow sends the PSBT over, Corky signs it, the signed
+            # Sparrow sends the PSBT over, Core Signer signs it, the signed
             # PSBT comes back by QR, and Sparrow signs the SAME object on
             # top. Sparrow must keep a partial signature it did not make.
             # Nothing here proved that before: the first version of this
             # test read "1 signature" and blamed Sparrow, when the real
-            # cause was Corky signing nothing.
+            # cause was Core Signer signing nothing.
             res = java("SparrowCosigner", "REGTEST", full, other_xprvs[0],
                        ours_signed["psbt"], tags=("INFO", "OUT"))
             chained = res["OUT"][0]
             n_chain = len(sigs(chained))
             fin_chain = net.rpc.call("finalizepsbt", chained, stdin=True)
-            r.record(f"{label}: Sparrow signs on top of Corky and keeps "
+            r.record(f"{label}: Sparrow signs on top of Core Signer and keeps "
                      "our signature",
                      n_chain == 2 and bool(fin_chain.get("complete")),
                      f"{n_chain} signatures, "

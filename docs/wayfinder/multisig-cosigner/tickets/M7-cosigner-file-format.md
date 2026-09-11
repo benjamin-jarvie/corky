@@ -21,7 +21,7 @@ reasonable. What each one parses today, read from its source.
   a plain descriptor in a text file?
 - **Nunchuk.** `libnunchuk` is cloned-readable and takes arbitrary
   miniscript; find its import path for a single cosigner.
-- **Coldcard's** JSON export shape is worth reading even though Corky is
+- **Coldcard's** JSON export shape is worth reading even though Core Signer is
   not a Coldcard, because coordinators already parse it and matching an
   existing shape beats inventing one.
 
@@ -50,7 +50,7 @@ and Nunchuk reads it (`Utils::ParseSignerString`,
 
 **Note what Coldcard does NOT write: the `/0/*` suffix.** Their line is
 `[xfp/path]xpub` and the fingerprint is lowercased. Core's
-`listdescriptors` gives us the suffix, so Corky has to strip it. That is
+`listdescriptors` gives us the suffix, so Core Signer has to strip it. That is
 the single most actionable detail in this ticket.
 
 ### The file does NOT reach Bitcoin Core, and M2 assumed it would
@@ -94,5 +94,5 @@ prefix against the script type, so a plain `tpub` there is rejected for a
 P2WSH wallet. The nested `bip48_2` form, or `p2wsh_deriv`/`p2wsh` with a
 `Vpub`, is what works.
 
-Whether Corky writes the JSON as well as the one-liner is a decision and
+Whether Core Signer writes the JSON as well as the one-liner is a decision and
 not a fact, so it is **M8** rather than an answer here.

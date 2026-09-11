@@ -1,7 +1,7 @@
-"""Corky's exported public key, read by Sparrow's own library.
+"""Core Signer's exported public key, read by Sparrow's own library.
 
 TESTING.md rule 8: an interop claim tested with your own tools is not an
-interop claim. Corky's own decoder reads Corky's own QR by construction.
+interop claim. Core Signer's own decoder reads Core Signer's own QR by construction.
 This suite renders the export exactly as the panel shows it, decodes it
 with the zxing reader Sparrow uses, hands the decoded string to Sparrow's
 OutputDescriptor, and compares the addresses with Core's.
@@ -15,7 +15,7 @@ from pathlib import Path
 import harness
 from harness import Java, Regtest, Results
 
-sys.path.insert(0, str(harness.REPO / "corky"))
+sys.path.insert(0, str(harness.REPO / "coresigner"))
 import qrchannel
 import screens  # noqa: E402
 import signer  # noqa: E402
@@ -67,7 +67,7 @@ PANELS = [("primary 320x240", (320, 240)), ("pocket 240x240", (240, 240))]
 def main():
     java = Java()
     r = Results()
-    work = Path(tempfile.mkdtemp(prefix="corky-export-interop-"))
+    work = Path(tempfile.mkdtemp(prefix="coresigner-export-interop-"))
     with Regtest(mine=1) as net:
         # Every policy this key HAS. The harness key arrives by import,
         # and since map ticket D6 an imported key is built with all four,
@@ -122,14 +122,14 @@ def main():
         # TESTING.md rule 1 wants real domain data through the surface, and
         # rule 8 wants the counterpart's decoder. test_keyscan.py drives the
         # stopping rules with stand-ins; this drives the bytes.
-        sys.path.insert(0, str(harness.REPO / "corky"))
-        import main as corky_main  # noqa: E402
+        sys.path.insert(0, str(harness.REPO / "coresigner"))
+        import main as coresigner_main  # noqa: E402
         priv = [d["desc"] for d in
                 net.rpc.call("listdescriptors", True,
                              wallet=net.wallet)["descriptors"]
                 if d["desc"].startswith("wpkh(") and not d["internal"]][0]
         xprv = signer.master_xprv(net.rpc, wallet=net.wallet)
-        session = corky_main.Session.__new__(corky_main.Session)
+        session = coresigner_main.Session.__new__(coresigner_main.Session)
 
         for name, payload, want_kind in (("private descriptor", priv, "descriptor"),
                                          ("master xprv", xprv, "xprv")):
@@ -141,9 +141,9 @@ def main():
                      "byte-identical" if decoded == payload
                      else f"got {decoded[:40]!r}")
             r.record(f"the scan classifies a real {name} as {want_kind}",
-                     corky_main._classify_qr(decoded) == want_kind,
-                     corky_main._classify_qr(decoded))
-            guarded = corky_main.Session._guard_key_payload(session, decoded)
+                     coresigner_main._classify_qr(decoded) == want_kind,
+                     coresigner_main._classify_qr(decoded))
+            guarded = coresigner_main.Session._guard_key_payload(session, decoded)
             r.record(f"the A-11 guards pass a real {name} through unchanged",
                      guarded == payload, "unchanged")
 

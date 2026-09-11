@@ -1,6 +1,6 @@
-"""Render Corky's real screens into six narrated demo videos.
+"""Render Core Signer's real screens into six narrated demo videos.
 
-Every frame is drawn by `corky/screens.py` itself, and every string in
+Every frame is drawn by `coresigner/screens.py` itself, and every string in
 them comes from Bitcoin Core on regtest: the key, its fingerprint, its
 descriptor, its addresses and a funded PSBT. Nothing here is a mockup and
 nothing is typed from memory (TESTING.md rule 1).
@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import qrchannel                                       # noqa: E402
 import screens                                         # noqa: E402
 import signer                                          # noqa: E402
@@ -33,8 +33,8 @@ SCALE = 4                       # 1280x960
 #
 #   VOICE=Daniel                             -> macOS say
 #   VOICE=en_GB-alba-medium                  -> piper
-VOICE = os.environ.get("CORKY_VOICE", "Daniel")
-RATE = int(os.environ.get("CORKY_RATE", "172"))
+VOICE = os.environ.get("CORESIGNER_VOICE", "Daniel")
+RATE = int(os.environ.get("CORESIGNER_RATE", "172"))
 PIPER_DIR = Path.home() / ".local" / "share" / "piper-voices"
 
 
@@ -196,11 +196,11 @@ def yield_scenes(xfp, xprv, desc, addrs, kinds, pages, path,
     shot("v1_made", screens.key_menu(W, H, xfp, 0))
     shot("v1_home2", screens.home(W, H, 1, xfp=xfp))
     build("01-generate-a-key", [
-        ("v1_home", "Corky holds no key until you give it one. Keys.", 0),
+        ("v1_home", "Core Signer holds no key until you give it one. Keys.", 0),
         ("v1_keys", "Nothing is loaded, so the only choices are to scan a "
                     "key you already have, or make a new one.", 0),
         ("v1_busy", "Bitcoin Core generates it, using Core's own random "
-                    "number generator. Corky ships no randomness of its "
+                    "number generator. Core Signer ships no randomness of its "
                     "own, and imports no cryptography at all.", 0),
         ("v1_made", f"The key is named by its fingerprint, {U}. Core made "
                     "it, Core holds it, and Core will sign with it.", 0),

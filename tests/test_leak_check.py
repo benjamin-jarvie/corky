@@ -1,6 +1,6 @@
 """The leak check is the one report a hardened board is trusted on.
 
-A hardened Corky has no SSH, so `Tools, Check for leaks` may be the only
+A hardened Core Signer has no SSH, so `Tools, Check for leaks` may be the only
 place anybody can ask whether the radios are off. That makes the failure
 mode that matters a FALSE PASS: a check that could not look, reporting
 nothing found, reading as clean.
@@ -45,7 +45,7 @@ def shim(**cmds):
     point of check 1, so the only way to exercise the rest of it on a
     dev machine is to answer `id -u` with 0.
     """
-    d = Path(tempfile.mkdtemp(prefix="corky-leakshim-"))
+    d = Path(tempfile.mkdtemp(prefix="coresigner-leakshim-"))
     (d / "id").write_text('#!/bin/sh\n'
                           'if [ "$1" = "-u" ]; then echo 0\n'
                           'else exec /usr/bin/id "$@"; fi\n')
@@ -158,9 +158,9 @@ else:
 #    main.py: two readings of two files, agreeing with each other while
 #    neither had run. A verdict can also be lost AFTER the parser, and
 #    reading `verdict in (...)` could never see that.
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import hal                          # noqa: E402
-import main as corky_main           # noqa: E402
+import main as coresigner_main           # noqa: E402
 import screens                      # noqa: E402
 
 
@@ -191,7 +191,7 @@ screens.leak_report = lambda w, h, rows, cursor: (painted.append(rows),
                                                               cursor))[1]
 os.environ["PATH"] = f"{d}{os.pathsep}{os.environ['PATH']}"
 try:
-    corky_main.Session(NullDisplay(), hal.DevButtons("a"), NullRpc(),
+    coresigner_main.Session(NullDisplay(), hal.DevButtons("a"), NullRpc(),
                        animate=False)._tool_leak_check()
 finally:
     screens.leak_report = real_report

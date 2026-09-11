@@ -1,7 +1,7 @@
 """E2E for the file channel: a temp directory stands in for the USB stick.
 
 Coordinator (watch-only) writes tx.psbt in BOTH formats Sparrow can emit
-(binary and base64 text); Corky reads each opaquely, signs, writes
+(binary and base64 text); Core Signer reads each opaquely, signs, writes
 tx-signed.psbt; coordinator finalizes and broadcasts both.
 
 Run: python3 tests/e2e_filechannel.py
@@ -15,7 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "corky"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "coresigner"))
 import signer  # noqa: E402
 import filechannel  # noqa: E402
 
@@ -26,12 +26,12 @@ XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLro
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-fc-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-fc-")
     import random as _rnd
     _port = _rnd.randint(20000, 60000)
     (Path(datadir) / "bitcoin.conf").write_text(
         "regtest=1\n[regtest]\nrpcport=%d\n" % _port)
-    stick = Path(tempfile.mkdtemp(prefix="corky-stick-"))
+    stick = Path(tempfile.mkdtemp(prefix="coresigner-stick-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
          "-fallbackfee=0.0001", "-server=1", "-debuglogfile=0"],

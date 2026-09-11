@@ -1,8 +1,8 @@
-# Corky
+# Core Signer
 
 > ### Experimental. Do not put money on it.
 >
-> No Corky has ever signed a mainnet transaction on hardware, and no
+> No Core Signer has ever signed a mainnet transaction on hardware, and no
 > hardened image has been flashed.
 > **Two of the five gates below are measured on a board.**
 > Three are not, including the one that proves a power cycle wipes the
@@ -20,18 +20,18 @@
 A stateless, air-gapped Bitcoin signer built from general-purpose
 hardware, in the tradition of SeedSigner. One difference is the whole
 point: **the wallet software is Bitcoin Core itself**, running wallet-only and
-offline. Corky draws screens, reads buttons and carries bytes. It never
+offline. Core Signer draws screens, reads buttons and carries bytes. It never
 computes anything on a key.
 
 ## Why Bitcoin Core's wallet, and not another one
 
-Corky reimplements no wallet logic. It does not build transactions and it
+Core Signer reimplements no wallet logic. It does not build transactions and it
 does not choose fees: your coordinator does that, whether that is
-Sparrow, Bull Bitcoin or Core on a laptop. Corky makes and backs up keys,
+Sparrow, Bull Bitcoin or Core on a laptop. Core Signer makes and backs up keys,
 and it signs. Key derivation, PSBT parsing and signing are all done by
 Bitcoin Core, running wallet-only and offline, driven over its own RPC.
 
-The fee on the review screen is not Corky's arithmetic either. Core reads
+The fee on the review screen is not Core Signer's arithmetic either. Core reads
 it out of the transaction the coordinator built, from input amounts the
 coordinator supplied, and an offline device cannot check those against
 the chain. The screen says so.
@@ -45,7 +45,7 @@ Core contributors now":
 > from the repo should. As long as the mechanics of the wallet RPC are
 > safe people should just make their own GUI to their liking."
 
-Corky is exactly that, built as if it were meant seriously: a GUI over
+Core Signer is exactly that, built as if it were meant seriously: a GUI over
 the wallet RPC, on hardware with no network, that adds nothing to the
 parts which handle the key.
 
@@ -57,19 +57,19 @@ easily reviewable if they're going to use it."** He is right on both
 counts, and the honest consequence is worth saying before anything else
 in this document.
 
-**If you want the least trust available, you do not want Corky.** You
+**If you want the least trust available, you do not want Core Signer.** You
 want Bitcoin Core's command line on an air-gapped laptop you built
 yourself. That is Core's reviewed code and nothing else, and no interface
 of ours sits between you and it. It is the smaller thing to check, and it
-will still be the smaller thing to check after Corky is finished.
+will still be the smaller thing to check after Core Signer is finished.
 
-Corky is Core **plus** a body of new code that draws screens, reads
+Core Signer is Core **plus** a body of new code that draws screens, reads
 buttons and moves bytes. That code is young. It has one author and an
 audit trail rather than years of adversarial review from strangers. We
 verify Core's binaries against the release signatures, and we intend our
 own builds to be reproducible, but "intend" is the honest word today.
 
-What Corky buys for that cost is the interface, and the interface is not
+What Core Signer buys for that cost is the interface, and the interface is not
 a luxury. A signer nobody will use protects nobody. The alternative most
 people actually reach for is friendlier, custodial in a way they did not
 read, and more likely to lose their coins than a command line ever was.
@@ -113,13 +113,13 @@ in exactly the same way.
 For single signature it barely bites, because the four paths are a
 convention every wallet already shares. For multisig it bites hard:
 nothing recovers a quorum, each cosigner's xpub, their script types and
-their paths, so a key alone is useless whichever form it is in. Corky is
+their paths, so a key alone is useless whichever form it is in. Core Signer is
 single signature in v1 and does not meet that problem at all.
 
-**The reason Corky takes an xprv is none of that.** Core has no BIP39
+**The reason Core Signer takes an xprv is none of that.** Core has no BIP39
 and never has. Checked against 31.1: no `sethdseed`, no `importmnemonic`,
 no `importseed`. Twelve words are not a thing Core can be handed, so
-supporting them would mean Corky doing PBKDF2-HMAC-SHA512 and
+supporting them would mean Core Signer doing PBKDF2-HMAC-SHA512 and
 HMAC-SHA512 itself, to turn words into a key. That is a cryptographic
 primitive operating on secret material, which is the one thing this
 repository does not contain and
@@ -142,7 +142,7 @@ missing from that story, and it is the most reviewed implementation
 there is.** Not because anyone excluded it. Because everybody else's key
 is a BIP39 seed phrase, and Core cannot make one or read one.
 
-A key Corky generates is a Core key, so it can go in the quorum. Proven
+A key Core Signer generates is a Core key, so it can go in the quorum. Proven
 with Sparrow's own library, 2 of 3, P2WSH:
 
 ```
@@ -159,9 +159,9 @@ generation turns out to be wrong, and vendors differ enormously in how
 carefully they review a change, a quorum holds as long as the others are
 sound. Today none of those others can be Bitcoin Core.
 
-**What Corky does not do yet.** Corky is single signature in v1: it does
+**What Core Signer does not do yet.** Core Signer is single signature in v1: it does
 not sign for a quorum, and it does not export a cosigner key. To put a
-Corky key in a quorum today you type the paper backup into Sparrow,
+Core Signer key in a quorum today you type the paper backup into Sparrow,
 which means the private key goes into a hot wallet once. Core can derive
 the cosigner branch without the key leaving, so exporting it is a real
 and small piece of work rather than a limitation of the idea. It is not
@@ -178,12 +178,12 @@ different wallets, and nothing in the words says whether one was used:
 | twelve words, no passphrase | wallet `73c5da0a` |
 | the same twelve words, passphrase `hunter2` | wallet `ca2c62d2` |
 
-Forget it and the words are worth nothing. Corky's backup cannot have
+Forget it and the words are worth nothing. Core Signer's backup cannot have
 one: the key is the key.
 
 **That is a trade, not a win.** A passphrase is also a feature. It is a
 second factor, it gives plausible deniability, and it means paper found
-in a drawer is not enough on its own. Corky removes the footgun and the
+in a drawer is not enough on its own. Core Signer removes the footgun and the
 capability together, and anyone who wants the capability should know
 that is what they are giving up.
 
@@ -231,18 +231,18 @@ same four, and you pick the script type when you import:
 | Native segwit | `m/84'/0'/0'` |
 | Taproot | `m/86'/0'/0'` |
 
-That is Sparrow's own table, and Corky rebuilds exactly that set on
+That is Sparrow's own table, and Core Signer rebuilds exactly that set on
 restore. **Tested rather than argued**:
 [`tests/sparrow/test_recovery.py`](tests/sparrow/test_recovery.py) hands
 those 111 characters to Sparrow's own library, out of its verified 2.5.4
-release, with no Corky code involved in the recovery at all. For all
+release, with no Core Signer code involved in the recovery at all. For all
 four policies Sparrow finds the addresses, signs a real spend, and
 Bitcoin Core confirms the network would accept it.
 
 **The edge, because there is one.** The account number is hardcoded
 `0h`. A key you loaded as a bare descriptor on some other account is not
 recoverable from the paper alone, so keep that descriptor with it. A key
-Corky generated cannot land there.
+Core Signer generated cannot land there.
 
 ### Nothing private leaves except on paper
 
@@ -272,7 +272,7 @@ Greg Maxwell, on the BIPs repository's own comments page for BIP39
 >
 > "…an attractive nuisance which has directly caused funds loss."
 
-Corky takes the other road. The key arrives as an **xprv** or a
+Core Signer takes the other road. The key arrives as an **xprv** or a
 **descriptor**, and Bitcoin Core is the only thing that ever parses it.
 
 ## Why people build these themselves
@@ -284,7 +284,7 @@ they will trust it. The instinct is right and the results are usually
 unfinished, because the hard part is not the signing, it is everything
 around it.
 
-Corky is that instinct finished. Two builds:
+Core Signer is that instinct finished. Two builds:
 
 - **The CM4 Lite has no radio at all**, because none was ever fitted.
 - **The Pi Zero 2 W pocket build** carries wifi and Bluetooth on the
@@ -369,20 +369,20 @@ ever plugged in.
 Rebuild them with `python3 tools/make_demo_videos.py`, which needs
 `bitcoind`, `ffmpeg` and a Mac. Nothing in that script is a mockup: it
 asks Core for a real key and a real transaction and photographs the
-screens Corky draws. Nothing leaves the machine either, because the
+screens Core Signer draws. Nothing leaves the machine either, because the
 narration is macOS `say`.
 
 ## What you are trusting
 
-Corky sees your key at two moments. On the way in, as a string it hands
-to Core through [`bitcoin-cli -stdin`](corky/signer.py), never on the
+Core Signer sees your key at two moments. On the way in, as a string it hands
+to Core through [`bitcoin-cli -stdin`](coresigner/signer.py), never on the
 command line, so it is never in a process listing. And on the way out to
 paper, as characters on the panel. Between those, the key lives in
 Bitcoin Core and in a ramdisk, and power-off ends both.
 
 The code is in three layers, and the first one is the claim that matters:
 
-**Layer 1 transforms secret material. 0 lines of Corky.** Nothing in
+**Layer 1 transforms secret material. 0 lines of Core Signer.** Nothing in
 this repository computes on a key. Every derivation, every signature and
 every byte of BIP32 arithmetic happens inside two binaries that are not
 ours:
@@ -398,7 +398,7 @@ Both are the official builds, pinned by sha256 in
 from the server that served the binary, and re-verified from a fresh
 download on 2026-09-08. That is the layer that does the cryptography,
 and the reason this project exists is that it has thousands of readers
-and Corky's 2,407 lines do not.
+and Core Signer's 2,407 lines do not.
 
 Layer 1 being empty is enforced, not asserted.
 [`tests/test_integrity.py`](tests/test_integrity.py) fails if any shipped
@@ -406,11 +406,11 @@ module imports `hashlib`, `hmac`, `secrets`, `random` or any curve
 library, if `os.urandom` appears anywhere, or if key-derivation
 vocabulary comes back.
 
-**Layer 2 sees secrets, computes nothing with them. 2529 lines.**
-[`main.py`](corky/main.py), [`signer.py`](corky/signer.py),
-[`screens.py`](corky/screens.py), [`qrsource.py`](corky/qrsource.py).
+**Layer 2 sees secrets, computes nothing with them. 2527 lines.**
+[`main.py`](coresigner/main.py), [`signer.py`](coresigner/signer.py),
+[`screens.py`](coresigner/screens.py), [`qrsource.py`](coresigner/qrsource.py).
 
-**Yes, this is Corky's own code, and yes it holds your actual private
+**Yes, this is Core Signer's own code, and yes it holds your actual private
 key.** Not a hash of it, not a handle to it: the xprv itself, in plain
 text, as an ordinary Python string. Four things happen to it and they
 are the whole list:
@@ -430,16 +430,16 @@ screen to open, which is why `XPRV_PREFIXES` is one list used by both
 the redactor and the argument guard.
 
 **The known exposure**, said plainly: while a key is loaded, a copy of
-it exists in Corky's Python memory as well as in Core's. Python strings
+it exists in Core Signer's Python memory as well as in Core's. Python strings
 cannot be reliably wiped. What bounds it is that the board has no swap,
 the datadir is a ramdisk, and power-off ends the session, so the copy
 lives as long as the session and not one second longer.
 [`tests/test_no_persistence.py`](tests/test_no_persistence.py) is the
 suite that keeps that true.
 
-**Layer 3 never touches secrets at all. 268 lines.** Also Corky's own
-code: [`filechannel.py`](corky/filechannel.py) and
-[`qrchannel.py`](corky/qrchannel.py), plus the panel driver and the
+**Layer 3 never touches secrets at all. 268 lines.** Also Core Signer's own
+code: [`filechannel.py`](coresigner/filechannel.py) and
+[`qrchannel.py`](coresigner/qrchannel.py), plus the panel driver and the
 buttons.
 
 These handle only transactions and public keys. A PSBT is not a secret,
@@ -452,7 +452,7 @@ Core an opaque string, and the one exception is documented at the top of
 payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
-**Total functional code: 2,797 lines** (5,859 with blanks/comments).
+**Total functional code: 2,795 lines** (5,863 with blanks/comments).
 **Test code: 7,177 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
@@ -484,13 +484,13 @@ fetches that same commit and re-derives every hash.
 
 One of those modifications is a bug fix upstream does not have.
 SeedSigner's `SetWindows` hardcodes the high octet of every coordinate to
-zero, which is right only below 256 pixels; on Corky's 320-wide primary
+zero, which is right only below 256 pixels; on Core Signer's 320-wide primary
 panel it addresses a 64-column window. That belongs upstream and we will
 send it.
 
 ## Where the key comes from
 
-Corky ships no randomness. No `os.urandom`, no `random`, no `secrets`,
+Core Signer ships no randomness. No `os.urandom`, no `random`, no `secrets`,
 [enforced by a test](tests/test_integrity.py). It asks **Bitcoin Core**
 to generate the key, in the wallet it then signs with, and hands you
 Core's own master private key as the backup, read verbatim from Core's
@@ -510,13 +510,13 @@ Said before critics find it:
 - **No multisig** in v1. Single signature only.
 - **Python on the signing path.** Nothing about the language protects
   memory. A Python string cannot be reliably wiped, so while a key is
-  loaded there is a copy of it in Corky's memory that nothing can
+  loaded there is a copy of it in Core Signer's memory that nothing can
   scrub. What protects it is not the language: the board has no swap,
   the datadir is a ramdisk, and power-off ends the session, which
   [a test proves](tests/test_no_persistence.py).
 - **The radio chip on a Zero 2 W still has power** after hardening. The
   overlays unbind the driver and the firmware never loads, so nothing
-  can drive it, and every check Corky runs is a check on the operating
+  can drive it, and every check Core Signer runs is a check on the operating
   system. No script can prove a chip is unpowered, because the thing
   doing the proving is running on the same board. Raspberry Pi documents
   a hardware disable pin for the Compute Modules and not for the Zero
@@ -533,7 +533,7 @@ Said before critics find it:
 need a real `bitcoind`. The rules that came out of being wrong are in
 [TESTING.md](TESTING.md).
 
-- **86% of `corky/`** executes under test, measured across both
+- **86% of `coresigner/`** executes under test, measured across both
   architectures, with every uncovered line sorted into one of three piles
   and exactly one statement unreachable
   ([A5](docs/wayfinder/beta-audit/tickets/A5-never-run.md)).
@@ -579,7 +579,7 @@ committed here. It needs nobody's word.
 M0 depends on the transaction's shape. Re-measured on the board
 2026-09-06, at 250 inputs: **187MB of headroom** on ordinary payments
 (pass), and exchange-batch consolidations pass to 175 inputs and fail
-from 200. The ceiling is bitcoind's memory, not Corky's, so the device
+from 200. The ceiling is bitcoind's memory, not Core Signer's, so the device
 refuses past 150 inputs rather than dying mid-sign.
 
 M1 passed except the optics, and the camera now reads a real Sparrow

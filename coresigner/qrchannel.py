@@ -39,7 +39,7 @@ _UR_CHARSET = set("abcdefghijklmnopqrstuvwxyz0123456789:-/")
 
 # Ticket 03. Sparrow's Low density tops out near 215 characters and its Normal
 # density near 775. A frame past this length is readable only when the code
-# fills most of the camera view, so Corky says so rather than letting the user
+# fills most of the camera view, so Core Signer says so rather than letting the user
 # watch a percentage that will not move. This ADVISES; it never refuses.
 # MAX_FRAME_CHARS above is the separate hostile-input guard, and it refuses.
 ADVISORY_FRAME_LEN = 400
@@ -137,7 +137,7 @@ def psbt_to_frames(psbt_b64: str, max_fragment_len: int = MAX_FRAGMENT_LEN,
     random subset, and any of them can stand in for a pure part the scanner
     never got.
 
-    That matters because one cycle on its own is fragile (ticket 09). Corky
+    That matters because one cycle on its own is fragile (ticket 09). Core Signer
     renders at exactly 4.0 pixels per module, and about one frame in 125 is
     deterministically unreadable by zxing, the decoder Sparrow uses. Looping a
     pure cycle shows the scanner the identical unreadable image forever, so

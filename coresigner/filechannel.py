@@ -2,8 +2,8 @@
 the boot microSD itself once the M3 RAM-resident image lands).
 
 Flow, Coldcard-style:
-  coordinator writes  <name>.psbt        -> stick -> Corky
-  Corky writes        <name>-signed.psbt -> stick -> coordinator
+  coordinator writes  <name>.psbt        -> stick -> Core Signer
+  Core Signer writes        <name>-signed.psbt -> stick -> coordinator
 
 Obeys the opaque-bytes law (PLAN.md A-11): this module never parses a PSBT.
 It only detects the FILE ENCODING (binary vs base64 text, both of which
@@ -31,7 +31,7 @@ def find_unsigned(mount: Path):
     follows symlinks, and every name here comes off a stick somebody else
     wrote, so on a filesystem with symlinks a file called `x.psbt` could
     point at anything this process can read. It cannot, because
-    `image/corky-usb@.service` mounts removable media `-t vfat,exfat` and
+    `image/coresigner-usb@.service` mounts removable media `-t vfat,exfat` and
     neither format has symlinks at all.
 
     That coupling had lived in two files that did not mention each other

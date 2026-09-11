@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 sys.path.insert(0, str(ROOT / "tests"))
 import hal                              # noqa: E402
-import main as corky_main               # noqa: E402
+import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
 import signer                           # noqa: E402
 from e2e_keys import grid_presses, text_keys   # noqa: E402
@@ -53,7 +53,7 @@ class Frames:
 
 
 def session(script):
-    return corky_main.Session(Frames(), hal.DevButtons(script), None,
+    return coresigner_main.Session(Frames(), hal.DevButtons(script), None,
                               animate=False, on_device=False)
 
 
@@ -202,7 +202,7 @@ class FlagWatcher:
 
 def flags_for(what, script, run, want_at_least=1):
     w = FlagWatcher()
-    sess = corky_main.Session(w, hal.DevButtons(script), None,
+    sess = coresigner_main.Session(w, hal.DevButtons(script), None,
                               animate=False, on_device=False)
     try:
         run(sess)
@@ -261,7 +261,7 @@ class ViewfinderWatcher:
 
 
 watcher = ViewfinderWatcher()
-sess = corky_main.Session(watcher, hal.DevButtons("a" * 6), None,
+sess = coresigner_main.Session(watcher, hal.DevButtons("a" * 6), None,
                           animate=False, on_device=False)
 sess.qr = OneFrameQr()
 real_scanning = screens.scanning
@@ -309,7 +309,7 @@ for verdict, want_text, why in (
     sess = session("a")
     signer.opens_wallet = lambda *a, _v=verdict, **k: _v
     try:
-        got = sess._confirm_typed_key(KEY, "corky-73c5da0a", "73c5da0a")
+        got = sess._confirm_typed_key(KEY, "coresigner-73c5da0a", "73c5da0a")
     except hal.ScriptExhausted:
         got = "ran out of presses"
     finally:

@@ -1,12 +1,12 @@
-"""RECOVERY. Corky is gone; can the paper backup still spend the money?
+"""RECOVERY. Core Signer is gone; can the paper backup still spend the money?
 
-Every other suite proves the export lands: a coordinator gets Corky's
+Every other suite proves the export lands: a coordinator gets Core Signer's
 PUBLIC descriptor and watches the right addresses. That is the happy path.
 This one is the unhappy path, and it is the one the paper backup exists
 for: the device is lost, broken, or in a river, and all that survives is
 111 characters written by hand.
 
-Nothing here uses Corky to recover. Sparrow Wallet's own library, out of
+Nothing here uses Core Signer to recover. Sparrow Wallet's own library, out of
 the sha256-verified 2.5.4 release, rebuilds a spending wallet from the
 bare master private key through `Keystore.fromMasterPrivateExtendedKey`,
 which is the call Sparrow's own "master private key" import drives. Then
@@ -22,12 +22,12 @@ from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 sys.path.insert(0, str(ROOT / "tests" / "sparrow"))
 import signer                                   # noqa: E402
 from harness import Java, Regtest, Results      # noqa: E402
 
-#: Corky's four policies, and what Sparrow calls each of them.
+#: Core Signer's four policies, and what Sparrow calls each of them.
 POLICIES = (("wpkh", "P2WPKH"), ("tr", "P2TR"),
             ("sh", "P2SH_P2WPKH"), ("pkh", "P2PKH"))
 
@@ -90,7 +90,7 @@ def main():
                      signed != psbt and len(signed) > 40,
                      f"{len(signed)} chars back")
 
-            # 3. Core is the judge. A signature Corky's own node will not
+            # 3. Core is the judge. A signature Core Signer's own node will not
             #    finalise is not a recovery, whatever Sparrow reports.
             final = net.rpc.call("finalizepsbt", signed)
             r.record(f"{kind}: Bitcoin Core finalises Sparrow's signature",

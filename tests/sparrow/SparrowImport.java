@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Asks ONE of Sparrow's own cosigner importers to read a file Corky
+ * Asks ONE of Sparrow's own cosigner importers to read a file Core Signer
  * wrote, and says what it made of it.
  *
  * Map multisig-cosigner, ticket M8. M7 read the importer sources and
@@ -35,7 +35,7 @@ public class SparrowImport {
         if (args[3].equals("-")) {
             // What Sparrow's own UI knows about this importer: whether a
             // QR can feed it, and the words it puts in front of the user.
-            // Corky has to name the menu entry, so it has to read the
+            // Core Signer has to name the menu entry, so it has to read the
             // menu rather than guess at it.
             Object scan = importer.getClass()
                     .getMethod("isKeystoreImportScannable").invoke(importer);

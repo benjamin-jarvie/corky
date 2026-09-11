@@ -66,7 +66,7 @@ for line in sorted(added):
         ok(f"{line} is removed again")
 
 # 3. The moved firmware comes back.
-if "brcm.corky-disabled" in HARDEN and "brcm.corky-disabled" not in UNHARDEN:
+if "brcm.coresigner-disabled" in HARDEN and "brcm.coresigner-disabled" not in UNHARDEN:
     bad("harden.sh moves the radio firmware and unharden.sh leaves it moved")
 else:
     ok("the radio firmware is put back")
@@ -94,12 +94,12 @@ fake = Path(tempfile.mkdtemp())
 (fake / "boot" / "firmware").mkdir(parents=True)
 (fake / "etc" / "modprobe.d").mkdir(parents=True)
 (fake / "etc" / "systemd" / "system").mkdir(parents=True)
-(fake / "lib" / "firmware" / "brcm.corky-disabled").mkdir(parents=True)
+(fake / "lib" / "firmware" / "brcm.coresigner-disabled").mkdir(parents=True)
 (fake / "boot" / "firmware" / "config.txt").write_text(
     "gpu_mem=32\ndtoverlay=disable-wifi\ndtoverlay=disable-bt\n"
     "enable_uart=0\n")
 (fake / "boot" / "firmware" / "cmdline.txt").write_text("root=/dev/mmcblk0p2\n")
-(fake / "etc" / "modprobe.d" / "corky-no-radio.conf").write_text("blacklist x\n")
+(fake / "etc" / "modprobe.d" / "coresigner-no-radio.conf").write_text("blacklist x\n")
 for unit in sorted(h):
     name = unit if unit.endswith(".service") else unit + ".service"
     os.symlink("/dev/null", fake / "etc" / "systemd" / "system" / name)
@@ -119,7 +119,7 @@ if "gpu_mem=32" not in cfg:
     bad("unharden.sh deleted a config.txt line that was not its business")
 else:
     ok("and it left the lines that were not its business alone")
-if (fake / "etc" / "modprobe.d" / "corky-no-radio.conf").exists():
+if (fake / "etc" / "modprobe.d" / "coresigner-no-radio.conf").exists():
     bad("the driver blacklist survived unharden.sh")
 else:
     ok("the driver blacklist is gone")

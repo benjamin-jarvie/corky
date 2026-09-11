@@ -1,12 +1,12 @@
-"""Can Corky's camera read Sparrow's screen? Answered without a camera.
+"""Can Core Signer's camera read Sparrow's screen? Answered without a camera.
 
-Corky's stream is ~512x384 at ~10fps into pyzbar (hw/HARDWARE.md:75). Sparrow
+Core Signer's stream is ~512x384 at ~10fps into pyzbar (hw/HARDWARE.md:75). Sparrow
 at its default NORMAL density emits UR frames up to 775 characters, which is a
 large QR. This rig renders Sparrow's real frames, degrades them the way a cheap
 camera does, and decodes with the same pyzbar 0.1.9 and zbar the device runs.
 
 Frames in sparrow_frames.json come from Sparrow's own UREncoder, captured by
-tests/sparrow. Both Sparrow and Corky render at error correction level L, so
+tests/sparrow. Both Sparrow and Core Signer render at error correction level L, so
 the module count here is the module count on the real screen.
 
 Run: tests/m1/run tests/m1/legibility_rig.py
@@ -86,7 +86,7 @@ def main():
     here = Path(__file__).resolve().parent
     fixtures = json.loads((here / "sparrow_frames.json").read_text())
 
-    print(f"Corky stream {STREAM[0]}x{STREAM[1]}, pyzbar 0.1.9 over zbar, "
+    print(f"Core Signer stream {STREAM[0]}x{STREAM[1]}, pyzbar 0.1.9 over zbar, "
           f"error correction L\n")
     verdicts = {}
 

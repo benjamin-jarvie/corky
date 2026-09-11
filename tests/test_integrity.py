@@ -2,8 +2,8 @@
 
 Run: python3 tests/test_integrity.py
 
-This file used to pin hashes for shim/bip39_shim.py, corky/codex32.py and
-corky/seedqr.py, because those three transformed key material and the README
+This file used to pin hashes for shim/bip39_shim.py, coresigner/codex32.py and
+coresigner/seedqr.py, because those three transformed key material and the README
 promised they were frozen. PLAN A-22 removed all three: `main` is a signer
 whose entire job is to carry bytes between a person and Bitcoin Core.
 
@@ -33,12 +33,12 @@ def check(name, ok, detail=""):
 
 
 # 1. The three transforming modules, and the wordlist, are gone.
-for gone in ("shim/bip39_shim.py", "shim/english.txt", "corky/codex32.py",
-             "corky/seedqr.py", "SHIM_HASH"):
+for gone in ("shim/bip39_shim.py", "shim/english.txt", "coresigner/codex32.py",
+             "coresigner/seedqr.py", "SHIM_HASH"):
     check(f"absent: {gone}", not (ROOT / gone).exists())
 check("absent: the whole shim/ directory", not (ROOT / "shim").exists())
 
-# 2. No shipped module imports a cryptographic primitive. Corky does no
+# 2. No shipped module imports a cryptographic primitive. Core Signer does no
 #    hashing, no HMAC, no key stretching: Core does all of it.
 # Everything a shipped module may import from outside the standard library.
 # This is the signer's whole third-party surface, and the README section
@@ -69,7 +69,7 @@ ALLOWED_THIRD_PARTY = {
 BANNED_IMPORTS = {"hashlib", "hmac", "secrets", "random", "ecdsa",
                   "coincurve", "bip32", "cryptography", "nacl"}
 # Every shipped .py, wherever it lives. The first version of this scanned
-# corky/*.py only, so a reintroduced Layer 1 in a new top-level directory
+# coresigner/*.py only, so a reintroduced Layer 1 in a new top-level directory
 # would have passed. Found by the A-22 spec review, 2026-09-04.
 SHIPPED = sorted(p for p in ROOT.rglob("*.py")
                  if not any(part in {"tests", "hw", ".git", "m0", "tools",
@@ -104,8 +104,8 @@ for src in SHIPPED:
     check(f"no derivation code: {src.relative_to(ROOT)}", not hits,
           f"found {hits}" if hits else "")
 
-# 4. The one thing Corky may do with a key is hand it to Core untouched.
-sig = (ROOT / "corky" / "signer.py").read_text()
+# 4. The one thing Core Signer may do with a key is hand it to Core untouched.
+sig = (ROOT / "coresigner" / "signer.py").read_text()
 check("signer only imports keys into Core",
       "importdescriptors" in sig and "open_session_xprv" in sig
       and "def open_session(" not in sig,

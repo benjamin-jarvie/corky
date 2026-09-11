@@ -1,7 +1,7 @@
 """POWER OFF must actually power the device off (issue I-2).
 
 Before this suite existed, choosing POWER OFF returned from Python and
-nothing else: bitcoind kept running under its own systemd unit, /run/corky
+nothing else: bitcoind kept running under its own systemd unit, /run/coresigner
 stayed mounted, and the ST7789 held the signed-result screen, so the
 operator read POWER OFF on a live device.
 
@@ -18,9 +18,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer                       # noqa: E402
-import main as corky_main           # noqa: E402
+import main as coresigner_main           # noqa: E402
 import hal                          # noqa: E402
 
 fails = []
@@ -83,14 +83,14 @@ def run_power_off(on_device, rpc=None, systemctl=WORKS, halt=WORKS):
     events = []
     rpc = rpc or FakeRpc()
     display = RecordingDisplay(events)
-    session = corky_main.Session(display, hal.DevButtons("a"), rpc,
+    session = coresigner_main.Session(display, hal.DevButtons("a"), rpc,
                                  animate=on_device, on_device=on_device)
-    real_run = corky_main.subprocess.run
+    real_run = coresigner_main.subprocess.run
 
     def fake_run(cmd, **kw):
         cmd = list(cmd)
         events.append(("run", cmd))
-        mode = systemctl if cmd == corky_main.HALT_CMD else halt
+        mode = systemctl if cmd == coresigner_main.HALT_CMD else halt
         if mode == MISSING:
             raise FileNotFoundError(2, "No such file or directory", cmd[0])
 
@@ -105,11 +105,11 @@ def run_power_off(on_device, rpc=None, systemctl=WORKS, halt=WORKS):
         return real_call(method, *params, **kw)
 
     rpc.call = traced
-    corky_main.subprocess.run = fake_run
+    coresigner_main.subprocess.run = fake_run
     try:
         session.power_off()
     finally:
-        corky_main.subprocess.run = real_run
+        coresigner_main.subprocess.run = real_run
     return events, display, rpc
 
 
@@ -150,7 +150,7 @@ else:
 
 # --- 2. under systemd: cover the screen, then halt ------------------------
 #
-# systemctl poweroff stops corky-bitcoind.service by that unit's own
+# systemctl poweroff stops coresigner-bitcoind.service by that unit's own
 # ExecStop, so the session must NOT also stop the node. Calling stop twice
 # makes the unit's ExecStop fail against a node that has already gone.
 
@@ -159,13 +159,13 @@ events, display, rpc = run_power_off(on_device=True)
 runs = [e[1] for e in events if e[0] == "run"]
 if not runs:
     bad("power_off never halted the board: the device stays powered on")
-elif runs != [corky_main.HALT_CMD]:
-    bad(f"power_off ran {runs}, not exactly {[corky_main.HALT_CMD]}")
+elif runs != [coresigner_main.HALT_CMD]:
+    bad(f"power_off ran {runs}, not exactly {[coresigner_main.HALT_CMD]}")
 else:
-    ok(f"power_off halts the board with {corky_main.HALT_CMD}, once")
+    ok(f"power_off halts the board with {coresigner_main.HALT_CMD}, once")
 
 if "stop" in rpc.calls:
-    bad("power_off stopped the node itself; corky-bitcoind.service's own "
+    bad("power_off stopped the node itself; coresigner-bitcoind.service's own "
         "ExecStop already does that during the systemd shutdown")
 else:
     ok("power_off leaves the node to systemd when systemd answers")
@@ -197,16 +197,16 @@ runs = [e[1] for e in events if e[0] == "run"]
 if "stop" not in rpc.calls:
     bad("systemctl is missing and power_off did not stop bitcoind: the node "
         "outlives the session and keeps writing to the ramdisk")
-elif runs[-1] != corky_main.FALLBACK_HALT_CMD:
+elif runs[-1] != coresigner_main.FALLBACK_HALT_CMD:
     bad(f"systemctl is missing and the fallback halt did not run: {runs}")
 else:
     order = [e for e in events
-             if e == ("rpc", "stop") or e == ("run", corky_main.FALLBACK_HALT_CMD)]
+             if e == ("rpc", "stop") or e == ("run", coresigner_main.FALLBACK_HALT_CMD)]
     if order[0] != ("rpc", "stop"):
         bad("the fallback halted before stopping the node")
     else:
         ok(f"a missing systemctl still stops the node, then runs "
-           f"{corky_main.FALLBACK_HALT_CMD}")
+           f"{coresigner_main.FALLBACK_HALT_CMD}")
 
 events, display, rpc = run_power_off(on_device=True, systemctl=FAILS)
 if "stop" not in rpc.calls:
@@ -261,22 +261,22 @@ else:
 
 # --- 5. a crash must NOT halt --------------------------------------------
 #
-# corky.service restarts on failure. Halting on a crash would turn a
+# coresigner.service restarts on failure. Halting on a crash would turn a
 # recoverable fault into a dead device in the user's hand.
 
 events = []
 display = RecordingDisplay(events)
-session = corky_main.Session(display, hal.DevButtons("a"), FakeRpc(),
+session = coresigner_main.Session(display, hal.DevButtons("a"), FakeRpc(),
                              animate=True, on_device=True)
 session.state_home = lambda: (_ for _ in ()).throw(RuntimeError("driver"))
-real_run = corky_main.subprocess.run
-corky_main.subprocess.run = lambda cmd, **kw: events.append(("run", list(cmd)))
+real_run = coresigner_main.subprocess.run
+coresigner_main.subprocess.run = lambda cmd, **kw: events.append(("run", list(cmd)))
 try:
     session.run()
 except RuntimeError:
     pass
 finally:
-    corky_main.subprocess.run = real_run
+    coresigner_main.subprocess.run = real_run
 
 if any(e[0] == "run" for e in events if isinstance(e, tuple)):
     bad("a crash halted the board; systemd can no longer restart the unit")

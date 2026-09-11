@@ -1,6 +1,6 @@
 [Unit]
-Description=Corky brand splash
-Before=corky-bitcoind.service
+Description=Core Signer brand splash
+Before=coresigner-bitcoind.service
 DefaultDependencies=no
 # sysinit.target orders after systemd-udevd: the SPI device node must
 # exist before the ST7789 driver opens it.
@@ -8,7 +8,7 @@ After=sysinit.target local-fs.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /opt/corky/corky/splash.py
+ExecStart=/usr/bin/python3 /opt/coresigner/coresigner/splash.py
 RemainAfterExit=yes
 User=root
 

@@ -1,4 +1,4 @@
-# M4 Does Sparrow accept Corky's cosigner export?
+# M4 Does Sparrow accept Core Signer's cosigner export?
 
 Type: `wayfinder:task`, AFK. **Blocked by M1, M2 (both closed).**
 Claimed and resolved 2026-09-10.
@@ -8,16 +8,16 @@ Claimed and resolved 2026-09-10.
 TESTING.md rule 8: an interop claim tested with your own tools is not an
 interop claim. Charting proved Sparrow's library builds a quorum from a
 Core MASTER key. It has not been asked whether it accepts the cosigner
-descriptor Corky would actually export.
+descriptor Core Signer would actually export.
 
 Drive Sparrow's own library, out of the verified 2.5.4 release already in
 `tests/sparrow/`:
 
-1. Corky exports its cosigner descriptor for each script type M1 picked.
+1. Core Signer exports its cosigner descriptor for each script type M1 picked.
 2. Sparrow imports it as one keystore of a 2-of-3.
 3. The addresses Sparrow derives match the ones Core derives for the same
    quorum.
-4. The coordinator builds a PSBT, Corky signs its share, Sparrow's
+4. The coordinator builds a PSBT, Core Signer signs its share, Sparrow's
    library combines and finalises with a second key, and Core says the
    network would accept it.
 
@@ -49,8 +49,8 @@ uses.
 2. Sparrow builds the 2-of-3 and derives the same addresses Core does,
    independently, for both paths.
 3. Sparrow sees three keystores and finds ours among them, at our path.
-4. Corky signs **one** share and does not finish the PSBT.
-5. **Chained**: Sparrow signs on top of Corky's PSBT and keeps our
+4. Core Signer signs **one** share and does not finish the PSBT.
+5. **Chained**: Sparrow signs on top of Core Signer's PSBT and keeps our
    signature. Two signatures, finalised.
 6. **Combined**: both sign the original, `combinepsbt` merges. Two
    signatures, finalised.
@@ -60,19 +60,19 @@ uses.
 ### The chained route is the finding
 
 Point 5 is the one that matters for an air-gapped device, and it was not
-on the ticket. Corky's real flow is chained: the coordinator sends a
-PSBT, Corky signs it, the signed PSBT returns by QR, and the coordinator
+on the ticket. Core Signer's real flow is chained: the coordinator sends a
+PSBT, Core Signer signs it, the signed PSBT returns by QR, and the coordinator
 signs the SAME object on top. That only works if Sparrow preserves a
 partial signature it did not make. It does. `wallet.sign(psbt)` signs in
 place and adds to what is there.
 
 Both routes producing identical hex says the two are interchangeable, so
-a coordinator can use either and Corky does not care which.
+a coordinator can use either and Core Signer does not care which.
 
 ### The bug this ticket nearly shipped
 
 The first version of check 4 asserted `complete is False` and passed
-while Corky signed **nothing**. `complete is False` is also true for zero
+while Core Signer signed **nothing**. `complete is False` is also true for zero
 signatures. The cause: `sign_psbt` was called with the session wallet,
 which holds the four standard policies and has no key at a BIP48 path at
 all. The test then read "1 signature" after Sparrow and blamed Sparrow
@@ -84,7 +84,7 @@ they bite, including the original bug replayed exactly, which reports
 
 ### The one thing this does NOT prove
 
-The test imports Corky's BIP48 branch into a scratch wallet before
+The test imports Core Signer's BIP48 branch into a scratch wallet before
 signing. That stands in for M3's decision that the device reads the path
 out of the PSBT and imports it, which is **not built**. So M4 proves the
 interop and the format. It does not prove the device's flow, and M3's

@@ -13,10 +13,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 sys.path.insert(0, str(ROOT / "tests"))
 import signer  # noqa: E402
-import main as corky_main  # noqa: E402
+import main as coresigner_main  # noqa: E402
 
 XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
@@ -84,7 +84,7 @@ def main():
                "policies and derives the same addresses")
         signer.close_key(rpc, back)
 
-        # 1b. Check an address must accept every address Corky can hand
+        # 1b. Check an address must accept every address Core Signer can hand
         #     out. _classify_qr decides that on shape alone, and its only
         #     address case was one bech32 v0 literal, so the three other
         #     policies were never put to it. A rejected address does not
@@ -93,7 +93,7 @@ def main():
         #     (Devil's advocate on A5, 2026-09-06. Rule 1: Core's own
         #     addresses, not shapes typed from memory.)
         misread = {k: a[0] for k, a in gen_addrs.items()
-                   if corky_main._classify_qr(a[0]) != "address"}
+                   if coresigner_main._classify_qr(a[0]) != "address"}
         if misread:
             bad(f"the scan does not recognise these as addresses: {misread}")
         else:
@@ -193,7 +193,7 @@ def main():
         #     This pins the boundary against Core itself, so the day a
         #     Core release moves it, the number on the screen is wrong
         #     and this fails rather than the user being misled.
-        depth = corky_main.ADDRESS_CHECK_DEPTH
+        depth = coresigner_main.ADDRESS_CHECK_DEPTH
         inside = signer.receive_addresses(rpc, gen_name, "wpkh", 1,
                                           depth - 1)[0]
         beyond = signer.receive_addresses(rpc, gen_name, "wpkh", 1, depth)[0]
@@ -221,7 +221,7 @@ def main():
             ok("no exported descriptor carries a private key, all four kinds")
         signer.close_key(rpc, gen_name)
 
-        # 2. The descriptor Corky exports is Core's own string, byte for
+        # 2. The descriptor Core Signer exports is Core's own string, byte for
         #    byte, with its checksum.
         desc = signer.export_descriptor(rpc, name, "wpkh")
         core = [d["desc"] for d in
@@ -275,18 +275,18 @@ def main():
             ok(f"watch-only wallet file written: {out.name}")
         else:
             bad("no watch-only wallet file was written")
-        orpc.call("restorewallet", "fromcorky", str(out))
-        info = orpc.call("getwalletinfo", wallet="fromcorky")
+        orpc.call("restorewallet", "fromcoresigner", str(out))
+        info = orpc.call("getwalletinfo", wallet="fromcoresigner")
         if info.get("private_keys_enabled") is False:
             ok("the restored wallet has no private keys")
         else:
             bad(f"the restored wallet reports private_keys_enabled="
                 f"{info.get('private_keys_enabled')}")
-        mine = orpc.call("getaddressinfo", addrs[0], wallet="fromcorky")
+        mine = orpc.call("getaddressinfo", addrs[0], wallet="fromcoresigner")
         if mine.get("ismine") and not mine.get("isscript", False):
-            ok("the restored wallet owns Corky's first receive address")
+            ok("the restored wallet owns Core Signer's first receive address")
         else:
-            bad("the restored wallet does not own Corky's first address")
+            bad("the restored wallet does not own Core Signer's first address")
         # And the file itself carries no secret.
         from test_no_persistence import _key_bytes
         blob = out.read_bytes()

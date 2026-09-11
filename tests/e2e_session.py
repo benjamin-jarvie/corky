@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -22,7 +22,7 @@ XPRV = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLro
 
 
 def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
-    cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
+    cmd = [sys.executable, str(ROOT / "coresigner" / "main.py"), "--dev",
            f"--datadir={datadir}", "--chain=regtest", f"--script={script}",
            f"--frames-dir={frames}"]
     if stick:
@@ -35,12 +35,12 @@ def run_device(datadir, script, frames, stick=None, qr_key=None, qr_psbt=None):
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-sess-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-sess-")
     import random as _rnd
     _port = _rnd.randint(20000, 60000)
     (Path(datadir) / "bitcoin.conf").write_text(
         "regtest=1\n[regtest]\nrpcport=%d\n" % _port)
-    work = Path(tempfile.mkdtemp(prefix="corky-sess-work-"))
+    work = Path(tempfile.mkdtemp(prefix="coresigner-sess-work-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
          "-fallbackfee=0.0001", "-server=1", "-debuglogfile=0"],
@@ -54,7 +54,7 @@ def main():
             except RuntimeError:
                 time.sleep(0.5)
 
-        # Coordinator: watch wallet from Corky's xpubs, funded
+        # Coordinator: watch wallet from Core Signer's xpubs, funded
         signer.open_session_xprv(rpc, XPRV)
         pubs = signer.public_descriptors(rpc)
         signer.close_session(rpc)
@@ -227,7 +227,7 @@ def main():
         # ---- Session J: PSBT this wallet cannot complete -> refusal ----
         # A-22: the watch wallet used to be a by-product of the codex32
         # session, which moved to the lab. J makes its own, so it stands
-        # alone: a funded wallet whose keys Corky does not hold.
+        # alone: a funded wallet whose keys Core Signer does not hold.
         stickj = work / "stickJ"; stickj.mkdir()
         rpc.call("createwallet", "foreignJ")
         fa = rpc.call("getnewaddress", wallet="foreignJ")

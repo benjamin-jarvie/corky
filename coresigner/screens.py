@@ -1,4 +1,4 @@
-"""Corky's screens as pure PIL renders.
+"""Core Signer's screens as pure PIL renders.
 
 Resolution-independent: every screen takes (width, height) and lays out from
 proportions, so the same code drives the primary 2.8" ST7789 (320x240) and the
@@ -6,7 +6,7 @@ proportions, so the same code drives the primary 2.8" ST7789 (320x240) and the
 show_image(); on a dev machine they save as PNGs for review (see
 tools/render_screens.py).
 
-Palette follows the Corky/Kawanatanga artefact palette: ink ground, cream
+Palette follows the Core Signer/Kawanatanga artefact palette: ink ground, cream
 text, Te Peeke red for the one number that matters on each screen.
 """
 
@@ -304,7 +304,7 @@ HOME_TILES = [("sign", "signature"), ("keys", "key"),
 
 def home(w, h, selected=0, xfp=None):
     """SeedSigner-style 2x2 home: four tiles, each a Font Awesome icon and a
-    title. Scan, Key, Tools, Settings (which holds power off). No CORKY
+    title. Scan, Key, Tools, Settings (which holds power off). No CORESIGNER
     text. It is a KEY, not a wallet.
 
     `xfp` is the loaded wallet's master fingerprint, shown at the top in
@@ -362,7 +362,7 @@ def settings_menu(w, h, selected=0):
 
 def about(w, h):
     img, d = _frame(w, h, "ABOUT")
-    d.text((w // 2, int(h * 0.34)), "CORKY", font=_font(int(h * 0.11)),
+    d.text((w // 2, int(h * 0.34)), "CORESIGNER", font=_font(int(h * 0.11)),
            fill=CREAM, anchor="mm")
     _fit_block(d, ["Core's keys, nothing kept",
                    "wallet brain: Bitcoin Core 31.1"],
@@ -544,7 +544,7 @@ def result(w, h, ok=True, detail="tx-a4f2-signed.psbt written",
 
     `label` names what happened. It defaulted to SIGNED for anything that
     went well, so writing a watch-only wallet file drew a large SIGNED
-    over "corky-7b6e6f0e-watch.dat written" and nothing had been signed
+    over "coresigner-7b6e6f0e-watch.dat written" and nothing had been signed
     (Ben, on the board, 2026-09-05). Signing passes SIGNED; everything
     else says DONE.
 
@@ -945,10 +945,10 @@ def leak_report(w, h, rows, cursor=0):
 # correct terms instead of xprv because people won't know what that is").
 # They also do NOT say "seed", which he asked about and which would be
 # wrong here: a seed in Bitcoin means the 12 or 24 words, or the bytes
-# they expand into, and Corky cannot take words at all. Calling this a
+# they expand into, and Core Signer cannot take words at all. Calling this a
 # seed would send a reader looking for words to write down, and would
 # suggest another wallet could restore it from words. It cannot. What
-# Corky holds is the master private key itself, which in a worded wallet
+# Core Signer holds is the master private key itself, which in a worded wallet
 # is what the seed PRODUCES. "Private key" is both true and the phrase
 # people already know. The exact token, xprv, belongs in the README.
 KEYS_ACTIONS = [
@@ -1405,7 +1405,7 @@ def splash(w, h):
          int(h * 0.075), OCHRE, "mm", int(w * 0.90))
     _fit(d, (cx, int(h * 0.42)), "presents",
          int(h * 0.05), GREY, "mm", int(w * 0.90))
-    _fit(d, (cx, int(h * 0.62)), "CORKY", int(h * 0.15), CREAM, "mm",
+    _fit(d, (cx, int(h * 0.62)), "CORESIGNER", int(h * 0.15), CREAM, "mm",
          int(w * 0.92))
     return img
 
@@ -1460,7 +1460,7 @@ def check_result(w, h, typed, wrong, label, page=0, pages=1):
     sees WHICH characters to correct rather than being told the page is
     wrong and left to find it. An empty `wrong` is a pass.
 
-    Corky can only mark the wrong ones because it holds the true key at
+    Core Signer can only mark the wrong ones because it holds the true key at
     this moment, which it already does: this screen runs inside the paper
     backup, where the key is on the panel anyway. It opens no new window
     on the key. Core, separately, is what confirms the whole key matches

@@ -1,13 +1,13 @@
-"""Adversarial signing suite for Corky. Regtest only, no real funds.
+"""Adversarial signing suite for Core Signer. Regtest only, no real funds.
 
 Each block states an ATTACK, the expected SAFE behavior, and asserts it.
 House style: ok-lines on success, sys.exit(1) on any failure.
 
 The threat model: a malicious or buggy coordinator (Sparrow, or an
-impostor) controls every byte that crosses the air gap. Corky must never
+impostor) controls every byte that crosses the air gap. Core Signer must never
 sign what it does not own, never hide a change of outputs behind a review
 screen, and never hang or crash on hostile input. Bitcoin Core is the only
-PSBT parser and the only signer; these tests prove Corky's plumbing around
+PSBT parser and the only signer; these tests prove Core Signer's plumbing around
 Core stays safe when the input is an attack.
 
 Run: python3 tests/test_adversarial.py
@@ -25,7 +25,7 @@ from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import filechannel  # noqa: E402
 import qrchannel  # noqa: E402
 import signer  # noqa: E402
@@ -65,7 +65,7 @@ def expect_raises(name, excs, fn, *args, **kwargs):
 # ======================================================================
 
 def setup_regtest(rpc):
-    """Corky session + coordinator watch wallet funded with real coins."""
+    """Core Signer session + coordinator watch wallet funded with real coins."""
     signer.open_session_xprv(rpc, XPRV)
     pubs = signer.public_descriptors(rpc)
     rpc.call("createwallet", WATCH, True, True, "", False, True)
@@ -91,7 +91,7 @@ def funded_psbt(rpc, amount=1.5):
 #  Attack: the coordinator inflates the witness_utxo amount inside the
 #  PSBT. An air-gapped signer cannot check that amount against the chain.
 #  Expected safe behavior: describe_psbt reports EXACTLY the fee Core
-#  derives from the supplied (lying) amount. Corky invents no number of
+#  derives from the supplied (lying) amount. Core Signer invents no number of
 #  its own; it faithfully surfaces Core's computation and the review
 #  screen carries fee_note saying the amount is coordinator-supplied.
 #  This is the DOCUMENTED coordinator-trust limit of any air-gapped
@@ -205,7 +205,7 @@ def _b64encode(b):
 #  ATTACK 2 — OUTPUT SUBSTITUTION AFTER REVIEW
 # ======================================================================
 #
-#  Attack: Corky reviews and signs a PSBT paying address D. The
+#  Attack: Core Signer reviews and signs a PSBT paying address D. The
 #  coordinator then swaps output D for attacker address D' in the final
 #  transaction. Expected safe behavior: the signature covers the outputs
 #  (SIGHASH_ALL), so the tampered transaction fails validation. Core's
@@ -214,7 +214,7 @@ def _b64encode(b):
 def attack_output_substitution(rpc):
     psbt, _ = funded_psbt(rpc)
     signed = signer.sign_psbt(rpc, psbt)
-    assert signed["complete"], "attack2 setup: Corky did not fully sign"
+    assert signed["complete"], "attack2 setup: Core Signer did not fully sign"
     final_hex = rpc.call("finalizepsbt", signed["psbt"])["hex"]
 
     # Baseline: the untampered signed tx is accepted.
@@ -277,7 +277,7 @@ def attack_malformed(rpc):
                       signer.sign_psbt, rpc, bad)
 
     # -- filechannel: size guard rejects empty and oversized before parsing
-    tmp = Path(tempfile.mkdtemp(prefix="corky-adv-"))
+    tmp = Path(tempfile.mkdtemp(prefix="coresigner-adv-"))
     try:
         empty = tmp / "empty.psbt"
         empty.write_bytes(b"")
@@ -375,7 +375,7 @@ def attack_malformed(rpc):
 #  ATTACK 7 — THE ENVELOPE, NOT THE PAYLOAD
 # ======================================================================
 #
-#  PLAN A-11 says Corky treats key material as opaque bytes and Core is
+#  PLAN A-11 says Core Signer treats key material as opaque bytes and Core is
 #  the only parser. That is a claim about the PAYLOAD. The ENVELOPE is
 #  parsed by us: filenames, file types, sizes, the write itself. Audit A3
 #  (2026-09-06) asked what a hostile envelope makes the device do, and
@@ -386,8 +386,8 @@ def attack_malformed(rpc):
 def attack_hostile_envelope():
     import base64
     import stat as statmod
-    tmp = Path(tempfile.mkdtemp(prefix="corky-env-"))
-    outside = Path(tempfile.mkdtemp(prefix="corky-out-"))
+    tmp = Path(tempfile.mkdtemp(prefix="coresigner-env-"))
+    outside = Path(tempfile.mkdtemp(prefix="coresigner-out-"))
     try:
         # -- What find_unsigned will pick up off a stick somebody else
         #    wrote. A FIFO is the dangerous one: opening one for reading
@@ -464,7 +464,7 @@ def attack_hostile_envelope():
 
         # -- A read-only medium, which is what a stick with its lock tab
         #    on looks like. Refuse, do not crash.
-        ro = Path(tempfile.mkdtemp(prefix="corky-ro-"))
+        ro = Path(tempfile.mkdtemp(prefix="coresigner-ro-"))
         (ro / "a.psbt").write_bytes(b"psbt\xff")
         os.chmod(ro, statmod.S_IRUSR | statmod.S_IXUSR)
         try:
@@ -489,13 +489,13 @@ def attack_hostile_envelope():
 #  ATTACK 4 — UNOWNED INPUT
 # ======================================================================
 #
-#  Attack: ask Corky to sign a PSBT spending a UTXO for which the Corky
+#  Attack: ask Core Signer to sign a PSBT spending a UTXO for which the Core Signer
 #  wallet holds no descriptor. Expected safe behavior: walletprocesspsbt
-#  returns complete=False. Corky signs only what it owns and surfaces the
+#  returns complete=False. Core Signer signs only what it owns and surfaces the
 #  incomplete result rather than pretending it is broadcastable.
 
 def attack_unowned_input(rpc):
-    # A normal wallet WITH its own private keys, unrelated to Corky.
+    # A normal wallet WITH its own private keys, unrelated to Core Signer.
     rpc.call("createwallet", "stranger", False, False, "", False, True)
     saddr = rpc.call("getnewaddress", wallet="stranger")
     rpc.call("generatetoaddress", 101, saddr)
@@ -504,9 +504,9 @@ def attack_unowned_input(rpc):
                       {"fee_rate": 10}, True, wallet="stranger")
     result = signer.sign_psbt(rpc, funded["psbt"])
     if result["complete"]:
-        fail("attack4: Corky signed a PSBT it does not own (complete=True)")
+        fail("attack4: Core Signer signed a PSBT it does not own (complete=True)")
         return
-    ok("attack4 unowned-input: walletprocesspsbt complete=False; Corky "
+    ok("attack4 unowned-input: walletprocesspsbt complete=False; Core Signer "
        "does not sign what it cannot, incomplete result surfaced")
 
 
@@ -515,8 +515,8 @@ def attack_unowned_input(rpc):
 # ======================================================================
 #
 #  Attack / concern: a nonstandard sighash (NONE/SINGLE/ANYONECANPAY)
-#  would let a coordinator strip Corky's commitment to the outputs.
-#  Expected safe behavior: Corky never passes a sighash override to
+#  would let a coordinator strip Core Signer's commitment to the outputs.
+#  Expected safe behavior: Core Signer never passes a sighash override to
 #  walletprocesspsbt (verified by reading signer.sign_psbt), so Core uses
 #  the default SIGHASH_ALL and every signature ends in the 0x01 byte.
 
@@ -581,7 +581,7 @@ def _free_port():
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-adv-regtest-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-adv-regtest-")
     # A private RPC port, written into the datadir conf so bitcoin-cli finds
     # it. This isolates the suite from any other regtest daemon that a
     # concurrent session may be running on the default port.

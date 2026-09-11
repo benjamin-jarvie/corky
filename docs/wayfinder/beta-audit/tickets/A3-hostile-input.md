@@ -8,7 +8,7 @@ Type: `wayfinder:task`, AFK. **Blocked by A1.**
 
 Everything reaching this device comes from somewhere else: a QR held up
 to the camera, a file on a stick, a card in the slot. The stated defence
-is PLAN A-11, that Corky treats key material as opaque bytes and only
+is PLAN A-11, that Core Signer treats key material as opaque bytes and only
 Bitcoin Core parses.
 
 That is a claim about the payload. It says nothing about the envelope,
@@ -100,7 +100,7 @@ no-symlinks reasoning covers it as well as the stick. `/mnt/usb` with no
 stick in it is a plain directory on the boot card and is **not** offered,
 which is the A1 fix working on the real board rather than in a fake.
 
-`image/corky-usb@.service` mounts `-t vfat,exfat` with `noexec,nosuid,nodev`
+`image/coresigner-usb@.service` mounts `-t vfat,exfat` with `noexec,nosuid,nodev`
 and `umask=0077`, and `tests/test_channels.py` fails if any of that
 changes, checking every `ExecStart` and requiring the flags to be options
 rather than substrings.

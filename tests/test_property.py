@@ -1,11 +1,11 @@
-"""Property-based and fuzz tests for Corky. Run: python3 tests/test_property.py
+"""Property-based and fuzz tests for Core Signer. Run: python3 tests/test_property.py
 
 A-22 cut this suite from five properties to three. The shim, codex32 and
 SeedQR properties went with the modules they tested: the pure signer has no
 code that transforms secret material, so there is nothing left to
 cross-check against an oracle.
 
-What remains guards the two things Corky still does with untrusted input,
+What remains guards the two things Core Signer still does with untrusted input,
 and the one number it computes:
 
   1. PSBT boundary fuzz: FrameAssembler.feed and read_psbt never raise an
@@ -23,7 +23,7 @@ from pathlib import Path
 from hypothesis import given, settings, strategies as st
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 
 import qrchannel      # noqa: E402
 import filechannel    # noqa: E402
@@ -113,7 +113,7 @@ def prop_no_key_reaches_the_panel():
     reach.
     """
     import hal
-    import main as corky_main
+    import main as coresigner_main
     import screens as scr
     import signer as sg
 
@@ -135,7 +135,7 @@ def prop_no_key_reaches_the_panel():
             return ""
 
     def session():
-        return corky_main.Session(Blind(), hal.DevButtons("a"), NoRpc(),
+        return coresigner_main.Session(Blind(), hal.DevButtons("a"), NoRpc(),
                                   animate=False)
 
     seen = []
@@ -354,7 +354,7 @@ def prop_rpc_routes_keys_itself():
     The check below this one drives FAKES, so it asserts what CALLERS do.
     This one drives the real Rpc and asserts what the MODULE does, which
     is the difference between a rule written in a docstring and a rule
-    that holds. Only subprocess.run is replaced, so the command Corky
+    that holds. Only subprocess.run is replaced, so the command Core Signer
     would have executed is the thing under test.
     """
     seen = {}
@@ -500,7 +500,7 @@ def prop_too_many_inputs_is_refused_not_signed():
     asserted here instead (TESTING.md rule 9).
     """
     import hal
-    import main as corky_main
+    import main as coresigner_main
     import screens
 
     class Painted:
@@ -543,7 +543,7 @@ def prop_too_many_inputs_is_refused_not_signed():
                         "complete": True}
             return ""
 
-    limit = corky_main.MAX_SIGNABLE_INPUTS
+    limit = coresigner_main.MAX_SIGNABLE_INPUTS
     # Pin the VALUE against the board, not just the wiring. Reading the
     # constant and testing limit+1 follows the code wherever it goes:
     # setting it to 1 passed this check until the band below was added.
@@ -559,7 +559,7 @@ def prop_too_many_inputs_is_refused_not_signed():
     # costs more to decode. Ben, 2026-09-11: two numbers, not one
     # conservative one, because a single low cap refuses ordinary batches
     # this board is measured signing.
-    multi = corky_main.MAX_SIGNABLE_MULTISIG_INPUTS
+    multi = coresigner_main.MAX_SIGNABLE_MULTISIG_INPUTS
     if not 100 <= multi <= 150:
         raise AssertionError(
             f"MAX_SIGNABLE_MULTISIG_INPUTS is {multi}. Measured on the "
@@ -572,12 +572,12 @@ def prop_too_many_inputs_is_refused_not_signed():
                                     (multi + 1, True, True),
                                     (multi, True, False)):
         disp = Painted()
-        sess = corky_main.Session(disp, hal.DevButtons("a" * 40),
+        sess = coresigner_main.Session(disp, hal.DevButtons("a" * 40),
                                   rpc=Answers(n, quorum), animate=False,
                                   on_device=False)
-        sess.keys = [corky_main.LoadedKey("corky-73c5da0a", "73c5da0a")] \
-            if hasattr(corky_main, "LoadedKey") else []
-        sess._key_for = lambda _psbt: "corky-73c5da0a"
+        sess.keys = [coresigner_main.LoadedKey("coresigner-73c5da0a", "73c5da0a")] \
+            if hasattr(coresigner_main, "LoadedKey") else []
+        sess._key_for = lambda _psbt: "coresigner-73c5da0a"
         try:
             sess.state_review("cHNidP8B", None)
         except hal.ScriptExhausted:
@@ -623,7 +623,7 @@ def prop_a_failing_stick_does_not_lose_a_signature():
     """
     import filechannel
     import hal
-    import main as corky_main
+    import main as coresigner_main
 
     class Painted:
         width, height = 320, 240
@@ -677,10 +677,10 @@ def prop_a_failing_stick_does_not_lose_a_signature():
     signed_b64 = base64.b64encode(b"psbt\xffSIGNED").decode()
     filechannel.write_signed = full_medium
     qrchannel.psbt_to_frames = spy
-    sess = corky_main.Session(Painted(), hal.DevButtons("a" * 30),
+    sess = coresigner_main.Session(Painted(), hal.DevButtons("a" * 30),
                               rpc=Signs(), animate=False, on_device=False)
     try:
-        out = sess._sign_and_deliver("cHNidP8B", src, "corky-x")
+        out = sess._sign_and_deliver("cHNidP8B", src, "coresigner-x")
     except filechannel.FileChannelError:
         raise AssertionError(
             "the stick failed and the error unwound out of "
@@ -690,9 +690,9 @@ def prop_a_failing_stick_does_not_lose_a_signature():
         filechannel.write_signed = real
         qrchannel.psbt_to_frames = real_frames
         shutil.rmtree(src.parent, ignore_errors=True)
-    assert out in (corky_main.SIGN_AGAIN, corky_main.POWER_OFF,
-                   corky_main.TO_HOME), f"unexpected outcome {out!r}"
-    assert out != corky_main.TO_HOME, (
+    assert out in (coresigner_main.SIGN_AGAIN, coresigner_main.POWER_OFF,
+                   coresigner_main.TO_HOME), f"unexpected outcome {out!r}"
+    assert out != coresigner_main.TO_HOME, (
         "the run went home instead of reaching the signed screen, so the "
         "signature was not delivered anywhere")
     assert framed, (

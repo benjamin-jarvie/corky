@@ -37,7 +37,7 @@ Not because the signer is unsound. The signing path is the best-evidenced
 part of it: 132 checks against Sparrow's own library out of its verified
 release, a wallet rebuilt from the paper backup that signs a spend the
 network accepts, two real mainnet spends on the record, and 86% of
-`corky/` measured as executed with exactly one statement unreachable.
+`coresigner/` measured as executed with exactly one statement unreachable.
 
 The no-go is about the **package**, not the program. Three things.
 
@@ -59,7 +59,7 @@ and none of them has been answered. A signer whose QR cannot be read is
 not a signer.
 
 **3. Two testers flashing a week apart get different devices.**
-`CORKY_COMMIT="HEAD"`, `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
+`CORESIGNER_COMMIT="HEAD"`, `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
 `DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"`. And `harden.sh` has never
 been run, so the card a tester gets today still has SSH and both radios
 on it. A beta where nobody can say what the testers are running produces
@@ -72,7 +72,7 @@ Four things, each finishable, none depending on another:
 1. **Run `harden.sh` on the board and watch the leak check go 13 to 0.**
    Every failing row maps to a step; nothing is unaccounted for. It is
    one way and takes SSH with it, which is why it needs your say-so.
-2. **Pin the image.** Tag a commit, put the tag in `CORKY_COMMIT`, record
+2. **Pin the image.** Tag a commit, put the tag in `CORESIGNER_COMMIT`, record
    `OS_IMAGE_SHA256` and `DEV_IMAGE_SHA256` from the flash you actually
    give people. `image/verify-install.sh` then lets any tester check
    their own card against the repository without trusting either of us.
@@ -82,7 +82,7 @@ Four things, each finishable, none depending on another:
    limit", and the fix has since been tried and measured, so the choice
    is gone. A-21's suggestion was right about the waste and wrong about
    the effect: `describe_psbt` did parse 25,000 output objects it never
-   read, and not parsing them cut Corky's process from **56MB to 45MB**
+   read, and not parsing them cut Core Signer's process from **56MB to 45MB**
    and moved the headroom by **2MB**. The low-water mark tracks
    bitcoind, which peaks at 128MB, and that is Core's memory and not
    ours.
@@ -126,7 +126,7 @@ light, and a coordinator that is not a test harness.
   and both radios are live.
 - **Only Bitcoin Core and Sparrow can open the paper backup.** BlueWallet,
   Green and Bull Bitcoin cannot.
-- **Verify your own card**: `sudo bash /opt/corky/image/verify-install.sh`.
+- **Verify your own card**: `sudo bash /opt/coresigner/image/verify-install.sh`.
 
 ### Known broken and shipped anyway, said plainly
 
@@ -158,5 +158,5 @@ Ten tickets, and the ones that would have reached a tester:
 | A10 | the README's Status showed only the passing half of M0 |
 
 A6 is the one to sit with. The device told people their paper backup was
-verified by Bitcoin Core, on the strength of comparing Corky's own copy
+verified by Bitcoin Core, on the strength of comparing Core Signer's own copy
 of a string to itself. Every suite was green through all of it.

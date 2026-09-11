@@ -3,8 +3,8 @@
 The dedicated entrypoint imports only hal and screens. The signing stack
 (signer, the channels) stays out on purpose: the frame lands
 seconds earlier on the single-core Pi, and a fault in a signing-side
-module cannot dark the boot screen. corky-splash.service runs this
-before corky-bitcoind.service; the session itself is corky/main.py.
+module cannot dark the boot screen. coresigner-splash.service runs this
+before coresigner-bitcoind.service; the session itself is coresigner/main.py.
 """
 
 import argparse

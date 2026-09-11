@@ -1,4 +1,4 @@
-# M1 Which BIP48 script types does Corky offer?
+# M1 Which BIP48 script types does Core Signer offer?
 
 Type: `wayfinder:grilling`, HITL. **Blocks M2, M3, M6.**
 Claimed 2026-09-09.
@@ -14,13 +14,13 @@ the last hardened step names the script type:
 | `2'` | P2WSH (native segwit) | Sparrow's default, what the charting session proved |
 | `3'` | P2TR | taproot, and a different shape entirely |
 
-Corky's four single-sig policies exist because Core makes all four and
+Core Signer's four single-sig policies exist because Core makes all four and
 hiding half a wallet was the D6 defect. The same argument does not
 obviously carry: a cosigner branch is only useful if a coordinator asks
 for that shape, and offering shapes nobody asks for is
 `EXPORT_KINDS` growing for its own sake.
 
-**Decide which script types Corky derives and exports**, and whether that
+**Decide which script types Core Signer derives and exports**, and whether that
 is one, two or all three. `2'` is proven to work end to end; `1'` is
 untested here; `3'` is in the fog and probably its own map.
 
@@ -41,7 +41,7 @@ that decides whether blinding is reachable at all.
 
 ### 1. Arbitrary paths, told to the device
 
-Corky derives at whatever path it is given. Not a table, not an
+Core Signer derives at whatever path it is given. Not a table, not an
 enumeration. Core imposes no limit and signs on every shape tested: BIP48
 multisig, a Liana timelock, a three-tier decay, and a 93-bit random
 hardened path.
@@ -50,13 +50,13 @@ This is the decision M6 said would open or close miniscript, decaying
 quorums and blinded xpubs together. It opens them. It is also less code
 than the alternative, because there is no table to keep.
 
-What it costs: "Corky supports these four policies" stops being a
-sentence anyone can check by enumeration, and becomes "Corky derives
+What it costs: "Core Signer supports these four policies" stops being a
+sentence anyone can check by enumeration, and becomes "Core Signer derives
 where it is told". The tests have to change shape with it.
 
 ### 2. Signing takes its path from the PSBT, and shows it
 
-A PSBT names Corky's own derivation path in `bip32_derivs`, alongside
+A PSBT names Core Signer's own derivation path in `bip32_derivs`, alongside
 every cosigner's. Verified against a BLINDED path nobody had told the
 device:
 
@@ -64,7 +64,7 @@ device:
     f0d67a70  m/48h/1h/0h/2h/0/0
     bc05b401  m/48h/1h/0h/2h/0/0
 
-So Corky matches its own fingerprint, reads the path, derives that branch
+So Core Signer matches its own fingerprint, reads the path, derives that branch
 and signs. **No setup before signing, for any of these shapes.** A
 blinded or decaying wallet works with nothing configured.
 
@@ -86,7 +86,7 @@ arbitrary path from a user. On the decision above, Coldcard is the wallet
 that cannot, which is what buidl's "few HWWs can sign on these paths"
 warning is about.
 
-So Corky takes their safety for the common case and keeps the
+So Core Signer takes their safety for the common case and keeps the
 capability:
 
     EXPORT AS

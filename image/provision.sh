@@ -1,6 +1,6 @@
 #!/bin/bash
-# Corky dev-image step 2 of 2 — run ON THE PI over SSH (or HDMI+keyboard):
-#   sudo bash /boot/firmware/corky-provision.sh
+# Core Signer dev-image step 2 of 2 — run ON THE PI over SSH (or HDMI+keyboard):
+#   sudo bash /boot/firmware/coresigner-provision.sh
 #
 # Idempotent: safe to re-run. Builds the DEV image (SSH stays on).
 # The RELEASE image hardening (network stack removal, read-only root,
@@ -8,8 +8,8 @@
 set -euo pipefail
 
 BOOT=/boot/firmware
-PINS="$BOOT/corky-PINS"
-[ -f "$PINS" ] || { echo "corky-PINS missing from $BOOT — run prepare-sd.sh first"; exit 1; }
+PINS="$BOOT/coresigner-PINS"
+[ -f "$PINS" ] || { echo "coresigner-PINS missing from $BOOT — run prepare-sd.sh first"; exit 1; }
 # shellcheck disable=SC1090
 source "$PINS"
 
@@ -29,11 +29,11 @@ if ! command -v bitcoind >/dev/null || ! bitcoind --version | grep -q "v$CORE_VE
     # 208MB on a Zero 2 W. The tarball is 82MB and unpacks to more than
     # that, so the extract dies part-written, and filling that tmpfs eats
     # the very RAM the M0 gate exists to measure. Work on disk instead.
-    work="$(mktemp -d /var/tmp/corky-core.XXXXXX)"
+    work="$(mktemp -d /var/tmp/coresigner-core.XXXXXX)"
     trap 'rm -rf "$work"' EXIT
     curl -fSL -o "$work/$CORE_TARBALL" "$CORE_URL"
     echo "$CORE_SHA256  $work/$CORE_TARBALL" | sha256sum -c -
-    # Only the two binaries Corky runs. bitcoin-qt and test_bitcoin are most
+    # Only the two binaries Core Signer runs. bitcoin-qt and test_bitcoin are most
     # of the archive by size and neither is ever executed.
     tar xzf "$work/$CORE_TARBALL" -C "$work" \
         "bitcoin-$CORE_VERSION/bin/bitcoind" "bitcoin-$CORE_VERSION/bin/bitcoin-cli"
@@ -66,31 +66,31 @@ done
 # only needs libzbar0 above, so this is a convenience, not a requirement.
 apt-get install -y -qq python3-zbar 2>/dev/null \
   || echo "   (python3-zbar unavailable; pyzbar from pip covers it)"
-echo "== 3/5 corky -> /opt/corky"
+echo "== 3/5 coresigner -> /opt/coresigner"
 # VERIFY THE PAYLOAD FIRST. Bitcoin Core is checked against a sha256 and
 # eleven GPG signatures a few lines above; the signer's own code was the
 # one thing this script took on trust, unpacked as root, and then ran as
 # root at every boot. prepare-sd.sh records the hash beside the tarball
 # (audit of image/, 2026-09-08).
-if [ -z "${CORKY_TARBALL_SHA256:-}" ]; then
-    echo "!! corky-PINS carries no CORKY_TARBALL_SHA256."
+if [ -z "${CORESIGNER_TARBALL_SHA256:-}" ]; then
+    echo "!! coresigner-PINS carries no CORESIGNER_TARBALL_SHA256."
     echo "!! Re-run image/prepare-sd.sh to write the card; a payload this"
     echo "!! script cannot check is a payload it will not unpack as root."
     exit 1
 fi
-echo "$CORKY_TARBALL_SHA256  $BOOT/corky.tar.gz" | sha256sum -c - || {
-    echo "!! corky.tar.gz does not match the hash on this card."
+echo "$CORESIGNER_TARBALL_SHA256  $BOOT/coresigner.tar.gz" | sha256sum -c - || {
+    echo "!! coresigner.tar.gz does not match the hash on this card."
     echo "!! Either the card was written twice, or somebody changed it."
     exit 1
 }
-rm -rf /opt/corky      # stale files from a prior provision must not survive
-mkdir -p /opt/corky
+rm -rf /opt/coresigner      # stale files from a prior provision must not survive
+mkdir -p /opt/coresigner
 # --no-same-owner: everything belongs to root, whatever the tarball says.
-tar xzf "$BOOT/corky.tar.gz" -C /opt/corky --no-same-owner
-cp "$BOOT/corky-PINS" /opt/corky/PINS.installed
+tar xzf "$BOOT/coresigner.tar.gz" -C /opt/coresigner --no-same-owner
+cp "$BOOT/coresigner-PINS" /opt/coresigner/PINS.installed
 
 # pip LAST, and from the payload, in that order on purpose. The lock file
-# ships inside corky.tar.gz, so it can only be trusted after the tarball
+# ships inside coresigner.tar.gz, so it can only be trusted after the tarball
 # has been checked against its hash directly above. Installing from it
 # before unpacking would have read a file that was not there yet, which
 # is what the first version of this change did.
@@ -102,28 +102,28 @@ cp "$BOOT/corky-PINS" /opt/corky/PINS.installed
 # until the image/ audit on 2026-09-08.
 echo "   pip, hash-pinned"
 python3 -m pip install --quiet --break-system-packages \
-    --require-hashes -r /opt/corky/image/requirements.txt
+    --require-hashes -r /opt/coresigner/image/requirements.txt
 
 echo "== 4/5 ramdisk datadir + bitcoin.conf"
-mkdir -p /run/corky
-grep -q "corky-ramdisk" /etc/fstab || \
-    echo "tmpfs /run/corky tmpfs rw,nosuid,nodev,size=128m,mode=0700 0 0 # corky-ramdisk" >> /etc/fstab
-mount /run/corky 2>/dev/null || true
-install -m 644 /opt/corky/m0/bitcoin.conf /etc/corky-bitcoin.conf
+mkdir -p /run/coresigner
+grep -q "coresigner-ramdisk" /etc/fstab || \
+    echo "tmpfs /run/coresigner tmpfs rw,nosuid,nodev,size=128m,mode=0700 0 0 # coresigner-ramdisk" >> /etc/fstab
+mount /run/coresigner 2>/dev/null || true
+install -m 644 /opt/coresigner/m0/bitcoin.conf /etc/coresigner-bitcoin.conf
 
 echo "== 5/5 systemd units (installed, NOT enabled on the dev image)"
-install -m 644 "$BOOT/corky.service" /etc/systemd/system/corky.service
-install -m 644 "$BOOT/corky-bitcoind.service" /etc/systemd/system/corky-bitcoind.service
-install -m 644 "$BOOT/corky-splash.service" /etc/systemd/system/corky-splash.service
+install -m 644 "$BOOT/coresigner.service" /etc/systemd/system/coresigner.service
+install -m 644 "$BOOT/coresigner-bitcoind.service" /etc/systemd/system/coresigner-bitcoind.service
+install -m 644 "$BOOT/coresigner-splash.service" /etc/systemd/system/coresigner-splash.service
 # The USB PSBT channel mounts itself (map e2e-before-testers, ticket 15).
-install -m 644 /opt/corky/image/corky-usb@.service /etc/systemd/system/corky-usb@.service
-install -m 644 /opt/corky/image/99-corky-usb.rules /etc/udev/rules.d/99-corky-usb.rules
+install -m 644 /opt/coresigner/image/coresigner-usb@.service /etc/systemd/system/coresigner-usb@.service
+install -m 644 /opt/coresigner/image/99-coresigner-usb.rules /etc/udev/rules.d/99-coresigner-usb.rules
 udevadm control --reload-rules || true
 # The USB PSBT channel's mount point. A stick that is plugged in mounts
 # itself here through the udev rule above; until one is, it is empty.
 mkdir -p /mnt/usb
 systemctl daemon-reload
-echo "   enable boot-to-corky with: sudo systemctl enable --now corky"
+echo "   enable boot-to-coresigner with: sudo systemctl enable --now coresigner"
 
 CFG0="${CFG0:-/boot/firmware/config.txt}"
 [ -f "$CFG0" ] || CFG0=/boot/config.txt
@@ -145,11 +145,11 @@ printf '[swap]\nzram-size = 0\n' > /etc/systemd/zram-generator.conf
 swapoff -a 2>/dev/null || true
 sed -i '/\sswap\s/d' /etc/fstab 2>/dev/null || true
 
-# THE JOURNAL. Core quotes keys back in its errors and Corky redacts them,
+# THE JOURNAL. Core quotes keys back in its errors and Core Signer redacts them,
 # but a journal on the card is still a permanent record of a session.
 # Keep it in RAM, where it dies with the power like everything else.
 mkdir -p /etc/systemd/journald.conf.d
-cat > /etc/systemd/journald.conf.d/corky-volatile.conf <<'JEOF'
+cat > /etc/systemd/journald.conf.d/coresigner-volatile.conf <<'JEOF'
 [Journal]
 Storage=volatile
 RuntimeMaxUse=16M
@@ -174,8 +174,8 @@ grep -q "^enable_uart=0" "$CFG0" 2>/dev/null || echo "enable_uart=0" >> "$CFG0"
 # drivers.
 grep -q "^dtoverlay=dwc2,dr_mode=host" "$CFG0" || \
     echo "dtoverlay=dwc2,dr_mode=host" >> "$CFG0"
-cat > /etc/modprobe.d/corky-no-gadget.conf <<'GEOF'
-# Corky: this device is a USB host. It is never a USB device.
+cat > /etc/modprobe.d/coresigner-no-gadget.conf <<'GEOF'
+# Core Signer: this device is a USB host. It is never a USB device.
 blacklist g_ether
 blacklist g_serial
 blacklist g_mass_storage
@@ -194,7 +194,7 @@ echo "== dev image: radios and SSH stay. Run image/harden.sh before real keys."
 # SPI for the display hat
 raspi-config nonint do_spi 0 || true
 
-# Corky is headless: the panel is a 320x240 ST7789 on SPI, driven by
+# Core Signer is headless: the panel is a 320x240 ST7789 on SPI, driven by
 # hw/vendor/st7789.py, so the firmware's GPU split buys nothing.
 #
 # Measured on a Zero 2 W, 2026-09-03, one reboot per row:
@@ -220,8 +220,8 @@ raspi-config nonint do_spi 0 || true
 # 2026-09-08).
 CFG="$CFG0"
 if ! grep -q "^gpu_mem=" "$CFG"; then
-    cp -n "$CFG" "$CFG.pre-corky"     # one file to put the stock split back
-    printf '\n# Corky: headless signer. 32 is the floor; 16 starves the\n# VideoCore services that bcm2835_isp needs.\ngpu_mem=32\n' >> "$CFG"
+    cp -n "$CFG" "$CFG.pre-coresigner"     # one file to put the stock split back
+    printf '\n# Core Signer: headless signer. 32 is the floor; 16 starves the\n# VideoCore services that bcm2835_isp needs.\ngpu_mem=32\n' >> "$CFG"
     echo "   gpu_mem=32, +32MB of RAM (takes effect on reboot)"
 fi
 
@@ -230,10 +230,10 @@ fi
 # boot_config.txt, read 2026-09-08), so they are proven on a Zero 2 W
 # rather than guessed at. boot_delay defaults to 1 second and buys
 # nothing on a board with one boot device; disable_splash removes the
-# firmware rainbow, which on Corky is a frame of somebody else's branding
+# firmware rainbow, which on Core Signer is a frame of somebody else's branding
 # before splash.py paints ours.
 #
-# NOT MEASURED HERE. Corky's boot time has never been recorded, so the
+# NOT MEASURED HERE. Core Signer's boot time has never been recorded, so the
 # saving is "one second plus the rainbow" by arithmetic and not by a
 # stopwatch. Record it on the first hardened boot.
 for kv in "boot_delay=0" "disable_splash=1"; do

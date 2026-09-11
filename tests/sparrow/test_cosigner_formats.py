@@ -1,4 +1,4 @@
-"""FORMATS. Which of Sparrow's own importers takes what Corky writes?
+"""FORMATS. Which of Sparrow's own importers takes what Core Signer writes?
 
 Map multisig-cosigner, ticket M8. M7 answered this by READING Sparrow's
 importer sources. Rule 8 is the house rule of this map: a claim about
@@ -24,13 +24,13 @@ from pathlib import Path
 from harness import Java, Regtest, Results
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 PATH = "48h/1h/0h/2h"
 DERIV = "m/48'/1'/0'/2'"
 
-#: Everything Corky could hand a coordinator, and the shapes M7 named
+#: Everything Core Signer could hand a coordinator, and the shapes M7 named
 #: that turn out not to work. Kept in one place because the NEGATIVES
 #: are the point: they are what stops the JSON being written the wrong
 #: way if it is ever written at all.
@@ -70,7 +70,7 @@ EXPECT = {
 }
 
 #: Whether Sparrow's UI offers a FILE import for each menu entry, and
-#: the exact words it puts in the list. Corky has to name the entry a
+#: the exact words it puts in the list. Core Signer has to name the entry a
 #: person picks, so it reads the menu rather than guessing at it. Three
 #: entries are scan-only, which no amount of format work changes.
 #:
@@ -78,7 +78,7 @@ EXPECT = {
 #: is an Accordion, `HwAirgappedController` puts one pane in it per
 #: importer, and `FileImportPane` shows "Scan..." and "Import File..."
 #: according to `isKeystoreImportScannable()` and
-#: `isFileFormatAvailable()`. So pinning them here pins what Corky's
+#: `isFileFormatAvailable()`. So pinning them here pins what Core Signer's
 #: export screen is allowed to tell a person to press.
 MENU = {
     "SpecterDIY": ("Specter DIY", True),
@@ -99,7 +99,7 @@ def main():
         record = signer.cosigner_key(net.rpc, net.wallet, PATH)
         xfp = record[1:9]
         tpub = record[record.index("]") + 1:]
-        r.record("the record Corky writes today is the one-liner",
+        r.record("the record Core Signer writes today is the one-liner",
                  record == f"[{xfp}/{PATH}]{tpub}", record[:40] + "…")
 
         files = {}
@@ -108,13 +108,13 @@ def main():
             f.write_text(body)
             files[name] = f
         # THE ONE-LINER COMES FROM THE DEVICE, not from this file. The
-        # rest of the table is built here because Corky does not write
+        # rest of the table is built here because Core Signer does not write
         # those shapes, and the point of them is what they prove about
         # the one it does.
         written = signer.write_cosigner(net.rpc, net.wallet, PATH, work)
         files["one-liner"] = written
         r.record("the device writes one line, named by the fingerprint",
-                 written.name == f"corky-{xfp}-cosigner.txt"
+                 written.name == f"coresigner-{xfp}-cosigner.txt"
                  and written.read_text() == record,
                  f"{written.name}, {len(written.read_text())} bytes")
 
@@ -191,9 +191,9 @@ def main():
                      (f"{out[1]} {out[2]}" if took
                       else out[0] + " " + (out[1][:34] if len(out) > 1 else "")))
 
-        # WHAT CORKY ACTUALLY PUTS ON THE QR. The scan wants a whole
+        # WHAT CORESIGNER ACTUALLY PUTS ON THE QR. The scan wants a whole
         # descriptor, and `wsh(<key>)` is NOT one: Core refuses it with
-        # "A function is needed within P2WSH", so Corky would be emitting
+        # "A function is needed within P2WSH", so Core Signer would be emitting
         # a string its own brain calls invalid. `sortedmulti(1, ...)` is
         # a descriptor both agree on, and its script type matches the
         # P2WSH wallet the key is being added to, which is what
@@ -221,11 +221,11 @@ def main():
 
         # SLIP-132 is the finding that matters for the decision. M7 said
         # the JSON needs a Vpub, and Sparrow enforcing that would have
-        # put a base58check re-encode inside corky/, which PLAN A-22
+        # put a base58check re-encode inside coresigner/, which PLAN A-22
         # forbids and Core cannot do for us. It does not: a plain tpub
         # lands.
         r.record("the JSON Sparrow takes needs NO SLIP-132 prefix, so no "
-                 "key re-encoding is required of Corky",
+                 "key re-encoding is required of Core Signer",
                  tpub.startswith("tpub"), f"accepted as {tpub[:8]}…")
     return r.summary()
 

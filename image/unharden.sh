@@ -1,7 +1,7 @@
 #!/bin/bash
 # Undo image/harden.sh. The way back in when something goes wrong.
 #
-#   sudo bash /opt/corky/image/unharden.sh && sudo reboot
+#   sudo bash /opt/coresigner/image/unharden.sh && sudo reboot
 #
 # harden.sh is one way BY DESIGN and this does not change that: you still
 # need root on the board to run it, and the only ways to get root on a
@@ -13,13 +13,13 @@
 #
 # HOW TO GET ROOT ON A HARDENED BOARD, easiest first:
 #
-#   1. HDMI console. harden.sh does not touch getty@tty1, and the corky
+#   1. HDMI console. harden.sh does not touch getty@tty1, and the coresigner
 #      user has a password, so a mini-HDMI adapter, a screen and a USB
 #      keyboard get you a login. Verified on the board 2026-09-06.
 #   2. Rescue shell. Put the card in any computer, open the FAT boot
 #      partition, and append ` init=/bin/sh` to the single line in
 #      cmdline.txt. It boots to a root shell with no login. Then:
-#        mount -o remount,rw / && bash /opt/corky/image/unharden.sh
+#        mount -o remount,rw / && bash /opt/coresigner/image/unharden.sh
 #      Take the init= back out afterwards.
 #   3. A Linux machine. Mount the ext4 root partition and run this with
 #      ROOT=/path/to/that/mount.
@@ -43,9 +43,9 @@ say() { printf '%-6s %s\n' "$1" "$2"; }
 # version used sed -i and silently changed nothing on macOS;
 # tests/test_harden_reversible.py caught it on the first run.
 drop_line() {
-    grep -v "^$1\$" "$CFG0" > "$CFG0.corky-tmp" 2>/dev/null || true
-    cat "$CFG0.corky-tmp" > "$CFG0"
-    rm -f "$CFG0.corky-tmp"
+    grep -v "^$1\$" "$CFG0" > "$CFG0.coresigner-tmp" 2>/dev/null || true
+    cat "$CFG0.coresigner-tmp" > "$CFG0"
+    rm -f "$CFG0.coresigner-tmp"
 }
 
 echo "== 1/4 firmware overlays"
@@ -61,19 +61,19 @@ if grep -q "^enable_uart=0" "$CFG0" 2>/dev/null; then
 fi
 
 echo "== 2/4 drivers may load again"
-if [ -f "$ROOT/etc/modprobe.d/corky-no-radio.conf" ]; then
-    rm -f "$ROOT/etc/modprobe.d/corky-no-radio.conf"
+if [ -f "$ROOT/etc/modprobe.d/coresigner-no-radio.conf" ]; then
+    rm -f "$ROOT/etc/modprobe.d/coresigner-no-radio.conf"
     say ok "removed the driver blacklist"
 else
     say note "no driver blacklist to remove"
 fi
 
 echo "== 3/4 firmware for the chip"
-if [ -d "$ROOT/lib/firmware/brcm.corky-disabled" ]; then
+if [ -d "$ROOT/lib/firmware/brcm.coresigner-disabled" ]; then
     if [ -d "$ROOT/lib/firmware/brcm" ]; then
-        say note "both brcm and brcm.corky-disabled exist; leaving both"
+        say note "both brcm and brcm.coresigner-disabled exist; leaving both"
     else
-        mv "$ROOT/lib/firmware/brcm.corky-disabled" "$ROOT/lib/firmware/brcm"
+        mv "$ROOT/lib/firmware/brcm.coresigner-disabled" "$ROOT/lib/firmware/brcm"
         say ok "put the radio firmware back"
     fi
 else
@@ -106,6 +106,6 @@ fi
 
 echo
 echo "Now REBOOT. Then check what came back with:"
-echo "  sudo bash /opt/corky/image/leak-check.sh"
+echo "  sudo bash /opt/coresigner/image/leak-check.sh"
 echo "Expect the radio and remote-login rows to FAIL again. That is the"
 echo "point: this board is a dev board again and must not hold a real key."

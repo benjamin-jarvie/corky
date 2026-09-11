@@ -1,4 +1,4 @@
-# Corky hardware reference
+# Core Signer hardware reference
 *Extracted from the SeedSigner repo (MIT) 2026-08-17, so the UI layer targets
 Ben's exact kit with zero guesswork.*
 
@@ -26,9 +26,9 @@ and a camera on the carrier's CSI port. Parts list: ../ORDER.md.
   No partial updates; SeedSigner redraws whole frames and it is fast enough
   for menus and animated QRs at a few FPS.
 - SeedSigner's display factory also supports st7789 320×240, ili9341 and
-  ili9486. **Corky v1's primary display is Ben's SeedSigner+ hat: 2.8" ST7789
+  ili9486. **Core Signer v1's primary display is Ben's SeedSigner+ hat: 2.8" ST7789
   at 320×240 (A-13b/A-15)**; the 1.3" 240×240 remains the pocket build.
-  Corky vendors the ST7789 driver and nothing else. The ili9341 driver was
+  Core Signer vendors the ST7789 driver and nothing else. The ili9341 driver was
   vendored too, for 2.4" boards, until 2026-09-08: no code path could
   select it, so it was 383 lines an auditor had to read that could never
   run. Git holds it if such a board ever arrives.
@@ -63,7 +63,7 @@ Eight controls, all of them used. The "4-button primary scheme" in PLAN A-15
 belonged to the Pimoroni Display HAT Mini and died with A-13b/A-15b; it is
 not a requirement.
 
-| Control | Corky's meaning |
+| Control | Core Signer's meaning |
 |---|---|
 | Joystick up / down | Move the selection; page through review outputs |
 | Joystick left / right | Move within a grid row; toggle the bottom action bar |
@@ -91,7 +91,7 @@ Everything below was read from source until this date. What the board says:
 
 **The camera is mounted at 90 degrees to the panel.** The frame arrives
 sideways. This does not affect scanning, because zbar reads a QR at any
-orientation, so Corky must NOT rotate before decoding: it would cost a copy
+orientation, so Core Signer must NOT rotate before decoding: it would cost a copy
 per frame and buy nothing. Rotate for the viewfinder only, where a human has
 to aim.
 
@@ -117,23 +117,23 @@ a Zero 2 W. numpy would have been faster to write and is already on the
 board via picamera2, but it is not on the dependency list above, and that
 list is the point.
 
-## Camera: the one place Corky must NOT copy SeedSigner
+## Camera: the one place Core Signer must NOT copy SeedSigner
 
 SeedSigner pins `picamera==1.13`, the **legacy** camera stack, frozen to old
-Raspberry Pi OS releases. Corky runs current 64-bit Bookworm (bitcoind needs
-it), where the legacy stack is gone. Corky uses **picamera2/libcamera**
+Raspberry Pi OS releases. Core Signer runs current 64-bit Bookworm (bitcoind needs
+it), where the legacy stack is gone. Core Signer uses **picamera2/libcamera**
 (preinstalled on Raspberry Pi OS) for the QR video stream instead:
 ~512×384 at ~10fps into pyzbar, mirroring SeedSigner's stream settings.
 
 ## QR libraries (SeedSigner's choices, all applicable)
 
 - `pyzbar` (SeedSigner maintains its own fork pinned by commit) for decode —
-  wraps the C zbar library. Corky rule: length-cap and charset-check zbar
+  wraps the C zbar library. Core Signer rule: length-cap and charset-check zbar
   output before use; the string then goes to Core opaque.
 - `qrcode` for encode; UR (`crypto-psbt`) framing via SeedSigner's `ur2`
   module, vendored at `hw/vendor/ur2` — UR is what Sparrow speaks for
   animated PSBTs. (SeedSigner also uses `urtypes` for richer UR types;
-  Corky needs only crypto-psbt and does it with ur2's CBOR alone.)
+  Core Signer needs only crypto-psbt and does it with ur2's CBOR alone.)
 - Plus `Pillow` for all rendering. Total third-party surface for the UI:
   Pillow, pyzbar, qrcode, urtypes, picamera2, RPi.GPIO, spidev — none of
   which ever see key material (keys exist only inside bitcoind and, for
@@ -143,8 +143,8 @@ it), where the legacy stack is gone. Corky uses **picamera2/libcamera**
 
 SeedSigner OS (their buildroot image) runs **entirely from RAM** after boot;
 SeedSigner's `hardware/microsd.py` watches `/mnt/microsd`, so the boot card can be removed
-and reused for data. Corky v1 keeps the USB-stick channel (full Raspberry Pi
-OS cannot leave its boot card), but a RAM-resident Corky OS at M3+ would make
+and reused for data. Core Signer v1 keeps the USB-stick channel (full Raspberry Pi
+OS cannot leave its boot card), but a RAM-resident Core Signer OS at M3+ would make
 the boot card itself the PSBT sled AND make statelessness structural: the
 whole OS becomes immutable-by-location. Parked, not planned: 512MB must fit
 OS + bitcoind + UI first, and M0 will tell us the headroom.

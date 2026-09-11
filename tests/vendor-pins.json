@@ -1,7 +1,7 @@
 {
-  "hw/vendor/fonts/NOTICE.md": "a5c4d7e6d1fb8362bb65fa3bb58cffdc69c1fe06b94c1fcae8cf91090341cd8e",
+  "hw/vendor/fonts/NOTICE.md": "3a3e71507c3c0b8b8daacc4056549d8668df4096e1f7b9173b7d711ec51c8a11",
   "hw/vendor/fonts/fa-solid-subset.ttf": "42b8c60a45dea583f02e80491311ec668d296d9005a1be7413d50a162d2f4675",
-  "hw/vendor/st7789.py": "1d6147507ae8c33eecd6e6acc3a14368bbfcd016f08b7679cd1de4feab02754d",
+  "hw/vendor/st7789.py": "38abdc42d9259b31e895679bcc828e93126544451655b59bdeebf88606be9abb",
   "hw/vendor/ur2/LICENSE": "2f1b5bb0af989ba3080b7eae752992e65873e294db9fa13bef1858c96fc91113",
   "hw/vendor/ur2/VENDORED.md": "e4b6d2d34fe498b7a4bd3ef8d6b7d02a072a6e2da56e53d1e7a69bdcb97c1584",
   "hw/vendor/ur2/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

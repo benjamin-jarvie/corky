@@ -40,14 +40,14 @@ rather than carried forward on trust.
 ### R6: confirmed, and worse than recorded
 
 Three runs on the board today, 250 inputs each. The first shows why the
-other two stopped Corky's own services: otherwise the gate's bitcoind
+other two stopped Core Signer's own services: otherwise the gate's bitcoind
 competes with the device's.
 
 | run | funding shape | headroom | verdict |
 |---|---|---|---|
-| Corky running beside it | exchange batches | 13MB | not a fair number |
-| Corky stopped | exchange batches | **74MB** | **FAIL**, needs 100MB |
-| Corky stopped | ordinary payments | **187MB** | PASS |
+| Core Signer running beside it | exchange batches | 13MB | not a fair number |
+| Core Signer stopped | exchange batches | **74MB** | **FAIL**, needs 100MB |
+| Core Signer stopped | ordinary payments | **187MB** | PASS |
 
 PLAN A-21 measured the same split on 2026-09-03 and got 226MB and 97MB.
 R6 measured 81MB on 2026-09-05. **Both figures are lower today and the
@@ -82,7 +82,7 @@ form. Both now state the split and today's numbers.
 ### What Sparrow's suites do and do not settle
 
 `tests/sparrow/` runs **132 checks against Sparrow 2.5.4's own library**,
-out of its sha256-verified release: the PSBTs Corky signs are the ones
+out of its sha256-verified release: the PSBTs Core Signer signs are the ones
 Sparrow really builds, the exported descriptor is one Sparrow really
 parses, and a wallet rebuilt from the paper backup signs a spend the
 network accepts. That is a real interop proof and it is not a proof about

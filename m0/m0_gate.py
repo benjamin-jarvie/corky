@@ -5,9 +5,9 @@ Run ON THE PI (works on a dev machine too, with reduced measurements):
 
 What it does, with the exact production memory flags from m0/bitcoin.conf:
   1. Starts bitcoind on regtest in a temp datadir.
-  2. Opens a Corky session (importdescriptors), timed.
-  3. A miner wallet funds Corky with N separate UTXOs.
-  4. Corky builds and signs a PSBT spending ALL N inputs (the stress case:
+  2. Opens a Core Signer session (importdescriptors), timed.
+  3. A miner wallet funds Core Signer with N separate UTXOs.
+  4. Core Signer builds and signs a PSBT spending ALL N inputs (the stress case:
      PSBT size and signing cost scale with input count).
   5. Records peak bitcoind RSS (VmHWM), system MemAvailable, and timings.
 
@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 # A-22 removed the BIP39 shim. This is the key that mnemonic
@@ -130,9 +130,9 @@ def _sample(stop, track):
 
 
 def _build_quorum(rpc, threshold, total, report):
-    """A watch-only M-of-N holding Corky's cosigner key and strangers.
+    """A watch-only M-of-N holding Core Signer's cosigner key and strangers.
 
-    Corky's own session wallet is NOT changed: it keeps the four standard
+    Core Signer's own session wallet is NOT changed: it keeps the four standard
     policies, which is what a loaded key really has. The quorum is the
     coordinator's, as the multisig-cosigner map says it always is.
     """
@@ -200,7 +200,7 @@ def main():
     threading.Thread(target=_sample,
                      args=(stop_sampler, track), daemon=True).start()
 
-    datadir = tempfile.mkdtemp(prefix="corky-m0-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-m0-")
     t0 = time.time()
     daemon = subprocess.Popen(["bitcoind", f"-datadir={datadir}", *FLAGS],
                               stdout=subprocess.DEVNULL,
@@ -221,24 +221,24 @@ def main():
         signer.open_session_xprv(rpc, XPRV)
         report["session open: importdescriptors (s)"] = round(time.time() - t, 1)
 
-        # Miner funds Corky with n UTXOs, batched to keep this quick.
+        # Miner funds Core Signer with n UTXOs, batched to keep this quick.
         rpc.call("createwallet", "miner")
         mine_addr = rpc.call("getnewaddress", wallet="miner")
         rpc.call("generatetoaddress", 120, mine_addr)
         spender = signer.WALLET
         if quorum:
             spender = _build_quorum(rpc, *quorum, report=report)
-        corky_addrs = [rpc.call("getnewaddress", wallet=spender)
+        coresigner_addrs = [rpc.call("getnewaddress", wallet=spender)
                        for _ in range(min(n, 200))]
         sent = 0
         while sent < n:
-            pay = {corky_addrs[(sent + i) % len(corky_addrs)]: 0.01
+            pay = {coresigner_addrs[(sent + i) % len(coresigner_addrs)]: 0.01
                    for i in range(min(batch, n - sent))}
             rpc.call("send", pay, wallet="miner")
             sent += len(pay)
             rpc.call("generatetoaddress", 1, mine_addr)
         utxos = len(rpc.call("listunspent", wallet=spender))
-        report["corky utxos funded"] = utxos
+        report["coresigner utxos funded"] = utxos
         low_water = mem_available_mb()
 
         # The stress PSBT: spend everything (all inputs, one output).
@@ -268,7 +268,7 @@ def main():
             signed = signer.sign_psbt(
                 rpc, funded["psbt"], wallet=signer.WALLET,
                 xfp=signer.master_fingerprint(rpc, signer.WALLET))
-            assert signed["added"], "Corky signed no share of the quorum"
+            assert signed["added"], "Core Signer signed no share of the quorum"
             report["quorum the review read"] = review["quorum"]
         else:
             signed = signer.sign_psbt(rpc, funded["psbt"])
@@ -278,7 +278,7 @@ def main():
         report["stress psbt size (KB)"] = len(funded["psbt"]) // 1024
         report["peak bitcoind RSS (MB)"] = vm_hwm_mb(daemon.pid)
         # The gate's own process is part of the device's budget too: on the
-        # real device this is corky/main.py, holding the same PSBT string and
+        # real device this is coresigner/main.py, holding the same PSBT string and
         # the same decodepsbt JSON. Reporting only the daemon hid 45MB of the
         # loss between 180 and 210 inputs.
         report["peak gate process RSS (MB)"] = vm_hwm_mb("self")

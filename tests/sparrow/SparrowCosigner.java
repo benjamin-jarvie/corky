@@ -10,9 +10,9 @@ import java.util.*;
  * other vendor in a multivendor multisig.
  *
  * Map multisig-cosigner, ticket M4. tests/sparrow/test_cosigner.py proves
- * Sparrow PARSES a quorum holding a Corky cosigner key. This proves the
+ * Sparrow PARSES a quorum holding a Core Signer cosigner key. This proves the
  * other half: Sparrow, holding a different key of the same quorum, adds
- * its signature to the one Corky already put there, and Bitcoin Core
+ * its signature to the one Core Signer already put there, and Bitcoin Core
  * accepts the result.
  *
  * The wallet is built from the descriptor exactly as SparrowDesc builds

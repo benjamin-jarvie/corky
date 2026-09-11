@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
-import main as corky_main  # noqa: E402
+sys.path.insert(0, str(ROOT / "coresigner"))
+import main as coresigner_main  # noqa: E402
 import qrchannel  # noqa: E402
 import screens  # noqa: E402
 
@@ -72,7 +72,7 @@ class Clock:
 
 
 def session(source, buttons, clock):
-    s = corky_main.Session(Display(), buttons, rpc=None, qr_source=source)
+    s = coresigner_main.Session(Display(), buttons, rpc=None, qr_source=source)
     s.clock = clock
     return s
 
@@ -135,7 +135,7 @@ def main():
 
     # 6. The guards still bite: an oversized payload and one with
     #    characters no key can contain (PLAN A-11).
-    for name, payload in (("oversized", "x" * (corky_main.MAX_KEY_PAYLOAD + 1)),
+    for name, payload in (("oversized", "x" * (coresigner_main.MAX_KEY_PAYLOAD + 1)),
                           ("bad characters", "wpkh(\x00\x01\x02)")):
         try:
             session(Source([payload]), Buttons(), Clock())._scan_key_guarded()
@@ -147,7 +147,7 @@ def main():
     #    35s to first read on the board; with the viewfinder it took 8.
     src = Source([None, None, XPRV])
     disp = Display()
-    sess = corky_main.Session(disp, Buttons(), rpc=None, qr_source=src)
+    sess = coresigner_main.Session(disp, Buttons(), rpc=None, qr_source=src)
     sess.clock = Clock()
     sess._scan_key_guarded()
     blank = screens.scanning(320, 240, None, "hold the key QR in view", 0.0)
@@ -173,8 +173,8 @@ def main():
         ("hello world", None),
         ("", None),
     ]
-    wrong = [(t[:34], corky_main._classify_qr(t), want)
-             for t, want in cases if corky_main._classify_qr(t) != want]
+    wrong = [(t[:34], coresigner_main._classify_qr(t), want)
+             for t, want in cases if coresigner_main._classify_qr(t) != want]
     if not wrong:
         ok(f"the scan classifies all {len(cases)} shapes correctly")
     else:
@@ -188,9 +188,9 @@ def main():
     #    with it, because there the user is holding a key up on purpose.
     disp = Display()
     src = Source(["hello world", "https://example.com/a(b)c", XPRV])
-    sess = corky_main.Session(disp, Buttons(), rpc=None, qr_source=src)
+    sess = coresigner_main.Session(disp, Buttons(), rpc=None, qr_source=src)
     sess.clock = Clock()
-    kind, got = sess._scan_until("hold any QR in view", corky_main._classify_qr)
+    kind, got = sess._scan_until("hold any QR in view", coresigner_main._classify_qr)
     counted = [screens.scanning(320, 240, None,
                                 f"hold any QR in view ({n} skipped)", 0.0)
                for n in (1, 2)]
@@ -229,7 +229,7 @@ def main():
                 self.n += 1
                 yield XPRV if self.n > 40 else "https://example.com/junk"
 
-    sess = corky_main.Session(Display(), Buttons(), rpc=None,
+    sess = coresigner_main.Session(Display(), Buttons(), rpc=None,
                               qr_source=StrayThenReal())
     sess.clock = Ticking()
     try:
@@ -251,7 +251,7 @@ def main():
             while True:
                 yield None
 
-    blind = corky_main.Session(Display(), Buttons(), rpc=None,
+    blind = coresigner_main.Session(Display(), Buttons(), rpc=None,
                                qr_source=Blind())
     blind.clock = Ticking()
     try:

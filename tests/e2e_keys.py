@@ -13,9 +13,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
-import main as corky_main  # noqa: E402
+import main as coresigner_main  # noqa: E402
 import screens as scr  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -127,7 +127,7 @@ def keys_press(n_keys, action, start=0):
 
 def run_device(datadir, script, frames, qr_key=None, qr_psbt=None,
                stick=None, card=None):
-    cmd = [sys.executable, str(ROOT / "corky" / "main.py"), "--dev",
+    cmd = [sys.executable, str(ROOT / "coresigner" / "main.py"), "--dev",
            f"--datadir={datadir}", "--chain=regtest", f"--script={script}",
            f"--frames-dir={frames}"]
     if stick:
@@ -172,10 +172,10 @@ def fresh_xprv(rpc):
 
 
 def main():
-    datadir = tempfile.mkdtemp(prefix="corky-keys-")
+    datadir = tempfile.mkdtemp(prefix="coresigner-keys-")
     (Path(datadir) / "bitcoin.conf").write_text(
         "regtest=1\n[regtest]\nrpcport=%d\n" % random.randint(20000, 60000))
-    work = Path(tempfile.mkdtemp(prefix="corky-keys-work-"))
+    work = Path(tempfile.mkdtemp(prefix="coresigner-keys-work-"))
     daemon = subprocess.Popen(
         ["bitcoind", "-regtest", f"-datadir={datadir}", "-listen=0",
          "-fallbackfee=0.0001", "-server=1", "-nodebuglogfile"],
@@ -253,7 +253,7 @@ def main():
             scr.result, ok=False, detail=f"no loaded key owns it; wants {xfp_b}")), \
             "K2: a transaction nobody owns was not refused by name"
         assert _has(work / "framesK2", _render(
-            scr.choose_key, [("corky", xfp_a), ("corky-2", xfp_b)], {xfp_b}, 1)), \
+            scr.choose_key, [("coresigner", xfp_a), ("coresigner-2", xfp_b)], {xfp_b}, 1)), \
             "K2: the key screen with B pre-selected was never shown"
         last = _shots(work / "framesK2")[-1].read_bytes()
         assert any(last == _render(scr.result, ok=True,
@@ -312,7 +312,7 @@ def main():
         # The address itself cannot be asserted here: this session ends
         # with the key discarded, so by the time these checks run there is
         # no wallet to ask what its first address was. The version of this
-        # that tried was guarded by `if "corky" in listwallets`, which is
+        # that tried was guarded by `if "coresigner" in listwallets`, which is
         # never true two lines above an assertion that no slot is loaded,
         # so it never ran at all (two-axis review, 2026-09-05). What CAN
         # be said is that the screen was reached with no chooser first.
@@ -325,7 +325,7 @@ def main():
 
         # ---- Session K4: a key from a crashed session never reaches this
         # one. bitcoind and the ramdisk both outlive a UI restart, and
-        # corky.service has Restart=on-failure, so this is what the board
+        # coresigner.service has Restart=on-failure, so this is what the board
         # does after a crash. Load a key OUTSIDE the device, then start the
         # device: it must clear it, say so, and show a home screen with no
         # fingerprint on it.
@@ -405,7 +405,7 @@ def main():
             assert _has(fr5, _render(scr.address_page, i, addr, "wpkh",
                                      total=3)), \
                 f"K5: address {i} was not shown after the export"
-        written = list(stick5.glob("corky-*-watch.dat"))
+        written = list(stick5.glob("coresigner-*-watch.dat"))
         assert len(written) == 1, f"K5: watch-only file not written: {written}"
         assert _has(fr5, _render(scr.result, ok=True, label="DONE",
                                  detail=f"{written[0].name} written")), \
@@ -419,7 +419,7 @@ def main():
               f"{written[0].name}, then the addresses to compare")
 
         # ---- Session K7: a bad file on the stick must not kill the app ----
-        # ISSUES D18. corky.service has Restart=on-failure, so an exception
+        # ISSUES D18. coresigner.service has Restart=on-failure, so an exception
         # here is not one bad screen, it is a restart loop that lasts as
         # long as the file is on the stick. A tester will hit this in the
         # first hour.
@@ -650,7 +650,7 @@ def main():
                 scr.verified, f"key {xfp_a.upper()}\nowns this address"))
             refused = _has(fr11, _render(
                 scr.result, ok=False, label="FAILED",
-                detail=f"not in the first {corky_main.ADDRESS_CHECK_DEPTH} "
+                detail=f"not in the first {coresigner_main.ADDRESS_CHECK_DEPTH} "
                        f"addresses of any loaded key"))
             if want == "owned":
                 assert owned and not refused, \

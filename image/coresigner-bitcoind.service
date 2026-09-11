@@ -1,0 +1,14 @@
+[Unit]
+Description=Core Signer wallet-only bitcoind (ramdisk datadir)
+RequiresMountsFor=/run/coresigner
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/bitcoind -datadir=/run/coresigner -conf=/etc/coresigner-bitcoin.conf
+ExecStop=/usr/local/bin/bitcoin-cli -datadir=/run/coresigner -conf=/etc/coresigner-bitcoin.conf stop
+TimeoutStopSec=30
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target

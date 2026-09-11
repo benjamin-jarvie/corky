@@ -26,10 +26,10 @@ def bad(m): fails.append(m); print("FAIL", m)
 
 
 def archive_paths():
-    """Exactly what prepare-sd.sh puts in corky.tar.gz, read out of the
+    """Exactly what prepare-sd.sh puts in coresigner.tar.gz, read out of the
     script itself so the two cannot drift apart."""
     script = (ROOT / "image" / "prepare-sd.sh").read_text()
-    m = re.search(r'archive --format=tar\.gz -o "\$BOOT/corky\.tar\.gz" HEAD \\?\s*\n?\s*([^\n]*)',
+    m = re.search(r'archive --format=tar\.gz -o "\$BOOT/coresigner\.tar\.gz" HEAD \\?\s*\n?\s*([^\n]*)',
                   script)
     if not m or not m.group(1).strip():
         bad("prepare-sd.sh no longer names the paths it ships")
@@ -52,16 +52,16 @@ def main():
         sys.exit(1)
     ok(f"prepare-sd.sh ships {len(spec)} paths, {len(names)} files")
 
-    # 1. Everything provision.sh installs from /opt/corky must be present,
+    # 1. Everything provision.sh installs from /opt/coresigner must be present,
     #    or the first real flash dies partway through provisioning.
     provision = (ROOT / "image" / "provision.sh").read_text()
     needed = set()
     for line in provision.splitlines():
-        for hit in re.findall(r"/opt/corky/([A-Za-z0-9_@./-]+)", line):
+        for hit in re.findall(r"/opt/coresigner/([A-Za-z0-9_@./-]+)", line):
             # A path at the end of a cp or install line is where the file
             # GOES, not a file the image must already carry. PINS.installed
             # is written by provisioning itself.
-            if line.rstrip().endswith("/opt/corky/" + hit):
+            if line.rstrip().endswith("/opt/coresigner/" + hit):
                 continue
             needed.add(hit)
     needed = sorted(needed)
@@ -76,9 +76,9 @@ def main():
     #    that matters most and shipped in nothing until audit A7: it is how
     #    anybody, including a tester who trusts neither of us, checks that
     #    the card in their hand matches the repository they can read.
-    required = ("corky/main.py", "corky/signer.py", "corky/screens.py",
-                "corky/qrchannel.py", "corky/filechannel.py",
-                "corky/hal.py", "corky/splash.py",
+    required = ("coresigner/main.py", "coresigner/signer.py", "coresigner/screens.py",
+                "coresigner/qrchannel.py", "coresigner/filechannel.py",
+                "coresigner/hal.py", "coresigner/splash.py",
                 "image/leak-check.sh", "image/harden.sh", "image/unharden.sh",
                 "image/verify-install.sh", "image/PINS",
                 "image/requirements.txt",
@@ -114,7 +114,7 @@ def main():
 
     # 4. No Python on the device except the program and what it imports.
     stray = [n for n in names if n.endswith(".py")
-             and not n.startswith(("corky/", "hw/vendor/"))]
+             and not n.startswith(("coresigner/", "hw/vendor/"))]
     if not stray:
         ok("no Python ships that the device does not run")
     else:
@@ -135,15 +135,15 @@ def main():
 
     # 6. The signer's own payload must be verified before it is unpacked
     #    as root. Bitcoin Core is checked against a sha256 and eleven GPG
-    #    signatures; corky.tar.gz was taken on trust, unpacked as root and
+    #    signatures; coresigner.tar.gz was taken on trust, unpacked as root and
     #    then run as root at every boot (audit of image/, 2026-09-08).
     prov = (ROOT / "image" / "provision.sh").read_text()
     prep = (ROOT / "image" / "prepare-sd.sh").read_text()
-    if "CORKY_TARBALL_SHA256" not in prep:
-        bad("prepare-sd.sh records no hash for corky.tar.gz, so the "
+    if "CORESIGNER_TARBALL_SHA256" not in prep:
+        bad("prepare-sd.sh records no hash for coresigner.tar.gz, so the "
             "device has nothing to check the payload against")
-    elif "CORKY_TARBALL_SHA256" not in prov:
-        bad("provision.sh does not check corky.tar.gz against a hash "
+    elif "CORESIGNER_TARBALL_SHA256" not in prov:
+        bad("provision.sh does not check coresigner.tar.gz against a hash "
             "before unpacking it as root")
     elif "sha256sum -c" not in prov:
         bad("provision.sh names the hash but never verifies it")
@@ -152,7 +152,7 @@ def main():
            "before it is unpacked")
     if "--no-same-owner" not in prov:
         bad("tar unpacks with the tarball's own ownership; everything in "
-            "/opt/corky should belong to root whatever the archive says")
+            "/opt/coresigner should belong to root whatever the archive says")
     else:
         ok("the payload unpacks as root, whatever the archive claims")
 
@@ -187,12 +187,12 @@ def main():
             ok("pip installs only after the payload carrying the lock is "
                "verified and unpacked")
 
-    # 7. A card must say which Corky is on it. CORKY_COMMIT="HEAD" told a
+    # 7. A card must say which Core Signer is on it. CORESIGNER_COMMIT="HEAD" told a
     #    tester nothing and made two cards a week apart indistinguishable
     #    (audit A7).
-    if 'CORKY_COMMIT=' not in prep or "rev-parse HEAD" not in prep:
+    if 'CORESIGNER_COMMIT=' not in prep or "rev-parse HEAD" not in prep:
         bad("prepare-sd.sh does not pin the commit it packed into the "
-            "card's PINS, so a tester cannot say which Corky they have")
+            "card's PINS, so a tester cannot say which Core Signer they have")
     else:
         ok("the card records the exact commit it was written from")
 

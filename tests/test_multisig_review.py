@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 import signer  # noqa: E402
 
 fails = []
@@ -161,7 +161,7 @@ def main():
         psbt, keys, mw = build_quorum(rpc)
 
         # 1. THE THRESHOLD. M3 decision 2: review says "2 of 3". Core
-        #    already reports the script type and the threshold, so Corky
+        #    already reports the script type and the threshold, so Core Signer
         #    reads them and parses no script itself (PLAN A-11).
         info = signer.describe_psbt(rpc, psbt)
         if info.get("quorum") == (2, 3):
@@ -254,7 +254,7 @@ def main():
         #    untouched PSBT would be lying on its most important screen,
         #    which is the exact shape of the bug M4 nearly shipped.
         #
-        #    This is a real case and not a contrived one: a loaded Corky
+        #    This is a real case and not a contrived one: a loaded Core Signer
         #    key holds the four standard policies, so it has no key at a
         #    BIP48 path and Core signs nothing at all.
         solo_w = signer.open_session_xprv(rpc, XPRV)
@@ -286,7 +286,7 @@ def main():
         #     signing takes its path from the PSBT. A loaded key holds
         #     the four standard policies and nothing at a BIP48 path, so
         #     without this the device cannot sign a share at all, which
-        #     is the gap between what M4 proved possible and what Corky
+        #     is the gap between what M4 proved possible and what Core Signer
         #     does. Same PSBT and same wallet as check 8, which signed
         #     nothing.
         told = signer.sign_psbt(rpc, quorum_psbt, wallet=solo_w,
@@ -300,7 +300,12 @@ def main():
         # 11. AND IT LEAVES NOTHING BEHIND. The fallback imports the
         #     branch to sign it. PLAN A-24 and the whole persistence
         #     argument say what it imports must not outlive the signing.
-        after = {w for w in rpc.call("listwallets") if "sign" in w}
+        # The scratch wallet BY NAME. This matched `"sign" in w`, which
+        # also matches the session wallet now that it is called
+        # coresigner: a substring filter reads as a filter and is a
+        # coincidence (rename, 2026-09-11).
+        after = {w for w in rpc.call("listwallets")
+                 if w == signer._SIGN_SCRATCH}
         if not after:
             ok("the branch it imported to sign with is gone again")
         else:
@@ -361,12 +366,12 @@ def main():
             bad(f"14: a plain quorum reported timelocks "
                 f"{info.get('timelocks')!r} lock={info.get('spend_lock')!r}")
 
-        # 15. AND CORKY SIGNS EVERY TIER IT IS IN, IN ONE PASS. Our key
+        # 15. AND CORESIGNER SIGNS EVERY TIER IT IS IN, IN ONE PASS. Our key
         #     sits at three accounts here. M9's _branches reads all of
         #     them out of the PSBT, so nothing has to be set up first.
         t3 = signer.sign_psbt(rpc, spends[2][2], wallet="dours", xfp=dxfp)
         if t3["added"] and t3["complete"]:
-            ok("past its timelock, Corky alone finishes the spend")
+            ok("past its timelock, Core Signer alone finishes the spend")
         else:
             bad(f"15: tier 3 added={t3['added']} complete={t3['complete']}; "
                 "the one-key tier must finish on this device alone")

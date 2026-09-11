@@ -1,6 +1,6 @@
 """No key material survives a discard, a close, a crash or a restart.
 
-This is the product. Corky's claim is that the device holds nothing, so
+This is the product. Core Signer's claim is that the device holds nothing, so
 this suite treats the whole datadir as one blob of bytes and refuses to
 find a key in it. Map e2e-before-testers, ticket 08.
 
@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "corky"))
+sys.path.insert(0, str(ROOT / "coresigner"))
 sys.path.insert(0, str(ROOT / "tests"))
 import signer  # noqa: E402
 
@@ -276,7 +276,7 @@ def main():
 
         # 6. A key loaded by anything other than this session must not
         #    survive into it. bitcoind runs under its own systemd unit and
-        #    keeps running when corky.service restarts, so a crashed
+        #    keeps running when coresigner.service restarts, so a crashed
         #    session leaves its wallet loaded in Core.
         signer.open_session_xprv(rpc, XPRV_A)
         loaded_before = [w for w in rpc.call("listwallets") if w in signer.SLOTS]
@@ -288,7 +288,7 @@ def main():
             bad(f"a stray key survived startup: loaded {loaded_after}, "
                 f"files {hits(datadir, XPRV_A)}")
 
-        # 6b. A scratch wallet is Corky's too. write_watch_only holds the
+        # 6b. A scratch wallet is Core Signer's too. write_watch_only holds the
         #     PRIVATE descriptors in `<slot>-backup` between createwallet
         #     and the finally that deletes it. A crash in that window used
         #     to leave a plaintext key that neither close_session nor the
@@ -365,7 +365,7 @@ def main():
             ok("redact() leaves public keys alone")
 
         # 8c. A WIF carries no word-shaped prefix, so the pattern above
-        #     misses it entirely. Corky never asks for one, but a person
+        #     misses it entirely. Core Signer never asks for one, but a person
         #     typing a key on a five-way pad can mistype or paste one, and
         #     Core echoes what it refused: "key 'cVjzvdHG…' is not valid"
         #     reached the panel and the journal in full (audit A2).

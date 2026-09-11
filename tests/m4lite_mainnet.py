@@ -13,21 +13,21 @@ import subprocess
 import sys
 import tempfile
 import time
-sys.path.insert(0, "corky")
+sys.path.insert(0, "coresigner")
 import signer
 
 # The burner key, as an xprv. A-22 left this branch with no BIP39, so the
 # key arrives in the form Core itself understands. Pass the file holding it
-# as argv[1], or set CORKY_BURNER_XPRV. It was a mnemonic in the original
+# as argv[1], or set CORESIGNER_BURNER_XPRV. It was a mnemonic in the original
 # 2026-08-19 run; the recorded result (tx 19d1180b, block 963255) stands.
 def burner_xprv():
     import os
     if len(sys.argv) > 1:
         return open(sys.argv[1]).read().strip()
-    key = os.environ.get("CORKY_BURNER_XPRV", "").strip()
+    key = os.environ.get("CORESIGNER_BURNER_XPRV", "").strip()
     if not key:
         sys.exit("give the burner xprv: a file as argv[1], or "
-                 "CORKY_BURNER_XPRV in the environment")
+                 "CORESIGNER_BURNER_XPRV in the environment")
     return key
 
 TXID = "de2b23a1ced68cc80c8b1bf04c609e7fe096987db3b62d15ea3fc0d12fa650d8"
@@ -83,7 +83,7 @@ def main():
         psbt += b"\x00"                                         # output0: empty
         psbt_b64 = base64.b64encode(psbt).decode()
 
-        # signer reviews then signs (Corky's exact path)
+        # signer reviews then signs (Core Signer's exact path)
         info = signer.describe_psbt(rpc, psbt_b64)
         print(f"REVIEW: out {info['outputs'][0]['address']} "
               f"{info['outputs'][0]['amount_btc']} BTC, fee {info['fee_btc']} BTC, "
