@@ -13,16 +13,25 @@ camera at this panel.
 Run this BEFORE `image/harden.sh`. Hardening takes SSH with it, and
 every diagnosis below is easier with a shell.
 
-## What is already covered, and what is not
+## Two different camera problems
 
-| direction | who reads | covered by |
-|---|---|---|
-| inbound, the device reads a coordinator's QR | Core Signer's camera | `tests/hw_camera.py`, scripted |
-| **outbound, a coordinator reads the panel** | **a phone or webcam** | **nothing** |
+They are not one job and they need different things from you.
 
-`tests/sparrow/` proves the outbound BYTES are correct and that zxing
-decodes the rendered image. What it cannot prove is that a real lens, in
-real light, at a real distance, resolves the panel.
+**1. The device's camera reads a QR off the laptop screen.** This is how
+a transaction gets IN. `tests/hw_camera.py` already exists for it: it
+paints what the camera sees onto the LCD so the operator can aim, and
+names every QR it decodes. You run it and hold the board up to Sparrow.
+
+**2. A phone or webcam reads the device's screen.** This is how the
+signed transaction and the public key get OUT. Nothing exists for it and
+nothing can, because Core Signer cannot drive somebody else's camera.
+You point and look.
+
+Both must work or the device is useless, and neither has been done.
+
+`tests/sparrow/` proves the BYTES leaving the device are right, and that
+zxing decodes the image the panel draws. What no software can prove is
+that a real lens, in real light, at arm's length, resolves it.
 
 ## Setup
 
@@ -30,7 +39,7 @@ Board on the desk, running, SSH still alive. Sparrow on the laptop. One
 phone wallet. Room light as a person would actually use, not a lamp
 aimed at the screen.
 
-## Part A. Inbound, scripted
+## Part A. The device's camera reads a QR
 
     ssh corky-ip
     sudo python3 /opt/coresigner/tests/hw_camera.py --seconds 90
@@ -39,7 +48,7 @@ Paints the viewfinder on the LCD and names every QR it decodes. Show it
 a PSBT QR from Sparrow. **Pass:** it decodes within a few seconds of
 being aimed, without a tripod.
 
-## Part B. Outbound, single-sig
+## Part B. Sparrow and a phone read the device's screen
 
 On the device: **Export public key** -> pick a policy -> **QR code**.
 The screen cycles all eight mask patterns at 0.3s. Hold each coordinator
@@ -49,7 +58,7 @@ Do all four policies. Native segwit and Taproot are what most people
 use; Nested segwit is the awkward one at 61 modules against the others'
 57.
 
-## Part C. Outbound, multisig. NEW, and the bigger ask
+## Part C. The same, for a multisig key. NEW, and the hard one
 
 Multisig is in the pilot, so this is not optional.
 
@@ -70,7 +79,7 @@ Wallet** -> **Specter DIY** -> **Scan...**.
 
 | # | what | coordinator | read? | notes |
 |---|---|---|---|---|
-| A | inbound PSBT | Core Signer's camera | | |
+| A | device reads a PSBT QR | Core Signer's camera | | |
 | B1 | Native segwit | Sparrow | | |
 | B2 | Taproot | Sparrow | | |
 | B3 | Nested segwit | Sparrow | | |
