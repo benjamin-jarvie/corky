@@ -8,13 +8,18 @@ export PYTHONDONTWRITEBYTECODE=1
 find . -name __pycache__ -not -path "./hw/vendor/*" -exec rm -rf {} + 2>/dev/null || true
 PY="arch -arm64 python3"
 SUITES_FAST="tests/test_integrity.py tests/test_image_contents.py tests/test_readme_claims.py tests/test_qrchannel.py tests/test_filechannel.py tests/test_property.py tests/test_screen_fit.py tests/test_ui_cost.py tests/test_qr_out.py tests/test_poweroff.py tests/test_display_driver.py tests/test_buttons.py tests/test_keyscan.py tests/test_menu_wiring.py tests/test_scroll.py tests/test_splash.py tests/test_backup_check.py tests/test_channels.py tests/test_key_persistence.py tests/test_harden_reversible.py tests/test_vendor_pinned.py tests/test_leak_check.py"
-SUITES_NODE="tests/test_addresses.py tests/e2e_regtest.py tests/e2e_filechannel.py tests/e2e_session.py tests/test_generate.py tests/test_matrix.py tests/test_adversarial.py tests/test_keys.py tests/e2e_keys.py tests/test_no_persistence.py tests/test_export.py"
+SUITES_NODE="tests/test_addresses.py tests/e2e_regtest.py tests/e2e_filechannel.py tests/e2e_session.py tests/test_generate.py tests/test_matrix.py tests/test_adversarial.py tests/test_keys.py tests/e2e_keys.py tests/test_no_persistence.py tests/test_export.py tests/test_multisig_review.py"
 FAILED=0
 # The two lists above are typed by hand, so a suite can exist and never
 # run. That is the same defect as the shellcheck line below: a check that
 # reads a hand-written file list reports on the list, not on the repo.
 # tests/m1 and tests/sparrow are excluded because they have their own
-# gates further down.
+# gates further down. The sparrow gate globs rather than naming its
+# suites: it used to list four by hand, and the two added for the
+# multisig map on 2026-09-10 were not in the list, so 56 checks against
+# Sparrow's own library never ran here. A hand-written list is the very
+# defect the UNWIRED loop above exists to catch, and it had the same
+# hole one level along.
 UNWIRED=""
 for f in tests/test_*.py tests/e2e_*.py; do
   case " $SUITES_FAST $SUITES_NODE " in
@@ -100,8 +105,7 @@ done
 # so they run here when that build exists, and say so when it does not.
 SPARROW=0
 if [ -x "tests/sparrow/.build/jdk-25.0.4.1+1/Contents/Home/bin/java" ]; then
-  for t in tests/sparrow/test_sparrow_interop.py tests/sparrow/test_qr_airgap.py \
-           tests/sparrow/test_export_interop.py tests/sparrow/test_recovery.py; do
+  for t in tests/sparrow/test_*.py; do
     SLOG="$LOGDIR/$(basename "$t").log"
     if (cd tests/sparrow && $PY "$(basename "$t")" >"$SLOG" 2>&1); then
       # Report the count the suite OBSERVED, never one written down here.

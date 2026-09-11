@@ -842,7 +842,7 @@ def _timelocks(inputs: list) -> "tuple[int, ...]":
     timelocks here, in front of `OP_CHECKSEQUENCEVERIFY`. Measured
     2026-09-10 against a three-tier decay: `('10', '20')`.
     """
-    found = set()
+    found: "set[int]" = set()
     for txin in inputs:
         asm = str(txin.get("witness_script", {}).get("asm", ""))
         found.update(int(n) for n in _CSV.findall(asm))
@@ -992,15 +992,19 @@ def sign_at_told_paths(rpc: "Rpc", wallet: str, psbt_b64: str,
             stem = account.removeprefix("m/")
             raw = (f"wpkh({xprv}/{stem}/{change}/*)" if change
                    else f"wpkh({xprv}/{stem})")
-            entry = {"desc": raw, "timestamp": "now"}
+            # Checksummed here rather than in a second pass over the
+            # list. The second pass had to read `desc` back out of a dict
+            # holding a range as well, which is a str and a list in one
+            # value, and mypy was right to refuse it.
+            checksum = rpc.call("getdescriptorinfo", raw,
+                                stdin=True)["checksum"]
+            # A ranged descriptor needs its range and a flat one must NOT
+            # carry it, so the shape differs per branch.
+            entry: "dict[str, object]" = {"desc": f"{raw}#{checksum}",
+                                          "timestamp": "now"}
             if change:
                 entry["range"] = [0, top]
             imports.append(entry)
-        for entry in imports:
-            entry["desc"] = (
-                entry["desc"] + "#"
-                + rpc.call("getdescriptorinfo", entry["desc"],
-                           stdin=True)["checksum"])
         result = rpc.call("importdescriptors", imports,
                           wallet=_SIGN_SCRATCH, stdin=True)
         failed = [r for r in result if not r.get("success")]
