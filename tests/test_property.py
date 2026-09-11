@@ -560,12 +560,13 @@ def prop_too_many_inputs_is_refused_not_signed():
     # conservative one, because a single low cap refuses ordinary batches
     # this board is measured signing.
     multi = corky_main.MAX_SIGNABLE_MULTISIG_INPUTS
-    if not 60 <= multi < limit:
+    if not 100 <= multi <= 150:
         raise AssertionError(
-            f"MAX_SIGNABLE_MULTISIG_INPUTS is {multi}. A 2-of-3 decode "
-            f"costs 1.23x a single-sig one at the same input count, so it "
-            f"belongs below {limit} and not so low it refuses a quorum "
-            "the board can hold")
+            f"MAX_SIGNABLE_MULTISIG_INPUTS is {multi}. Measured on the "
+            "Zero 2 W: a 2-of-3 leaves 107MB of headroom at 150 inputs "
+            "and FAILS at 175 with 92MB, against 100MB required, so "
+            "anything past 150 ships a known failure and anything under "
+            "100 refuses quorums the board can hold")
     for n, quorum, want_refusal in ((limit + 1, False, True),
                                     (limit, False, False),
                                     (multi + 1, True, True),

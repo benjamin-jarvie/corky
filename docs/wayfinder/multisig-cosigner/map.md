@@ -206,6 +206,13 @@ ticket needs to re-derive them.
   a whole descriptor Core will checksum. A first pass closed this with
   Advanced unbuilt and the justification written into the answer, which
   a two-axis review caught.
+- [M5 How many multisig inputs will the board sign?](tickets/M5-memory.md):
+  measured on the Zero 2 W. A 2-of-3 PASSES at 150 inputs with 107MB of
+  headroom and FAILS at 175 with 92MB, so the cap is **120**, which
+  leaves 29MB and matches the margin the single-sig 150 buys. The board
+  confirms the dev ratio of 1.23x; what it corrects is the inference,
+  because a cap follows where the 100MB line falls and not another cap
+  divided by a ratio.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
@@ -237,14 +244,6 @@ ticket needs to re-derive them.
   alone recovers the wallet, in a way the standard paths do not, which
   is the descriptor argument at its strongest and needs its own thinking
   about what Corky then owes the user.
-
-## Still to build
-
-The map's decisions are all made. ONE piece of execution remains.
-
-- [M5 How many multisig inputs will the board sign?](tickets/M5-memory.md),
-  which needs the Zero 2 W. M9 measured the cost of its undrop at 0.29MB
-  retained and nothing at the peak, so this is a confirmation.
 
 ## Out of scope
 

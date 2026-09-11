@@ -125,22 +125,27 @@ MAX_SIGNABLE_INPUTS = 150
 #: script and a derivation entry per cosigner rather than one, and M9
 #: undropped both for the review screen.
 #:
-#: **PROVISIONAL, and it is an estimate rather than a measurement**,
-#: which TESTING.md rule 6 says is not good enough for a cost claim. It
-#: stands here because the alternative is worse: 150 for a quorum is a
-#: promise the board probably cannot keep, and this errs toward refusing
-#: work rather than toward the OOM killer taking bitcoind while it holds
-#: the only copy of a signature.
+#: **Measured on the Zero 2 W, 2026-09-11**, swap off, funding batch 100,
+#: `m0/m0_gate.py --inputs N --quorum 2-of-3`. MemAvailable low-water,
+#: against the 100MB the gate requires:
 #:
-#: Where it comes from. `describe_psbt` under tracemalloc at funding
-#: batch 100, the worst case the number above was set against:
-#: single-sig decodes 100 inputs in 15.29MB and 150 in 19.27MB, where a
-#: 2-of-3 takes 18.74MB and 23.69MB. **1.23x at both sizes.** So a
-#: quorum at 150/1.23 is about the decode the board was measured
-#: holding at 150 single-sig.
+#:     2-of-3   100   146MB      single-sig   150   139MB
+#:              120   129MB                   175   123MB
+#:              150   107MB
+#:              175    92MB  FAIL
 #:
-#: Map M5 confirms or replaces it on the Zero 2 W with
-#: `python3 m0/m0_gate.py --inputs N --quorum 2-of-3`.
+#: **A 2-of-3 at 150 passes.** The cap is not 150 for the same reason the
+#: single-sig cap is not 175: the line is drawn below the cliff rather
+#: than on it. 150 would leave 7MB over the limit where the single-sig
+#: cap leaves 39MB, and the fall from 150 to 175 is 15MB. 120 leaves
+#: 29MB, which is the margin the number above already buys.
+#:
+#: A dev-machine estimate put this at 120 by scaling the decode cost,
+#: which a 2-of-3 raises 1.23x. The ratio was right and the inference
+#: was crude: bitcoind's own RSS carries it on the board, 97MB against
+#: 117MB at 150 inputs, and a cap follows where the 100MB line falls
+#: rather than the other cap times a ratio. The number landed in the
+#: right place for a reason it did not have until it was measured.
 MAX_SIGNABLE_MULTISIG_INPUTS = 120
 
 # What a PSBT run reports back to the home screen.

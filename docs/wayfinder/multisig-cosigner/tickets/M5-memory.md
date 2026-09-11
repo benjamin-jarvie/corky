@@ -148,3 +148,53 @@ quietly get the single-sig number.
 
 Swap must be off or the gate refuses to give a verdict. Pass is
 MemAvailable never below 100MB.
+
+## Answer, 2026-09-11. Measured on the Zero 2 W. The cap stays 120.
+
+Ben turned the board on, so this stopped being a prediction. Run on a
+Pi Zero 2 W Rev 1.0, 447MB, swap off (`/proc/swaps` empty), the device's
+own `corky`, `corky-bitcoind` and `corky-splash` stopped for the
+measurement and started again after. No key was loaded; `/run/corky` was
+empty, so nothing was discarded. SoC peaked at 42.9C and
+`vcgencmd get_throttled` read `0x0` throughout.
+
+`m0/m0_gate.py --inputs N [--quorum 2-of-3]`, funding batch 100:
+
+| case | PSBT | bitcoind RSS | gate RSS | MemAvailable | verdict |
+|---|---|---|---|---|---|
+| 2-of-3 100 | 623KB | 106MB | 32MB | **146MB** | PASS |
+| 2-of-3 120 | 658KB | 108MB | 33MB | **129MB** | PASS |
+| 2-of-3 150 | 795KB | 117MB | 38MB | **107MB** | PASS |
+| 2-of-3 175 | 985KB | 123MB | 44MB | **92MB** | **FAIL** |
+| single-sig 150 | 548KB | 97MB | 32MB | 139MB | PASS |
+| single-sig 175 | 681KB | 107MB | 37MB | 123MB | PASS |
+
+### A 2-of-3 at 150 passes, and the cap is still 120
+
+The ticket feared 150 was "a promise the board cannot keep" for a
+quorum. It can keep it, with 7MB to spare. That is not a margin worth
+shipping. The single-sig cap of 150 sits 39MB above the line, and its
+own comment says the cliff "is 36MB, so the line is drawn below it
+rather than on it". The quorum cliff from 150 to 175 is 15MB. **120
+leaves 29MB**, which is the same kind of margin, so 120 stands, now
+measured rather than guessed.
+
+### Where the dev estimate was right and where it was crude
+
+The dev machine put a 2-of-3 decode at **1.23x** single-sig. The board
+agrees: bitcoind's RSS at 150 inputs is 97MB single-sig against 117MB
+for a quorum, which is 1.21x.
+
+What was wrong was the inference. That measurement was turned into a cap
+by dividing the OTHER cap by the ratio, 150/1.23, and landing on 120.
+A cap follows from where the 100MB line falls, not from scaling another
+cap. The number was right by luck and is now right by measurement, which
+is the difference TESTING.md rule 6 is about.
+
+### M3's undrop cost nothing the board can see
+
+M9 undropped `witness_script` and `bip32_derivs` for the review screen
+and M5 existed partly to find what that cost. At 150 single-sig inputs
+the board holds 139MB, where the pre-undrop measurement that set the cap
+held 114MB at 175. The undrop is not visible against run-to-run
+variation. M9's dev figure, 0.29MB retained, was the right order.
