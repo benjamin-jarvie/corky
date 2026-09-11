@@ -191,6 +191,13 @@ ticket needs to re-derive them.
   ready to send` from `SHARE · needs another signature`. That closes
   M3's own reopen condition, because a miniscript screen never had a
   threshold to state.
+- [M8 Does Corky write the Coldcard JSON as well as the one-liner?](tickets/M8-one-format-or-two.md):
+  no. Export asks ONE question, QR or file, and each answer has one
+  payload and one name to tell the person: **Specter DIY**, which is the
+  format Krux and SeedSigner both extend. The two channels carry
+  DIFFERENT text, which M2 never asked about: the scan path refuses a
+  bare key expression, so the QR must be `wsh([xfp/path]tpub)` while the
+  file stays the bare one-liner.
 - [M7 What file does a coordinator want a cosigner key in?](tickets/M7-cosigner-file-format.md):
   a bare key expression on one line, which Coldcard writes and both
   Sparrow and Nunchuk read. Coldcard omits the `/0/*` suffix Core gives
