@@ -129,6 +129,32 @@ def _sample(stop, track):
             track["temp"] = t
 
 
+def _build_quorum(rpc, threshold, total, report):
+    """A watch-only M-of-N holding Corky's cosigner key and strangers.
+
+    Corky's own session wallet is NOT changed: it keeps the four standard
+    policies, which is what a loaded key really has. The quorum is the
+    coordinator's, as the multisig-cosigner map says it always is.
+    """
+    path = signer.cosigner_path(rpc)
+    keys = [signer.cosigner_key(rpc, signer.WALLET, path)]
+    for i in range(total - 1):
+        rpc.call("createwallet", f"cosigner{i}")
+        keys.append(signer.cosigner_key(rpc, f"cosigner{i}", path))
+    rpc.call("createwallet", "quorum", True, True, "", False, True)
+    for change in (0, 1):
+        inner = (f"sortedmulti({threshold},"
+                 + ",".join(f"{k}/{change}/*" for k in keys) + ")")
+        checksum = rpc.call("getdescriptorinfo", f"wsh({inner})",
+                            stdin=True)["checksum"]
+        rpc.call("importdescriptors",
+                 [{"desc": f"wsh({inner})#{checksum}", "active": True,
+                   "internal": bool(change), "timestamp": "now",
+                   "range": [0, 250]}], wallet="quorum", stdin=True)
+    report["quorum"] = f"{threshold}-of-{total} P2WSH at m/{path}"
+    return "quorum"
+
+
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--inputs", type=int, default=250)
@@ -139,8 +165,21 @@ def main():
     # factor of 7.3. 100 models consolidating exchange batch withdrawals,
     # which is the real worst case. 2 models ordinary payments.
     args.add_argument("--funding-batch", type=int, default=100)
+    # M5: the same gate against a QUORUM. A multisig input carries a
+    # witness script and a derivation entry per cosigner rather than one,
+    # so the same input count is a larger PSBT and a larger decode. M9
+    # also undropped `witness_script` and `bip32_derivs` for the review
+    # screen, and signs through `sign_at_told_paths`, which imports a
+    # branch into a scratch wallet. This measures the path that ships
+    # (TESTING.md rule 3), not a convenient one.
+    args.add_argument("--quorum", metavar="M-of-N",
+                      help="measure a multisig share, e.g. 2-of-3")
     parsed = args.parse_args()
     n, batch = parsed.inputs, parsed.funding_batch
+    quorum = None
+    if parsed.quorum:
+        threshold, total = (int(x) for x in parsed.quorum.split("-of-"))
+        quorum = (threshold, total)
 
     swap = swap_active_mb()
     if swap:
@@ -186,7 +225,10 @@ def main():
         rpc.call("createwallet", "miner")
         mine_addr = rpc.call("getnewaddress", wallet="miner")
         rpc.call("generatetoaddress", 120, mine_addr)
-        corky_addrs = [rpc.call("getnewaddress", wallet=signer.WALLET)
+        spender = signer.WALLET
+        if quorum:
+            spender = _build_quorum(rpc, *quorum, report=report)
+        corky_addrs = [rpc.call("getnewaddress", wallet=spender)
                        for _ in range(min(n, 200))]
         sent = 0
         while sent < n:
@@ -195,7 +237,7 @@ def main():
             rpc.call("send", pay, wallet="miner")
             sent += len(pay)
             rpc.call("generatetoaddress", 1, mine_addr)
-        utxos = len(rpc.call("listunspent", wallet=signer.WALLET))
+        utxos = len(rpc.call("listunspent", wallet=spender))
         report["corky utxos funded"] = utxos
         low_water = mem_available_mb()
 
@@ -203,9 +245,9 @@ def main():
         t = time.time()
         dest = rpc.call("getnewaddress", wallet="miner")
         inputs = [{"txid": u["txid"], "vout": u["vout"]}
-                  for u in rpc.call("listunspent", wallet=signer.WALLET)]
+                  for u in rpc.call("listunspent", wallet=spender)]
         total = sum(float(u["amount"]) for u in
-                    rpc.call("listunspent", wallet=signer.WALLET))
+                    rpc.call("listunspent", wallet=spender))
         # subtractFeeFromOutputs keeps this a single output with no change,
         # which is the shape the stress case wants. A hard-coded fee reserve
         # was wrong at both ends: 60x the real fee at 250 inputs, and larger
@@ -214,12 +256,23 @@ def main():
         funded = rpc.call("walletcreatefundedpsbt", inputs,
                           [{dest: round(total, 8)}], 0,
                           {"fee_rate": 5, "subtractFeeFromOutputs": [0]},
-                          True, wallet=signer.WALLET)
+                          True, wallet=spender, stdin=True)
         report["stress psbt inputs"] = len(inputs)
         report["funding batch (outputs per tx)"] = batch
         review = signer.describe_psbt(rpc, funded["psbt"])
-        signed = signer.sign_psbt(rpc, funded["psbt"])
-        assert signed["complete"], "stress PSBT did not fully sign"
+        if quorum:
+            # The shipped path: the loaded key holds the four standard
+            # policies and nothing at a BIP48 path, so `sign_psbt` falls
+            # through to `sign_at_told_paths` and imports the branch the
+            # PSBT names into a scratch wallet.
+            signed = signer.sign_psbt(
+                rpc, funded["psbt"], wallet=signer.WALLET,
+                xfp=signer.master_fingerprint(rpc, signer.WALLET))
+            assert signed["added"], "Corky signed no share of the quorum"
+            report["quorum the review read"] = review["quorum"]
+        else:
+            signed = signer.sign_psbt(rpc, funded["psbt"])
+            assert signed["complete"], "stress PSBT did not fully sign"
         report["build+review+sign stress PSBT (s)"] = round(time.time() - t, 1)
         report["fee shown (rBTC)"] = review["fee_btc"]
         report["stress psbt size (KB)"] = len(funded["psbt"]) // 1024

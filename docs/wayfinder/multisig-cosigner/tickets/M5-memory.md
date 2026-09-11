@@ -55,3 +55,61 @@ One thing M9 added that this must include: `sign_at_told_paths` imports
 a descriptor per branch and signs in a scratch wallet, so a multisig
 sign now runs `decodepsbt` once more than a single-sig one. Measure the
 whole signing run, not just the review.
+
+## Measured on the dev machine, 2026-09-11, before the board
+
+TESTING.md rule 7: "before you write 'no test without hardware', name
+the exact line that needs the board." For this ticket that line is
+`mem_available_mb()` on 512MB with swap off. Everything else measures
+here, and doing it first turns the board session into a confirmation
+rather than a search.
+
+**`m0/m0_gate.py` now measures a quorum**, so Friday is one command:
+
+    python3 m0/m0_gate.py --inputs 150 --quorum 2-of-3
+
+It builds a watch-only 2-of-3 holding Corky's cosigner key and two
+strangers, funds it, and signs a share through the path that SHIPS:
+`sign_psbt(..., xfp=…)` falls through to `sign_at_told_paths`, which
+imports the branch the PSBT names into a scratch wallet. Corky's own
+session wallet keeps the four standard policies, which is what a loaded
+key really has.
+
+### The decode, which is the term that matters
+
+`describe_psbt` under `tracemalloc`, funding batch 100 (2778 bytes per
+input, the exchange-batch worst case the cap was set against):
+
+| case | PSBT | decode peak |
+|---|---|---|
+| single-sig 100 | 432KB | 15.29MB |
+| single-sig 150 | 548KB | 19.27MB |
+| 2-of-3 100 | 623KB | 18.74MB |
+| 2-of-3 150 | 795KB | 23.69MB |
+
+**A 2-of-3 costs 1.23x a single-sig decode at the same input count**,
+and the ratio is the same at 100 and at 150. PSBT size scales at 1.45x.
+
+So **a 2-of-3 at about 120 inputs costs the decode that single-sig costs
+at 150**, which is where `MAX_SIGNABLE_INPUTS` sits.
+
+### The prediction the board has to judge
+
+The board measured single-sig: 175 inputs passed with 114MB headroom,
+200 failed with 78MB, and the cap was set at 150. If the decode carries
+the ratio, **the multisig ceiling is near 120 and 150 is a promise this
+board cannot keep for a quorum.** That is the fear this ticket opened
+with, now with a number on it.
+
+Sample 100, 120, 150 and 175 with `--quorum 2-of-3` and find the floor.
+
+### One correction to M9's number
+
+M9 recorded the undrop as costing "0.29MB retained and nothing at the
+peak", measured at 150 multisig inputs on a **516KB** PSBT. Today's
+150-input multisig PSBT is **795KB**, because M9's fixture funded in
+chunks of 50 and this gate funds in batches of 100, and the gate's own
+comment says that is a factor of 7.3 on bytes per input. The undrop
+conclusion stands, because it is about the RETAINED tree and that is
+small either way. **The peak figures are not comparable**, and the board
+must use the batch-100 case, which is what the cap was set against.
