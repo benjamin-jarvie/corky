@@ -407,12 +407,10 @@ def main():
         # Every key presents all four since D6, and the wallet this session
         # used is already closed, so the list is EXPORT_ORDER rather than a
         # live lookup.
-        # The menu carries the cosigner rows under the four policies
-        # since map M11, so the expected render has to be given what the
-        # device gives it. The path follows the chain, as signer does.
+        # The menu carries a Multisig row under the four policies, so
+        # the expected render has to be given what the device gives it.
         assert _has(fr5, _render(
-            scr.script_menu, signer.EXPORT_ORDER, 0,
-            cosigner_path="m/" + signer.cosigner_path(rpc).replace("h", "'"))), \
+            scr.script_menu, signer.EXPORT_ORDER, 0, multisig=True)), \
             "K5: the script type was not asked before the QR"
         assert _has(fr5, _render(scr.export_options, 0)), \
             "K5: the export destination was never asked"

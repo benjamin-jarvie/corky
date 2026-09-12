@@ -182,6 +182,16 @@ else:
     bad(f"DOWN x{_downs} then L then A returned {typed!r}; the buttons "
         "under the grid are not reachable by going down")
 
+# AND THE LOOP CLOSES. Down again from the bar comes round to the top of
+# the grid, so the buttons are a place you pass through rather than a
+# room with one door.
+sess = session("d" * _downs + "d" + "a" + "d" * _downs + "la")
+typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
+if typed is None:
+    ok("DOWN from the bar loops to the top of the grid, and round again")
+else:
+    bad(f"the d-pad did not loop through the bar; got {typed!r}")
+
 sess = session("ccla")               # to the bar, to ABORT, take it
 typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
 if typed is not None:

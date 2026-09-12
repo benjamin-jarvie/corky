@@ -784,13 +784,37 @@ KEY_MENU_OPTIONS = [
 #: decision 3: named rows at the top, the typed path one level down
 #: inside Advanced, which is Coldcard's structure with the capability
 #: they do not have. Nobody types m/48'/0'/0'/2', so nobody mistypes it.
-COSIGNER_KIND = "cosigner"
-ADVANCED_KIND = "advanced"
-COSIGNER_ROW = "Cosigner (P2WSH)"
-ADVANCED_ROW = "Advanced…"
+#: Multisig is its own place, not a fifth policy with a jargon name
+#: (Ben, 2026-09-11). "Cosigner (P2WSH)" sat in the list beside Native
+#: segwit and Taproot and read as a different KIND of thing, which it is:
+#: those four are for a wallet you sign alone, and this is for a wallet
+#: where you are one of several. Behind this row the words are the same
+#: ones again, Native segwit and Nested segwit, because inside multisig
+#: the question really is the script type.
+MULTISIG_KIND = "multisig"
+MULTISIG_ROW = "Multisig…"
+
+#: What one cosigner export can be. The first two are BIP48's script
+#: step, 2h for P2WSH and 1h for P2SH-P2WSH, named in the words the rest
+#: of the device uses rather than in the numbers.
+MS_WSH, MS_SHWSH, MS_ACCOUNT, MS_TYPED = "wsh", "sh-wsh", "account", "typed"
 
 
-def script_rows(kinds, cosigner_path=None):
+def multisig_rows(wsh_path, shwsh_path, account):
+    """The rows MULTISIG draws, with the thing each one means."""
+    return [("Native segwit", wsh_path, MS_WSH),
+            ("Nested segwit", shwsh_path, MS_SHWSH),
+            ("Account number", str(account), MS_ACCOUNT),
+            ("Type a path…", "", MS_TYPED)]
+
+
+def multisig_menu(w, h, rows, selected=0):
+    return _menu(w, h, "MULTISIG",
+                 [(label, note, "normal") for label, note, _k in rows],
+                 selected)
+
+
+def script_rows(kinds, multisig=False):
     """The rows SCRIPT TYPE draws, with the thing each one MEANS.
 
     ONE list. `script_menu` draws it and `main._export` dispatches on it,
@@ -801,13 +825,12 @@ def script_rows(kinds, cosigner_path=None):
     appended the cosigner rows under a condition of its own.
     """
     rows = [(SCRIPT_LABELS[k], "", k) for k in kinds]
-    if cosigner_path:
-        rows.append((COSIGNER_ROW, cosigner_path, COSIGNER_KIND))
-        rows.append((ADVANCED_ROW, "", ADVANCED_KIND))
+    if multisig:
+        rows.append((MULTISIG_ROW, "one key of several", MULTISIG_KIND))
     return rows
 
 
-def script_menu(w, h, kinds, selected=0, cosigner_path=None):
+def script_menu(w, h, kinds, selected=0, multisig=False):
     """Which script policy to export. Chosen FIRST, before the QR.
 
     Ben, 2026-09-05: "if exporting, you should have chosen this first."
@@ -819,33 +842,8 @@ def script_menu(w, h, kinds, selected=0, cosigner_path=None):
     a key imported since D6.
     """
     rows = [(label, note, "normal")
-            for label, note, _kind in script_rows(kinds, cosigner_path)]
+            for label, note, _kind in script_rows(kinds, multisig)]
     return _menu(w, h, "SCRIPT  TYPE", rows, selected)
-
-
-#: One level down from the named row, which is Coldcard's structure:
-#: expert things once under Advanced, and nothing destructive here at
-#: all. M1 decision 3: "Nobody types m/48'/0'/0'/2', so nobody mistypes
-#: it. The free-text row is one level down, where it is not reached by
-#: accident, and it is the only route to a blinded xpub."
-NESTED_KIND, ACCOUNT_KIND, TYPED_KIND = "nested", "account", "typed"
-
-
-def advanced_rows(nested_path, account):
-    """The rows ADVANCED draws, with the thing each one means.
-
-    One list, drawn and dispatched from, as `script_rows` is and for the
-    same reason (TESTING.md rule 11).
-    """
-    return [("Cosigner (nested)", nested_path, NESTED_KIND),
-            ("Account number", str(account), ACCOUNT_KIND),
-            ("Type a path…", "", TYPED_KIND)]
-
-
-def advanced_menu(w, h, rows, selected=0):
-    return _menu(w, h, "ADVANCED",
-                 [(label, note, "normal") for label, note, _k in rows],
-                 selected)
 
 
 #: How many accounts the chooser offers. A person with more than this
@@ -854,7 +852,7 @@ ACCOUNTS = 10
 
 
 def account_menu(w, h, selected=0):
-    """Which account the named rows derive at. `m/48'/coin'/ACCOUNT'/…`"""
+    """Which account the named rows derive at. `m/48'/coin'/ACCOUNT'/...`"""
     return _menu(w, h, "ACCOUNT  NUMBER",
                  [(str(i), "", "normal") for i in range(ACCOUNTS)], selected)
 
@@ -1006,7 +1004,7 @@ SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot",
                  # the cosigner row is appended separately. It is here so
                  # the export QR can label itself with the same line the
                  # single-sig one uses.
-                 COSIGNER_KIND: "Cosigner"}
+                 MULTISIG_KIND: "Cosigner"}
 
 
 def _groups(text):
@@ -1320,7 +1318,7 @@ def _echo_with_caret(d, w, h, shown, at):
 CHECK_HINTS = {
     "grid": "%d/%d typed   ·   DOWN for ABORT, C for the caret",
     "text": "%d/%d typed   ·   L/R move, A to the grid, C for ABORT",
-    "bar": "%d/%d typed   ·   L/R choose, A does it, B back to typing",
+    "bar": "%d/%d typed   ·   L/R choose, A does it, DOWN loops round",
 }
 
 #: How many typed characters the echo line can hold at this font size.

@@ -227,8 +227,8 @@ CASES = {
     # row is the longest the named rows can produce, which is mainnet's
     # m/48'/0'/0'/2' at the same width as regtest's.
     "cosigner-options": lambda w, h: screens.cosigner_options(w, h, 1),
-    "advanced-menu": lambda w, h: screens.advanced_menu(
-        w, h, screens.advanced_rows("m/48'/0'/0'/1'", 9), 2),
+    "multisig-menu": lambda w, h: screens.multisig_menu(
+        w, h, screens.multisig_rows("m/48'/0'/0'/2'", "m/48'/0'/0'/1'", 9), 3),
     "account-menu": lambda w, h: screens.account_menu(w, h, 9),
     # The worst path a person can type: three hardened levels of 31 bits,
     # which is the shape buidl's secure_secret_path builds and the only
@@ -236,8 +236,7 @@ CASES = {
     "path-echo": lambda w, h: screens.path_echo(
         w, h, "m/607137099'/1711870460'/1965312408'", "7asmw9jj", 1),
     "script-menu-cosigner": lambda w, h: screens.script_menu(
-        w, h, ("wpkh", "tr", "sh", "pkh"), 4,
-        cosigner_path="m/48'/0'/0'/2'"),
+        w, h, ("wpkh", "tr", "sh", "pkh"), 4, multisig=True),
     "script-menu": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "choose-key": lambda w, h: screens.choose_key(
@@ -265,12 +264,11 @@ MENUS = {
     "script type": lambda w, h: screens.script_menu(
         w, h, ("wpkh", "tr", "sh", "pkh"), 0),
     "cosigner options": lambda w, h: screens.cosigner_options(w, h, 0),
-    "advanced": lambda w, h: screens.advanced_menu(
-        w, h, screens.advanced_rows("m/48'/0'/0'/1'", 0), 0),
+    "multisig": lambda w, h: screens.multisig_menu(
+        w, h, screens.multisig_rows("m/48'/0'/0'/2'", "m/48'/0'/0'/1'", 0), 0),
     "account number": lambda w, h: screens.account_menu(w, h, 0),
-    "script type with cosigner": lambda w, h: screens.script_menu(
-        w, h, ("wpkh", "tr", "sh", "pkh"), 0,
-        cosigner_path="m/48'/0'/0'/2'"),
+    "script type with multisig": lambda w, h: screens.script_menu(
+        w, h, ("wpkh", "tr", "sh", "pkh"), 0, multisig=True),
 }
 
 

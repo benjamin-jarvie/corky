@@ -782,26 +782,20 @@ class Session:
         # The cosigner rows sit under the four policies (M1 decision 3).
         # `order` stays the four, and the extra rows are indexed past it,
         # so `available_kinds` keeps meaning what it always did.
-        path = signer.cosigner_path(self.rpc)
-        shown = "m/" + path.replace("h", "'")
         # The SAME list screens draws, so the label and the handler cannot
         # drift apart (TESTING.md rule 11).
-        rows = screens.script_rows(order, shown)
+        rows = screens.script_rows(order, multisig=True)
         selected = 0
         while True:
             selected = self._pick(
-                lambda sel, o=order, p=shown: screens.script_menu(
-                    self.w, self.h, o, sel, cosigner_path=p),
+                lambda sel, o=order: screens.script_menu(
+                    self.w, self.h, o, sel, multisig=True),
                 len(rows), start=selected)
             if selected is None:
                 return
             kind = rows[selected][2]
-            if kind == screens.COSIGNER_KIND:
-                if self._export_cosigner(name, path):
-                    return
-                continue
-            if kind == screens.ADVANCED_KIND:
-                if self._export_advanced(name):
+            if kind == screens.MULTISIG_KIND:
+                if self._export_multisig(name):
                     return
                 continue
             # A completed export leaves the flow. It used to drop back on
@@ -815,31 +809,36 @@ class Session:
     #: holds.
     cosigner_account = 0
 
-    def _export_advanced(self, name):
-        """The nested path, the account number, and a typed path.
+    def _export_multisig(self, name):
+        """This key as one of several: the script type, then how it leaves.
 
-        M1 decision 3 puts these one level down, which is Coldcard's
-        structure: "the free-text row is one level down, where it is not
-        reached by accident, and it is the only route to a blinded xpub".
+        One place for everything multisig (Ben, 2026-09-11). The two named
+        rows are BIP48's script step and they use the words the rest of
+        the device uses, because inside multisig the question really is
+        the script type. The typed row is the only route to a blinded
+        xpub, which M1 decision 3 put one level down so it is not reached
+        by accident, and it is still one level down: here.
 
         Returns True when an export finished, which ends the whole flow.
         """
         while True:
-            nested = signer.cosigner_path(self.rpc, "sh-wsh",
-                                          self.cosigner_account)
-            rows = screens.advanced_rows("m/" + nested.replace("h", "'"),
+            paths = {k: signer.cosigner_path(self.rpc, k,
+                                             self.cosigner_account)
+                     for k in ("wsh", "sh-wsh")}
+            shown = {k: "m/" + v.replace("h", "'") for k, v in paths.items()}
+            rows = screens.multisig_rows(shown["wsh"], shown["sh-wsh"],
                                          self.cosigner_account)
             chosen = self._pick(
-                lambda sel, r=rows: screens.advanced_menu(
+                lambda sel, r=rows: screens.multisig_menu(
                     self.w, self.h, r, sel),
                 len(rows))
             if chosen is None:
                 return False
             kind = rows[chosen][2]
-            if kind == screens.NESTED_KIND:
-                if self._export_cosigner(name, nested):
+            if kind in (screens.MS_WSH, screens.MS_SHWSH):
+                if self._export_cosigner(name, paths[kind]):
                     return True
-            elif kind == screens.ACCOUNT_KIND:
+            elif kind == screens.MS_ACCOUNT:
                 picked = self._pick(
                     lambda sel: screens.account_menu(self.w, self.h, sel),
                     screens.ACCOUNTS, start=self.cosigner_account)
@@ -930,7 +929,7 @@ class Session:
             self._hold("in your coordinator choose Specter DIY, then Scan",
                        ok=True)
             return bool(self._export_qr(name, payload,
-                                        screens.COSIGNER_KIND))
+                                        screens.MULTISIG_KIND))
         dest = self._choose_channel()
         if dest is None:
             return False
@@ -1257,6 +1256,14 @@ class Session:
                     sel = 1 - sel
                 elif key in ("a", "p"):
                     return text if sel == 1 else None
+                elif key == "d":
+                    # THE D-PAD LOOPS. Down off the grid reaches the bar,
+                    # and down again comes round to the top (Ben,
+                    # 2026-09-11). A row of buttons you can enter and not
+                    # leave the same way is a trap with one door.
+                    sel, page, cur = None, 0, 0
+                elif key == "u":
+                    sel = None         # back up into the grid, where you were
                 elif key in ("b", "c"):
                     sel = None
                 continue
@@ -1672,6 +1679,10 @@ class Session:
                     sel = 1 - sel
                 elif key in ("a", "p"):
                     return (typed, caret) if sel == 1 else (None, 0)
+                elif key == "d":
+                    focus, page, cur = "grid", 0, 0   # round to the top
+                elif key == "u":
+                    focus = "grid"     # back up into the grid
                 elif key in ("b", "c"):
                     focus = "grid"
             elif focus == "text":

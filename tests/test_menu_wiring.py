@@ -163,7 +163,8 @@ pin("EXPORT AS", screens.EXPORT_OPTIONS, run_export, {
 # which is the two-lists shape this whole file exists for. They now share
 # `screens.script_rows`, and this is what says so.
 
-SCRIPT_ROWS = screens.script_rows(coresigner_main.signer.EXPORT_ORDER, "m/48'/0'/0'/2'")
+SCRIPT_ROWS = screens.script_rows(coresigner_main.signer.EXPORT_ORDER,
+                                  multisig=True)
 
 
 def _stub(target, **values):
@@ -182,8 +183,7 @@ def _stub(target, **values):
 
 def run_script_menu(sess):
     ran = []
-    recorder(sess, ("_export_one", "_export_cosigner", "_export_advanced"),
-             ran)
+    recorder(sess, ("_export_one", "_export_multisig"), ran)
     undo = _stub(coresigner_main.signer,
                  available_kinds=lambda *a, **k: coresigner_main.signer.EXPORT_ORDER,
                  cosigner_path=lambda *a, **k: "48h/0h/0h/2h")
@@ -198,8 +198,7 @@ pin("SCRIPT TYPE", [(label, note) for label, note, _k in SCRIPT_ROWS],
     run_script_menu,
     {"Native segwit": "_export_one", "Taproot": "_export_one",
      "Nested segwit": "_export_one", "Legacy": "_export_one",
-     "Cosigner (P2WSH)": "_export_cosigner",
-     "Advanced…": "_export_advanced"})
+     "Multisig…": "_export_multisig"})
 
 
 # --- 4c. how a cosigner record leaves, and what Advanced offers --------
@@ -223,7 +222,7 @@ pin("COSIGNER OUT", screens.COSIGNER_OPTIONS, run_cosigner,
     {"QR code": "_export_qr", "File": "file"})
 
 
-def run_advanced(sess):
+def run_multisig(sess):
     ran = []
     recorder(sess, ("_export_cosigner", "_export_typed_path"), ran)
     # The account row opens a menu rather than calling a handler, so the
@@ -237,7 +236,7 @@ def run_advanced(sess):
                   account_menu=lambda *a, **k: (ran.append("account")
                                                 or real(*a, **k)))
     try:
-        sess._export_advanced("coresigner")
+        sess._export_multisig("coresigner")
     except hal.ScriptExhausted:
         pass            # the account menu asks again; the row still ran
     finally:
@@ -245,11 +244,12 @@ def run_advanced(sess):
     return ran[0] if ran else "nothing"
 
 
-pin("ADVANCED",
-    [(label, note)
-     for label, note, _k in screens.advanced_rows("m/48'/0'/0'/1'", 0)],
-    run_advanced,
-    {"Cosigner (nested)": "_export_cosigner",
+pin("MULTISIG",
+    [(label, note) for label, note, _k in
+     screens.multisig_rows("m/48'/0'/0'/2'", "m/48'/0'/0'/1'", 0)],
+    run_multisig,
+    {"Native segwit": "_export_cosigner",
+     "Nested segwit": "_export_cosigner",
      "Account number": "account",
      "Type a path…": "_export_typed_path"})
 
