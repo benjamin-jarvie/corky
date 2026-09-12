@@ -273,6 +273,27 @@ def _grid_move(key, pages, page, cur):
     return page, cur
 
 
+def _leaves_grid(key, pages, page, cur):
+    """Does DOWN step off the bottom of the grid?
+
+    True on the last row of the last page, where `_grid_move` has
+    nowhere to go and hands the same cell back. Every screen with a
+    character grid also has an action bar UNDER it, and the bar used to
+    be reachable only with C.
+
+    Ben, on the board, 2026-09-11: "If you can't get to abort, remove the
+    button or make sure you can go down and left and actually get to the
+    button." The bar is drawn below the grid, so DOWN is where a person
+    reaches for it. C still works and the hint still names it.
+    """
+    # Only when DOWN would do NOTHING. The first version called the whole
+    # bottom row the edge, which stole a real move: on a partial last row
+    # `_grid_move` steps sideways to the final cell, and the route search
+    # in tests/test_ui_cost.py uses it. Ask the mover instead of
+    # second-guessing it.
+    return key == "d" and _grid_move(key, pages, page, cur) == (page, cur)
+
+
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
                  animate=False, on_device=False, card_dir=None):
@@ -1239,7 +1260,9 @@ class Session:
                 elif key in ("b", "c"):
                     sel = None
                 continue
-            if key in ("u", "d", "l", "r"):
+            if _leaves_grid(key, pages, page, cur):
+                sel = 1              # DOWN off the bottom: the buttons
+            elif key in ("u", "d", "l", "r"):
                 page, cur = _grid_move(key, pages, page, cur)
             elif key == "a":
                 text += pages[page][cur]
@@ -1664,6 +1687,8 @@ class Session:
                     return typed, caret  # centre press finishes, everywhere
                 elif key == "c":
                     focus = "bar"
+            elif _leaves_grid(key, grid, page, cur):
+                focus = "bar"        # DOWN off the bottom: the buttons
             elif key in ("u", "d", "l", "r"):
                 page, cur = _grid_move(key, grid, page, cur)
             elif key == "a":

@@ -1318,7 +1318,7 @@ def _echo_with_caret(d, w, h, shown, at):
 #: person presses it expecting to leave and why it must lead somewhere
 #: that says what it does.
 CHECK_HINTS = {
-    "grid": "%d/%d typed   ·   C for the caret, C again for ABORT",
+    "grid": "%d/%d typed   ·   DOWN for ABORT, C for the caret",
     "text": "%d/%d typed   ·   L/R move, A to the grid, C for ABORT",
     "bar": "%d/%d typed   ·   L/R choose, A does it, B back to typing",
 }

@@ -157,6 +157,31 @@ else:
 
 # --- 6. ABORT on the entry screen leaves, and B on an empty page leaves -
 
+# DOWN OFF THE BOTTOM OF THE GRID reaches the bar, which is where a
+# person reaches for a row of buttons drawn under a grid. The check
+# below this one has passed since the flow was written and proves the
+# path EXISTS; it cannot prove anybody can find it, and Ben could not:
+# "If you can't get to abort, remove the button or make sure you can go
+# down and left and actually get to the button" (on the board,
+# 2026-09-11). The walk is computed from the real charset so it cannot
+# drift.
+_pages = screens.charset_pages("xprv")
+_pg, _cur, _downs = 0, 0, 0
+while True:                      # walk it the way the device would
+    _nxt = coresigner_main._grid_move("d", _pages, _pg, _cur)
+    if _nxt == (_pg, _cur):
+        break
+    _pg, _cur = _nxt
+    _downs += 1
+_downs += 1                      # the press that steps off the bottom
+sess = session("d" * _downs + "la")
+typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
+if typed is None:
+    ok(f"DOWN x{_downs} off the grid reaches the bar, then L and A abort")
+else:
+    bad(f"DOWN x{_downs} then L then A returned {typed!r}; the buttons "
+        "under the grid are not reachable by going down")
+
 sess = session("ccla")               # to the bar, to ABORT, take it
 typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
 if typed is not None:
