@@ -800,12 +800,34 @@ MULTISIG_ROW = "Multisig…"
 MS_WSH, MS_SHWSH, MS_ACCOUNT, MS_TYPED = "wsh", "sh-wsh", "account", "typed"
 
 
+#: OFF FOR THE PILOT (Ben, 2026-09-16). A typed path reaches anywhere,
+#: including a blinded one, and that is the thing Core Signer can do that
+#: most hardware wallets cannot. It is also the one way a tester loses
+#: coins through OUR design rather than their mistake: the 111-character
+#: paper backup recovers the standard paths by convention and cannot
+#: recover a path nobody can guess. The coordinator holds that record,
+#: and a tester who loses it has nothing left.
+#:
+#: The map wrote this down and never answered it: "blinding breaks the
+#: property that the paper key alone recovers the wallet ... needs its
+#: own thinking about what Core Signer then owes the user." M11 shipped
+#: the row anyway. This closes it for the pilot rather than pretending
+#: the question was settled.
+#:
+#: The code stays whole. `_export_typed_path` and its checksum echo are
+#: reached by nothing while this is False, and turning it back on is one
+#: word plus the warning that question still owes.
+TYPED_PATH = False
+
+
 def multisig_rows(wsh_path, shwsh_path, account):
     """The rows MULTISIG draws, with the thing each one means."""
-    return [("Native segwit", wsh_path, MS_WSH),
+    rows = [("Native segwit", wsh_path, MS_WSH),
             ("Nested segwit", shwsh_path, MS_SHWSH),
-            ("Account number", str(account), MS_ACCOUNT),
-            ("Type a path…", "", MS_TYPED)]
+            ("Account number", str(account), MS_ACCOUNT)]
+    if TYPED_PATH:
+        rows.append(("Type a path…", "", MS_TYPED))
+    return rows
 
 
 def multisig_menu(w, h, rows, selected=0):

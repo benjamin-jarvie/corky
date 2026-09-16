@@ -248,10 +248,19 @@ pin("MULTISIG",
     [(label, note) for label, note, _k in
      screens.multisig_rows("m/48'/0'/0'/2'", "m/48'/0'/0'/1'", 0)],
     run_multisig,
+    # "Type a path…" is absent while screens.TYPED_PATH is False, and the
+    # pin reads the real rows, so this maps what is DRAWN.
     {"Native segwit": "_export_cosigner",
      "Nested segwit": "_export_cosigner",
      "Account number": "account",
      "Type a path…": "_export_typed_path"})
+
+if screens.TYPED_PATH:
+    bad("screens.TYPED_PATH is on. A typed path cannot be recovered from "
+        "the paper backup alone, and it is off for the pilot (2026-09-16). "
+        "Turning it back on owes the warning the map asked for.")
+else:
+    ok("the typed path is off, so no row reaches _export_typed_path")
 
 
 # --- 5. tools ------------------------------------------------------------
