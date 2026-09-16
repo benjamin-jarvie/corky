@@ -72,8 +72,9 @@ Check your own card, without trusting us:
 
 ## Multisig
 
-Core Signer can be one key of several. Export → **Multisig…** → the
-script type, then QR or file. Your coordinator asks what device it is:
+Core Signer can be one key of several:
+`Key → Export public key → Multisig… → Native segwit → QR code`, or
+choose File instead of QR code. Your coordinator asks what device it is:
 choose **Specter DIY**.
 
 The quorum belongs to your coordinator, not to Core Signer. Back it up

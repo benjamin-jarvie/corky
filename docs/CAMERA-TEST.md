@@ -1,4 +1,4 @@
-# Proving the optics
+# Can the cameras read?
 
 **Status: NOT DONE.** This is item 3 of the
 [A11 verdict](wayfinder/beta-audit/tickets/A11-the-verdict.md) and the
@@ -50,7 +50,7 @@ being aimed, without a tripod.
 
 ## Part B. Sparrow and a phone read the device's screen
 
-On the device: **Export public key** -> pick a policy -> **QR code**.
+On the device: `Key → Export public key → <a policy> → QR code`.
 The screen cycles all eight mask patterns at 0.3s. Hold each coordinator
 in front of it as a person would.
 
@@ -58,19 +58,21 @@ Do all four policies. Native segwit and Taproot are what most people
 use; Nested segwit is the awkward one at 61 modules against the others'
 57.
 
-## Part C. The same, for a multisig key. NEW, and the hard one
+## Part C. The same, for a multisig key. The hard one
 
 Multisig is in the pilot, so this is not optional.
 
-On the device: **Export public key** -> **Cosigner (P2WSH)** -> **QR
-code**. That payload is a whole descriptor,
+On the device:
+
+    `Key → Export public key → Multisig… → Native segwit → QR code`
+
+That payload is a whole descriptor,
 `wsh(sortedmulti(1,[xfp/48h/1h/0h/2h]tpub...))#checksum`, **167
 characters against a single-sig 148**. A longer string is a denser code,
 so this is the hardest thing the panel has to show.
 
-Then **Advanced -> Type a path...** and enter a three-level blinded path
-such as `607137099h/1711870460h/1965312408h`. Check the checksum echo,
-then export its QR. That is the longest payload the device can produce.
+The typed-path row that made a LONGER payload is off for the pilot
+(2026-09-16), so this is the densest code the panel has to show.
 
 In Sparrow: a 2-of-3 P2WSH wallet, keystore -> **Airgapped Hardware
 Wallet** -> **Specter DIY** -> **Scan...**.
@@ -85,7 +87,6 @@ Wallet** -> **Specter DIY** -> **Scan...**.
 | B3 | Nested segwit | Sparrow | | |
 | B4 | Native segwit | phone | | |
 | C1 | Cosigner P2WSH, 167 chars | Sparrow | | |
-| C2 | Blinded path, longest | Sparrow | | |
 | C3 | Cosigner P2WSH | phone | | |
 
 ## What counts as a pass
