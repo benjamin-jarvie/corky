@@ -533,6 +533,32 @@ if rewrites:
                   + ", ".join(f"{lbl} {was}->{now}"
                               for lbl, was, now, _, _ in rewrites))
 
+# --- the tester pack states numbers the CODE owns -----------------------
+# A pack that rots is worse than no pack: it is a limit a person was told
+# and then relied on. These two come straight out of main.py, one of them
+# measured on the board on 2026-09-11.
+PACK = (ROOT / "docs" / "TESTER-PACK.md")
+if not PACK.exists():
+    bad("docs/TESTER-PACK.md is missing; it is what a tester is handed")
+else:
+    pack = PACK.read_text()
+    main_py = (ROOT / "coresigner" / "main.py").read_text()
+    for const, label in (("MAX_SIGNABLE_INPUTS", "ordinary payments"),
+                         ("MAX_SIGNABLE_MULTISIG_INPUTS", "multisig")):
+        m = re.search(rf"^{const} = (\d+)$", main_py, re.M)
+        if not m:
+            bad(f"{const} is gone from main.py; the pack still quotes it")
+            continue
+        want = m.group(1)
+        row = re.search(rf"\| {label} \| \*\*(\d+) inputs\*\*", pack)
+        if not row:
+            bad(f"the tester pack no longer states the {label} ceiling")
+        elif row.group(1) != want:
+            bad(f"tester pack says {label} is {row.group(1)} inputs; "
+                f"{const} is {want}. A tester was told a limit that moved")
+        else:
+            ok(f"the tester pack's {label} ceiling matches {const} ({want})")
+
 if fails:
     print("\n" + "\n".join(fails))
     sys.exit(1)
