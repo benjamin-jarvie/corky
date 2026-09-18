@@ -81,7 +81,7 @@ Wallet** -> **Specter DIY** -> **Scan...**.
 
 | # | what | coordinator | read? | notes |
 |---|---|---|---|---|
-| A | device reads a PSBT QR | Core Signer's camera | | |
+| A | device reads a PSBT QR | Core Signer's camera | **YES** | 2026-09-18: 611-char UR:CRYPTO-PSBT, SEQUENCE COMPLETE in 36.8s, 7.0 fps, hand-held off a laptop screen |
 | B1 | Native segwit | Sparrow | | |
 | B2 | Taproot | Sparrow | | |
 | B3 | Nested segwit | Sparrow | | |
