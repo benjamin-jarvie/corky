@@ -47,7 +47,42 @@ fails = []
 def ok(m): print("ok  ", m)
 def bad(m): fails.append(m); print("FAIL", m)
 
+#: THE CENTRE PRESS IS SELECT. Everywhere, with no screen excepted.
+#:
+#: Ben, on the board, 2026-09-18, in capitals: "the fucking center
+#: fucking button on the dpad is fucking select". He had reached for it
+#: to choose a character and left the screen instead, twice, a week
+#: apart, because three typing branches wired "p" to FINISH while every
+#: menu and action bar wired it beside "a" to CHOOSE.
+#:
+#: This reads main.py and refuses any branch that handles "p" without
+#: also handling "a". It is a source check because the rule is about
+#: EVERY screen, and a behavioural test can only ever visit the screens
+#: somebody remembered to write one for. Those three branches shipped
+#: with a green suite.
+
+
+def check_centre_is_select():
+    src = (ROOT / "coresigner" / "main.py").read_text()
+    offenders = []
+    # BOTH directions. A branch that handles "p" without "a" gives the
+    # centre press its own meaning, which is the bug. A branch that
+    # handles "a" without "p" leaves the centre press doing NOTHING,
+    # which is the same promise broken the quiet way.
+    for n, line in enumerate(src.splitlines(), 1):
+        has_p, has_a = '"p"' in line, '"a"' in line
+        if has_p == has_a:
+            continue                      # both, or neither
+        offenders.append((n, line.strip()[:64]))
+    if offenders:
+        for n, line in offenders:
+            bad(f"main.py:{n} handles A and the centre press differently: "
+                f"{line!r}. Centre is select, on every screen")
+    else:
+        ok("A and the centre press are handled together, everywhere")
+
 def main():
+    check_centre_is_select()
     import importlib
     import hal
     sys.modules["RPi"] = types.ModuleType("RPi")

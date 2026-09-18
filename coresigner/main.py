@@ -344,7 +344,12 @@ class Session:
             dropped = []
             self._hold(f"could not clear old keys: {str(exc)[:40]}")
         if dropped:
-            self._hold(f"cleared {len(dropped)} key(s) from an earlier session")
+            # ok=True: this is housekeeping, not a fault. It drew FAILED
+            # over a sentence describing the device working exactly as
+            # designed, which is a screen telling a person something
+            # untrue (Ben, on the board, 2026-09-18).
+            self._hold(f"cleared {len(dropped)} key(s) from an earlier "
+                       "session", ok=True)
         teardown = None
         try:
             self.state_home()
@@ -1271,7 +1276,13 @@ class Session:
                 sel = 1              # DOWN off the bottom: the buttons
             elif key in ("u", "d", "l", "r"):
                 page, cur = _grid_move(key, pages, page, cur)
-            elif key == "a":
+            elif key in ("a", "p"):
+                # THE CENTRE PRESS IS SELECT. Everywhere on this device,
+                # with no exception for this screen. It used to return
+                # the text, so a person reaching for the obvious button
+                # to choose a character left the screen instead, and on
+                # an empty page that scored every character wrong at
+                # once (Ben, on the board, 2026-09-18).
                 text += pages[page][cur]
             elif key == "b":
                 if not text:
@@ -1281,8 +1292,6 @@ class Session:
                     # (Ben, on the board, 2026-09-05).
                     return None
                 text = text[:-1]
-            elif key == "p":
-                return text
             elif key == "c":
                 sel = 1              # jump to the action bar
 
@@ -1692,17 +1701,18 @@ class Session:
                     caret = min(len(typed), caret + 1)
                 elif key == "b" and caret < len(typed):
                     typed = typed[:caret] + typed[caret + 1:]
-                elif key == "a":
+                elif key in ("a", "p"):
                     focus = "grid"      # back to the grid to overwrite it
-                elif key == "p":
-                    return typed, caret  # centre press finishes, everywhere
                 elif key == "c":
                     focus = "bar"
             elif _leaves_grid(key, grid, page, cur):
                 focus = "bar"        # DOWN off the bottom: the buttons
             elif key in ("u", "d", "l", "r"):
                 page, cur = _grid_move(key, grid, page, cur)
-            elif key == "a":
+            elif key in ("a", "p"):
+                # Centre is select here too. It returned the page, which
+                # is how Ben got a screen of wrong characters without
+                # having entered one.
                 typed = typed[:caret] + grid[page][cur] + typed[caret + 1:]
                 caret = min(len(typed), caret + 1)
             elif key == "b":
@@ -1711,8 +1721,6 @@ class Session:
                 if caret > 0:
                     typed = typed[:caret - 1] + typed[caret:]
                     caret -= 1
-            elif key == "p":
-                return typed, caret
             elif key == "c":
                 focus = "text"
 

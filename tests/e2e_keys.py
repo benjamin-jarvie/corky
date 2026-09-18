@@ -78,9 +78,43 @@ def grid_presses(charset, want):
     return "".join(out)
 
 
+def _cell(charset, ch):
+    """Where one character sits on the grid, as (page, index)."""
+    pages = scr.charset_pages(charset)
+    page = next(i for i, pg in enumerate(pages) if ch in pg)
+    return page, pages[page].index(ch)
+
+
+def commit_presses(charset, at):
+    """Presses that leave the grid for the button bar and take the action.
+
+    The centre press used to commit a page from anywhere. It does not:
+    centre is SELECT on every screen (Ben, 2026-09-18), so finishing
+    means reaching the buttons, which is what DOWN off the bottom does.
+
+    The count has to be EXACT. One press too few sits in the grid; one
+    too many loops off the bar and back to the top, because the d-pad
+    loops. So walk it the way the device would.
+    """
+    pages = scr.charset_pages(charset)
+    page, cur, downs = at[0], at[1], 0
+    while True:
+        nxt = coresigner_main._grid_move("d", pages, page, cur)
+        if nxt == (page, cur):
+            break
+        page, cur = nxt
+        downs += 1
+    return "d" * (downs + 1) + "a"     # +1 steps off the bottom
+
+
 def text_keys(charset, want):
-    """Presses that type `want` and commit it with the centre press."""
-    return grid_presses(charset, want) + "p"
+    """Presses that type `want` and then take the bar's action."""
+    pages = scr.charset_pages(charset)
+    at = (0, 0)
+    for ch in want:
+        tp = next(i for i, pg in enumerate(pages) if ch in pg)
+        at = (tp, pages[tp].index(ch))
+    return grid_presses(charset, want) + commit_presses(charset, at)
 
 
 def home_press(tile, start=0):
@@ -355,7 +389,9 @@ def main():
         assert not [w for w in rpc.call("listwallets") if w in signer.SLOTS], \
             "K4: a key from an earlier session survived into this one"
         fr4 = work / "framesK4"
-        assert _has(fr4, _render(scr.result, ok=False,
+        # ok=True: clearing an inherited key is the device working, not a
+        # fault. It drew FAILED over that sentence until 2026-09-18.
+        assert _has(fr4, _render(scr.result, ok=True, label="DONE",
                                  detail="cleared 1 key(s) from an earlier session")), \
             "K4: the device did not say it had cleared an inherited key"
         assert _has(fr4, _render(scr.home, 0)), \
@@ -504,7 +540,10 @@ def main():
                   + "aa" + "ra"                  # 3 pages, then CHECK IT
                   + text_keys("xprv", page1_bad)  # page 1, one wrong
                   + "a"                          # verdict: FIX is selected
-                  + grid_presses("xprv", right) + "p"   # overwrite, CHECK
+                  # overwrite AT the caret, then walk to the bar and
+                  # CHECK. The centre press used to do this from here.
+                  + grid_presses("xprv", right)
+                  + commit_presses("xprv", _cell("xprv", right))
                   + "a"                          # verdict: matches, go on
                   + text_keys("xprv", pages9[1]) + "a"
                   + text_keys("xprv", pages9[2]) + "a"

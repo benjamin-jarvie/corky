@@ -315,6 +315,7 @@ def main():
         # build with no camera. Both modes were shipped once with a charset
         # that could not express them (no 'B', no brackets), so these type a
         # REAL xprv and a REAL descriptor character by character.
+        import main as _main            # for _grid_move, below
         import screens as _scr          # was imported by a session A-22 removed
         def text_keys(charset, want):
             """Keys that type `want` on the paged text grid, computed by
@@ -343,7 +344,19 @@ def main():
                 while cur > ti:
                     out.append("l"); cur -= 1
                 out.append("a")
-            out.append("p")                            # centre press = done
+            # Walk to the button bar and take its action. The centre
+            # press used to finish from anywhere; centre is SELECT on
+            # every screen now (Ben, 2026-09-18), so finishing means
+            # reaching the buttons. The count is exact because the d-pad
+            # LOOPS: one press too many comes back to the top of the grid.
+            downs = 0
+            while True:
+                nxt = _main._grid_move("d", pages, page, cur)
+                if nxt == (page, cur):
+                    break
+                page, cur = nxt
+                downs += 1
+            out.append("d" * (downs + 1) + "a")
             return "".join(out)
 
         stickt = None

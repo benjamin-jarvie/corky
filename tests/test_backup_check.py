@@ -112,12 +112,33 @@ else:
     ok("the verdict screen looks different when a character is wrong")
 
 # --- 3. FIX lands on the wrong character and overwrites it in place -----
+def _commit(charset, last_char):
+    """Presses from the cell holding `last_char` to the bar, and A.
+
+    Exact, because the d-pad loops: one press past the bar comes round
+    to the top of the grid.
+    """
+    pages = screens.charset_pages(charset)
+    page = next(i for i, pg in enumerate(pages) if last_char in pg)
+    cur = pages[page].index(last_char)
+    downs = 0
+    while True:
+        nxt = coresigner_main._grid_move("d", pages, page, cur)
+        if nxt == (page, cur):
+            break
+        page, cur = nxt
+        downs += 1
+    return "d" * (downs + 1) + "a"
+
+
 # This is the whole point of the caret: correcting position 5 must not
 # cost the 42 characters after it.
 
 fix = (text_keys("xprv", BAD_PAGE)          # type it wrong
        + "a"                                 # verdict: FIX is pre-selected
-       + grid_presses("xprv", RIGHT) + "p"   # overwrite AT the caret, CHECK
+       # overwrite AT the caret, then walk to the bar and CHECK. Centre
+       # is SELECT now, so it types rather than finishing (2026-09-18).
+       + grid_presses("xprv", RIGHT) + _commit("xprv", RIGHT)
        + "a")                                # verdict: matches
 sess, got = run_page(fix, PAGES[0])
 if got != PAGES[0]:
@@ -146,7 +167,10 @@ else:
 # L and R in text focus move the caret; B there deletes the character
 # under it. Without this a mistake 40 characters back costs 40 deletions.
 
-sess = session("c" + "ll" + "b" + "p")   # to the text, back 2, delete, done
+# to the caret, back 2, delete, then C again for the bar and A to take
+# it. The last press was "p", which finished from the caret; centre is
+# SELECT everywhere now, so it steps back to the grid instead.
+sess = session("c" + "ll" + "b" + "c" + "a")
 typed, caret = sess._check_entry(LABEL, 0, 3, 48, "abcde", 5)
 if typed != "abce":
     bad(f"C then L,L then B deleted the wrong character: {typed!r}")
