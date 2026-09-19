@@ -1793,6 +1793,11 @@ class Session:
                 actions_sel=sel, caret=caret, actions=("ABORT", "CHECK"),
                 wrong=_wrong_at(typed, want) if marked else (),
                 want_len=len(want),
+                # Box 13 is on page 2, not box 1 again. Every page
+                # numbered from 1, so 12 was the highest number the
+                # device drew and the last 16 boxes of a key had no
+                # names (Ben, on the board, 2026-09-19).
+                first_box=i * screens.CHARS_PER_PAGE // 4 + 1,
                 hint=self._type_hint(runs, mode, charset)),
                 sensitive=True)
             key = self.buttons.read()

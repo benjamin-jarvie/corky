@@ -1474,7 +1474,8 @@ CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 
 def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
                secret=False, actions_sel=None, caret=None, hint=None,
-               actions=("CANCEL", "DONE"), wrong=(), want_len=None):
+               actions=("CANCEL", "DONE"), wrong=(), want_len=None,
+               first_box=1):
     """Typing, shown the way the backup is shown: numbered boxes of four.
 
     The old screen drew a flat echo line with a caret while the backup
@@ -1487,6 +1488,16 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
     `caret` is the position being typed or edited. `wrong` holds the
     positions that do not match the paper, drawn with a red outline, so
     the screen says WHICH to fix rather than how many.
+
+    `first_box` is the number of this screenful's FIRST box. A key of
+    111 characters is 28 boxes, and the screen shows 48 characters at a
+    time, so the second screenful holds boxes 13 to 24. It numbered
+    every screenful from 1, so box 12 was the highest number the device
+    ever drew and boxes 13 to 28 did not appear to exist: "I STILL can
+    not enter more than the 12th box" (Ben, on the board, 2026-09-19,
+    the second time he reported it). The backup screen already counts
+    in one continuous run, "characters 49-96 of the key", so this is
+    the number that agrees with it.
 
     `mode` indexes `modes(charset)`. One mode at a time, never a paged
     alphabet: see that function for why.
@@ -1521,8 +1532,8 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
         x = left
         for g in range(r * ENTRY_GROUPS_PER_ROW,
                        min((r + 1) * ENTRY_GROUPS_PER_ROW, len(groups))):
-            _box(d, x + num_w, y, groups[g], g + 1, w, h, secret, caret,
-                 wrong, g * 4, slot, g == here)
+            _box(d, x + num_w, y, groups[g], first_box + g, w, h, secret,
+                 caret, wrong, g * 4, slot, g == here)
             x += pitch
         y += int(h * 0.125)
 

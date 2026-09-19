@@ -321,6 +321,65 @@ else:
     bad(f"the second attempt sent {TRIES[1:]!r}, not the key already "
         "typed. A refusal costs all 111 characters again")
 
+# --- 6e. the boxes are numbered once, across the whole key -------------
+# A 111-character key is 28 boxes over three screenfuls. Every screenful
+# numbered its boxes from 1, so 12 was the highest number the device ever
+# drew and boxes 13 to 28 did not appear to exist. Ben reported it twice:
+# "I can not even re-enter all of the words" (2026-09-18) and "I STILL
+# can not enter more than the 12th box" (2026-09-19). The first time it
+# was read as the caret sticking on the last character, which was a real
+# defect and not this one.
+
+KEY_BOXES = screens._groups(KEY)
+#: {the number of a screenful's first box: how many boxes it drew}
+drawn_for = {}
+_real_entry = screens.text_entry
+
+
+def _spy(w, h, title, text, cursor=0, charset="xprv", mode=0, secret=False,
+         actions_sel=None, caret=None, hint=None, actions=("CANCEL", "DONE"),
+         wrong=(), want_len=None, first_box=1):
+    count = -(-max(want_len or 0, len(text)) // 4)
+    drawn_for[first_box] = count
+    return _real_entry(w, h, title, text, cursor, charset, mode, secret,
+                       actions_sel, caret, hint, actions, wrong, want_len,
+                       first_box)
+
+
+ALL_PAGES = screens.text_pages(KEY)
+screens.text_entry = _spy
+try:
+    for page_i, page in enumerate(ALL_PAGES):
+        sess = session(text_keys("xprv", page, page_full=True))
+        if sess._check_page(LABEL, page_i, len(ALL_PAGES), page) != page:
+            bad(f"page {page_i + 1} was not accepted when typed correctly")
+finally:
+    screens.text_entry = _real_entry
+
+seen = []
+for first, count in sorted(drawn_for.items()):
+    seen += list(range(first, first + count))
+if seen == list(range(1, len(KEY_BOXES) + 1)):
+    ok(f"the {len(KEY_BOXES)} boxes of a key are numbered 1 to "
+       f"{len(KEY_BOXES)}, once each, across all {len(ALL_PAGES)} screens")
+else:
+    bad(f"the check screens number their boxes {sorted(set(seen))}, not 1 "
+        f"to {len(KEY_BOXES)}. A box number that repeats on every screen "
+        "says the key is 12 boxes long when it is not.")
+
+# And each screen's first box holds the group the paper calls by that
+# number, which is the thing a person is actually matching.
+for first, _count in sorted(drawn_for.items()):
+    page_of = (first - 1) * 4 // screens.CHARS_PER_PAGE
+    want_group = screens._groups(ALL_PAGES[page_of])[0]
+    if KEY_BOXES[first - 1] != want_group:
+        bad(f"box {first} holds {KEY_BOXES[first - 1]!r} on paper but "
+            f"{want_group!r} on the screen that calls it box {first}")
+        break
+else:
+    ok("and box N on the screen holds the same four characters as box N "
+       "on the paper")
+
 # --- 7. every screen that can show a key is marked sensitive ------------
 # hal.DevDisplay blanks a frame shown with sensitive=True, which is what
 # stops key material landing as a PNG on a developer's disk. That property
