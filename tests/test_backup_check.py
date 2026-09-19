@@ -21,7 +21,8 @@ import hal                              # noqa: E402
 import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
 import signer                           # noqa: E402
-from e2e_keys import commit_presses, text_keys  # noqa: E402
+from e2e_keys import (check_keys, commit_presses,  # noqa: E402
+                      text_keys)
 
 # A real regtest master private key, the one every other suite signs with.
 KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
@@ -52,15 +53,25 @@ class Frames:
         self.shown.append(image)
 
 
+class NoRpc:
+    """A node that is never called, but knows which network it is on.
+
+    The typing screens ask, because the 16 characters every master key
+    starts with are different on mainnet and everywhere else.
+    """
+
+    chain = "regtest"
+
+
 def session(script):
-    return coresigner_main.Session(Frames(), hal.DevButtons(script), None,
+    return coresigner_main.Session(Frames(), hal.DevButtons(script), NoRpc(),
                               animate=False, on_device=False)
 
 
 def run_page(script, want):
     sess = session(script)
     try:
-        return sess, sess._check_page(LABEL, 0, 3, want)
+        return sess, sess._check_typed(LABEL, want)
     except hal.ScriptExhausted:
         return sess, "ran out of presses"
 
@@ -75,10 +86,9 @@ PAGES = screens.text_pages(KEY)
 
 # --- 1. a page typed correctly is accepted ------------------------------
 # No trailing "a": text_keys walks to the bar and takes CHECK itself, and
-# a correct page returns from _check_page with no verdict in between.
+# a correct key returns from _check_typed with no verdict in between.
 
-sess, got = run_page(text_keys("xprv", PAGES[0], page_full=True),
-                     PAGES[0])
+sess, got = run_page(check_keys(PAGES[0]), PAGES[0])
 if got != PAGES[0]:
     bad(f"a correctly typed page was not accepted: {got!r}")
 else:
@@ -89,15 +99,18 @@ else:
 # the cursor on it. The old flow put up a screen that counted the
 # mistakes and then made a person find them.
 
-AT = 5
+# PAST THE PREFIX. The first 16 characters are prefilled, so they can
+# no longer be got wrong, and a check that puts the mistake there is
+# checking nothing.
+AT = len(signer.TESTNET_PREFIX) + 4
 BAD_PAGE = PAGES[0][:AT] + ("2" if PAGES[0][AT] != "2" else "3") + PAGES[0][AT + 1:]
 
-sess, got = run_page(text_keys("xprv", BAD_PAGE, page_full=True),
-                     PAGES[0])
+sess, got = run_page(check_keys(PAGES[0], BAD_PAGE), PAGES[0])
 if got != "ran out of presses":
     bad(f"a wrong page returned {got!r} instead of asking for a fix")
 elif not drew(sess, screens.text_entry(
-        320, 240, f"{LABEL}  ·  TYPE  1/3", BAD_PAGE, 0, "xprv", 0,
+        320, 240, f"{LABEL}  ·  ALL  {len(PAGES[0])}  TYPED",
+        BAD_PAGE, 0, "xprv", 0,
         # actions_sel None: the grid has the focus when the page comes
         # back marked, so neither button is lit (Ben, 2026-09-18).
         actions_sel=None, caret=AT, actions=("ABORT", "CHECK"), wrong={AT},
@@ -201,7 +214,7 @@ def _to_bar(cur):
 
 
 sess = session(_walk(0, _LEFT) + "aa" + "b" + _to_bar(_LEFT) + "a")
-typed, caret = sess._check_entry(LABEL, 0, 3, PAGES[0], "abcde", 5)
+typed, caret = sess._check_entry(LABEL, PAGES[0], "abcde", 5)
 if typed != "abde":
     bad(f"the caret keys did not move the caret: typed is {typed!r}, "
         "expected 'abde' after two lefts and a delete")
@@ -215,7 +228,7 @@ else:
 # returns to the top of the grid.
 
 sess = session(_to_bar(0) + "la")
-typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
+typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
 if typed is None:
     ok(f"DOWN x{len(_to_bar(0))} reaches the bar, then L and A abort")
 else:
@@ -223,14 +236,14 @@ else:
         "grid are not reachable by going down")
 
 sess = session(_to_bar(0) + "d" + _to_bar(0) + "la")
-typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
+typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
 if typed is None:
     ok("DOWN from the bar loops to the top of the grid, and round again")
 else:
     bad(f"the d-pad did not loop through the bar; got {typed!r}")
 
 sess = session("b")
-typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
+typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
 if typed is not None:
     bad("B with nothing typed did not leave the check entry")
 else:
@@ -304,11 +317,13 @@ def _refuse_once(_rpc, text):
     return signer.WALLET
 
 
-TYPED = "tprv8ZgxMBicQ"
+# The grid opens holding the prefix, so the person types what follows.
+TAIL = "e5YMU9gH"
+TYPED = signer.TESTNET_PREFIX + TAIL
 _real_open = signer.open_session_xprv
 signer.open_session_xprv = _refuse_once
 try:
-    sess = session(text_keys("xprv", TYPED)      # type it, then DONE
+    sess = session(text_keys("xprv", TAIL)       # type it, then DONE
                    + "a"                         # dismiss FAILED
                    + commit_presses("xprv", 0, 0))   # DONE again, as-is
     sess._key_xprv_typed()
@@ -321,18 +336,21 @@ else:
     bad(f"the second attempt sent {TRIES[1:]!r}, not the key already "
         "typed. A refusal costs all 111 characters again")
 
-# --- 6e. the boxes are numbered once, across the whole key -------------
-# A 111-character key is 28 boxes over three screenfuls. Every screenful
-# numbered its boxes from 1, so 12 was the highest number the device ever
-# drew and boxes 13 to 28 did not appear to exist. Ben reported it twice:
-# "I can not even re-enter all of the words" (2026-09-18) and "I STILL
-# can not enter more than the 12th box" (2026-09-19). The first time it
-# was read as the caret sticking on the last character, which was a real
-# defect and not this one.
+# --- 6e. every box of the key is reachable by typing -------------------
+# THE CHECK THAT SHOULD HAVE BEEN WRITTEN FIRST. Ben reported this three
+# times: "I can not even re-enter all of the words" (2026-09-18), then
+# twice on 2026-09-19. Two real defects were found and fixed on the way
+# and neither was this one, because each was found by reading the loop
+# and reasoning, and this is only visible by typing a key the way a
+# person types one: with a mistake in it.
+#
+# The check took one 48-character page at a time and would not leave a
+# page until every character matched, so one capital typed in lower case
+# pinned a person on boxes 1 to 12 for ever. This suite typed every page
+# PERFECTLY, so it never saw the wall.
 
 KEY_BOXES = screens._groups(KEY)
-#: {the number of a screenful's first box: how many boxes it drew}
-drawn_for = {}
+boxes_seen = set()
 _real_entry = screens.text_entry
 
 
@@ -340,45 +358,47 @@ def _spy(w, h, title, text, cursor=0, charset="xprv", mode=0, secret=False,
          actions_sel=None, caret=None, hint=None, actions=("CANCEL", "DONE"),
          wrong=(), want_len=None, first_box=1):
     count = -(-max(want_len or 0, len(text)) // 4)
-    drawn_for[first_box] = count
+    boxes_seen.update(range(first_box, first_box + count))
     return _real_entry(w, h, title, text, cursor, charset, mode, secret,
                        actions_sel, caret, hint, actions, wrong, want_len,
                        first_box)
 
 
-ALL_PAGES = screens.text_pages(KEY)
+# One capital typed in lower case, early, exactly what Ben did. Then the
+# whole rest of the key. Every box has to be reachable anyway.
+WRONG_AT = next(n for n, c in enumerate(KEY)
+                if c.isupper() and n >= len(signer.TESTNET_PREFIX))
+MISTYPED = KEY[:WRONG_AT] + KEY[WRONG_AT].lower() + KEY[WRONG_AT + 1:]
+
 screens.text_entry = _spy
 try:
-    for page_i, page in enumerate(ALL_PAGES):
-        sess = session(text_keys("xprv", page, page_full=True))
-        if sess._check_page(LABEL, page_i, len(ALL_PAGES), page) != page:
-            bad(f"page {page_i + 1} was not accepted when typed correctly")
+    sess = session(check_keys(KEY, MISTYPED) + "b")
+    try:
+        sess._check_typed(LABEL, KEY)
+    except hal.ScriptExhausted:
+        pass
 finally:
     screens.text_entry = _real_entry
 
-seen = []
-for first, count in sorted(drawn_for.items()):
-    seen += list(range(first, first + count))
-if seen == list(range(1, len(KEY_BOXES) + 1)):
-    ok(f"the {len(KEY_BOXES)} boxes of a key are numbered 1 to "
-       f"{len(KEY_BOXES)}, once each, across all {len(ALL_PAGES)} screens")
+want_boxes = set(range(1, len(KEY_BOXES) + 1))
+if boxes_seen == want_boxes:
+    ok(f"a key typed with one capital in lower case still reaches all "
+       f"{len(KEY_BOXES)} boxes")
+elif boxes_seen:
+    bad(f"typing reached boxes {min(boxes_seen)} to {max(boxes_seen)} of "
+        f"{len(KEY_BOXES)}. One wrong character early stops the rest of "
+        "the key being entered at all.")
 else:
-    bad(f"the check screens number their boxes {sorted(set(seen))}, not 1 "
-        f"to {len(KEY_BOXES)}. A box number that repeats on every screen "
-        "says the key is 12 boxes long when it is not.")
+    bad("no boxes were drawn at all")
 
-# And each screen's first box holds the group the paper calls by that
-# number, which is the thing a person is actually matching.
-for first, _count in sorted(drawn_for.items()):
-    page_of = (first - 1) * 4 // screens.CHARS_PER_PAGE
-    want_group = screens._groups(ALL_PAGES[page_of])[0]
-    if KEY_BOXES[first - 1] != want_group:
-        bad(f"box {first} holds {KEY_BOXES[first - 1]!r} on paper but "
-            f"{want_group!r} on the screen that calls it box {first}")
+# And box N holds the Nth four characters of the key, which is what a
+# person is matching against their paper.
+for n in (1, 13, len(KEY_BOXES)):
+    if KEY_BOXES[n - 1] != KEY[(n - 1) * 4:n * 4]:
+        bad(f"box {n} does not hold characters {(n-1)*4+1} to {n*4}")
         break
 else:
-    ok("and box N on the screen holds the same four characters as box N "
-       "on the paper")
+    ok("and box N holds the Nth four characters of the key")
 
 # --- 7. every screen that can show a key is marked sensitive ------------
 # hal.DevDisplay blanks a frame shown with sensitive=True, which is what
@@ -436,9 +456,9 @@ flags_for("the paper backup pages", "aaa",
 
 # A full page typed, then committed, so every frame of a real page is
 # counted. Without the commit the script never leaves the entry screen.
-_a_page = text_keys("xprv", PAGES[0], page_full=True)
+_a_page = check_keys(PAGES[0])
 flags_for("the check entry", _a_page,
-          lambda s: s._check_page(LABEL, 0, 3, PAGES[0]),
+          lambda s: s._check_typed(LABEL, PAGES[0]),
           len(_a_page) - 5)
 
 

@@ -247,6 +247,29 @@ class Rpc:
             return text
 
 
+#: The first 16 characters of a Bitcoin Core master private key, which
+#: are the same for every key on a given network. A master key is depth
+#: 0 with no parent fingerprint and no child number, so the leading
+#: bytes of the serialisation are fixed and base58 turns them into a
+#: fixed prefix. Four boxes of 28 that nobody has to type.
+#:
+#: MEASURED, not reasoned (TESTING.md rule 6): 12 freshly generated
+#: regtest keys and 12 testnet keys agreed on `tprv8ZgxMBicQKsP` and
+#: nothing longer; BIP32's three published test vectors, this repo's
+#: fixture and the key on the dev board agreed on `xprv9s21ZrQH143K`
+#: (2026-09-19). Nothing here derives or checks a key: these are two
+#: string constants a screen puts in front of a person (PLAN A-22).
+MAINNET_PREFIX = "xprv9s21ZrQH143K"
+TESTNET_PREFIX = "tprv8ZgxMBicQKsP"
+#: Both, for asking whether a key in hand starts with one of them.
+MASTER_PREFIXES = (MAINNET_PREFIX, TESTNET_PREFIX)
+
+
+def master_prefix(rpc: "Rpc") -> str:
+    """The prefix every master key on THIS node's network starts with."""
+    return MAINNET_PREFIX if rpc.chain == "main" else TESTNET_PREFIX
+
+
 def build_descriptors(rpc: "Rpc", xprv: str) -> list[dict]:
     """All four policies, receive and change, checksummed by Core.
 
@@ -1127,7 +1150,7 @@ def opens_wallet(rpc: "Rpc", wallet: str, key: str, count: int = 2) -> bool:
     lists of strings Core returned (PLAN A-11).
 
     Audit A6 (2026-09-06) found the check it replaces could not fail.
-    `_check_page` only accepts a page when it matches the backup character
+    `_check_typed` only accepts what was typed when it matches character
     for character, so by the time the flow asked Core to confirm, it was
     asking whether a string equalled itself. The screen said "your paper
     opens key X" on the strength of that. Deleting the whole comparison

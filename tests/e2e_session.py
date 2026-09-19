@@ -386,7 +386,9 @@ def main():
         # Keys -> Type private key (third row) -> type it -> back out to home ->
         # Sign tile -> sign -> POWER OFF.
         r = run_device(datadir,
-                       "ra" + "dda" + text_keys("xprv", typed_xprv)
+                       # The grid opens holding the master prefix, so
+                       # only what follows it is typed (Ben, 2026-09-19).
+                       "ra" + "dda" + text_keys("xprv", typed_xprv[16:])
                        + "bb" + "a" + "a" + "ra",
                        work / "framesT", stick=stickt)
         assert r.returncode == 0, f"T failed:\n{r.stderr}"

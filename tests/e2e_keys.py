@@ -115,6 +115,35 @@ def text_keys(charset, want, page_full=False):
     return presses + commit_presses(charset, mode, cur)
 
 
+def check_keys(want, typed=None):
+    """Presses that type a key into the CHECK screen, and commit.
+
+    That screen opens with the 16-character master prefix already in
+    place, because every Core master key on a network starts with the
+    same one (signer.MASTER_PREFIXES). `want` is the key the device
+    holds, which decides how much is prefilled; `typed` is what the
+    person types, when the point is to get something wrong. The bar
+    takes the focus on the last character, so one press commits.
+    """
+    import signer as _signer
+    pre = next((p for p in _signer.MASTER_PREFIXES if want.startswith(p)), "")
+    return text_keys("xprv", (want if typed is None else typed)[len(pre):],
+                     page_full=True)
+
+
+def entry_keys(xprv):
+    """Presses that type a key into the MASTER PRIVATE KEY grid.
+
+    That grid opens holding the 16 characters every Core master key on
+    this network starts with (Ben, 2026-09-19), so only what follows is
+    typed. The walk down to DONE is still needed: that screen cannot
+    know how long a key is, so nothing moves the focus for you.
+    """
+    import signer as _signer
+    pre = next((p for p in _signer.MASTER_PREFIXES if xprv.startswith(p)), "")
+    return text_keys("xprv", xprv[len(pre):])
+
+
 def home_press(tile, start=0):
     """Presses that pick a home tile, computed from the real 2x2 grid.
 
@@ -282,7 +311,7 @@ def main():
                   + "b" + "b"                     # key menu -> Keys -> home
                   + "a" + "a"                     # Sign tile: nobody owns it, dismiss
                   + "ra" + keys_press(1, "Type private key")
-                  + text_keys("xprv", xprv_b)
+                  + entry_keys(xprv_b)
                   + "b" + "b"                     # key menu -> Keys -> home
                   + "a"                           # Sign tile
                   + "a" + "a" + "ra")             # confirm B, sign, power off
@@ -523,35 +552,39 @@ def main():
         # page back, get told exactly which characters are wrong, fix them
         # in place, and have Bitcoin Core confirm the whole key at the end.
         #
-        # Page 1 is typed with a deliberate error at position 5, so the
-        # verdict screen has to name that position and FIX has to land on
-        # it. Rule 1: the key is a real one Core opens and signs with, and
-        # every press is computed from the navigation rules, never counted.
+        # The key is typed with a deliberate error, so the screen has to
+        # mark that position and the cursor has to land on it. Rule 1:
+        # the key is a real one Core opens and signs with, and every
+        # press is computed from the navigation rules, never counted.
+        #
+        # PAST THE PREFIX. The first 16 characters are already on the
+        # screen when it opens, so a mistake there cannot be made and a
+        # check that puts one there is checking nothing.
         signer.close_session(rpc)
         pages9 = scr.text_pages(XPRV_A)
         assert len(pages9) == 3, f"K9: expected 3 backup pages, got {len(pages9)}"
-        wrong_at = 5
-        right = pages9[0][wrong_at]
+        wrong_at = len(signer.TESTNET_PREFIX) + 4
+        right = XPRV_A[wrong_at]
         typo = "2" if right != "2" else "3"
         assert typo in scr.BASE58, "K9: the substitute is not a base58 character"
-        page1_bad = pages9[0][:wrong_at] + typo + pages9[0][wrong_at + 1:]
-
-        # NO VERDICT SCREEN when a page is wrong (map typing, T4). CHECK
-        # redraws the page with the mistake outlined and the cursor on
-        # it, so the fix is: type the right character, then CHECK again.
-        # The bar takes the focus on the last character of a page, so a
-        # full page commits with ONE press and the walk down to the bar
-        # is already done (Ben, 2026-09-19: "I can only get to the 12th
-        # box"). Fixing the last wrong character does the same, because
-        # then there is nothing left to type and nothing left to fix.
+        # NO VERDICT SCREEN when something is wrong (map typing, T4).
+        # CHECK redraws with the mistake outlined and the cursor on it,
+        # so the fix is: type the right character, then CHECK again.
+        #
+        # THE WHOLE KEY IN ONE GO. It was checked one 48-character page
+        # at a time and a page would not let you out until it was
+        # perfect, so a mistake at character 6 meant characters 49 to
+        # 111 could not be typed at all (Ben, on the board, three times,
+        # ending 2026-09-19). The bar takes the focus on the last
+        # character, so a full key commits with ONE press, and fixing
+        # the last wrong character does the same.
+        whole_bad = XPRV_A[:wrong_at] + typo + XPRV_A[wrong_at + 1:]
         fix, _fix_mode, _fix_cur = grid_presses("xprv", right)
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
                   + key_menu_press("Backup key", 0)  # paper, no chooser
                   + "aa" + "a"                   # 3 pages, then CHECK IT
-                  + text_keys("xprv", page1_bad, page_full=True)
+                  + check_keys(XPRV_A, whole_bad)
                   + fix + "a"                    # the fix, then CHECK
-                  + text_keys("xprv", pages9[1], page_full=True)
-                  + text_keys("xprv", pages9[2], page_full=True)
                   + "a"                          # Core's verdict, dismissed
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK9", qr_key=key_a)
@@ -578,7 +611,7 @@ def main():
         assert not signer.opens_wallet(rpc, name9, other), \
             "K9: a different key was judged to open this wallet"
         try:
-            signer.opens_wallet(rpc, name9, page1_bad + pages9[0][:1])
+            signer.opens_wallet(rpc, name9, whole_bad)
             raise AssertionError("K9: Core accepted a mistyped key")
         except RuntimeError as exc:
             assert XPRV_A[:20] not in str(exc) and typo not in str(exc)[:8], \

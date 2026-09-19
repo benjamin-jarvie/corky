@@ -54,10 +54,11 @@ def session(script):
                                    animate=False, on_device=False)
 
 
-#: A page of a backup, for the screen that checks one.
-PAGE = screens.text_pages(
-    "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
-    "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")[0]
+#: The key the check screen compares against. The WHOLE key: the
+#: check stopped paging on 2026-09-19, because a page you could not
+#: leave until it was perfect was a page a person could not get past.
+PAGE = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
+        "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 
 
 def _entry(charset):
@@ -76,7 +77,7 @@ def _check(script):
     """Drives _check_entry, with the same shape of answer."""
     sess = session(script)
     try:
-        typed, _caret = sess._check_entry("KEY", 0, 3, PAGE, "", 0)
+        typed, _caret = sess._check_entry("KEY", PAGE, "", 0)
     except hal.ScriptExhausted:
         return "ran out of presses", sess
     return typed, sess

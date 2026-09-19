@@ -284,18 +284,21 @@ else:
 # below, and without it Ben's paper check would have cost 1,444 presses,
 # which is not a check anyone performs.
 sys.path.insert(0, str(ROOT / "tests"))
-from e2e_keys import text_keys as _type_keys      # noqa: E402
+from e2e_keys import check_keys, entry_keys      # noqa: E402
 
 KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
        "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 
-typing_in = len(_type_keys("xprv", KEY))
-checking = sum(len(_type_keys("xprv", page, page_full=True))
-               for page in screens.text_pages(KEY))
+# Both flows as a person meets them: the 16-character master prefix is
+# already on the screen, and the check is one pass over the whole key
+# rather than three pages each of which had to be perfect before the
+# next would open (both 2026-09-19).
+typing_in = len(entry_keys(KEY))
+checking = len(check_keys(KEY))
 
 for label, got, budget in (
         ("typing a 111-character private key in", typing_in, 640),
-        ("checking a written backup, all 3 pages", checking, 650)):
+        ("checking a written backup, all 111 characters", checking, 650)):
     if got <= budget:
         ok(f"{label}: {got} presses (budget {budget})")
     else:

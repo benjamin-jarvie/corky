@@ -96,7 +96,7 @@ C = [
   "paging back off the first page"),
  ("coresigner/main.py", "Session._verify_backup", 1,
   "the refusal"),
- ("coresigner/main.py", "Session._check_page", 1,
+ ("coresigner/main.py", "Session._check_typed", 1,
   "leaving the check screen with and without errors"),
  ("coresigner/main.py", "Session._check_entry", 1,
   "the caret keys and the grid/entry focus swap"),

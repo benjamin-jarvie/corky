@@ -276,7 +276,7 @@ def _wrong_at(typed, want):
     until 2026-09-18, and `text_entry` outlines every position in it, so
     the screen drew eight red boxes ahead of the caret and accused a
     person of eight mistakes for having typed eight characters. Whether
-    a page is finished is a question about its length, and `_check_page`
+    a key is finished is a question about its length, and `_check_typed`
     asks it there.
     """
     return {n for n, ch in enumerate(typed)
@@ -1535,11 +1535,19 @@ class Session:
         The grid reopens holding what was typed, with the cursor on the
         end of it.
         """
-        text = ""
+        # The grid opens on box 5, with the 16 characters every Core
+        # master key on this network begins with already in place.
+        # Nothing is assumed by it: Core still reads the whole string
+        # and refuses anything that is not a key, and B deletes back
+        # through the prefix if somebody is restoring a key from
+        # another network.
+        text = signer.master_prefix(self.rpc)
         while True:
             text = self._text_entry("MASTER  PRIVATE  KEY", "xprv",
                                     start=text)
-            if not text:
+            if not text or text == signer.master_prefix(self.rpc):
+                # The prefix alone is not a key somebody typed, so DONE
+                # on an untouched screen leaves, the way CANCEL does.
                 return False
             stop = self._busy("importing into Core…")
             try:
@@ -1696,14 +1704,21 @@ class Session:
 
         Returns True when the paper is proven, False when the user leaves.
         """
-        pages = screens.text_pages(text)
-        typed = []
-        for i, page in enumerate(pages):
-            got = self._check_page(label, i, len(pages), page)
-            if got is None:
-                return False
-            typed.append(got)
-        return self._confirm_typed_key("".join(typed), name, xfp)
+        # THE WHOLE KEY, IN ONE GO. It was checked a page at a time and
+        # a page would not let you out until all 48 of its characters
+        # matched, so one capital typed in lower case pinned a person on
+        # boxes 1 to 12 and boxes 13 to 28 could not be reached by
+        # typing at all. Ben reported it three times before it was read
+        # correctly (on the board, 2026-09-18 and twice on 2026-09-19).
+        #
+        # The paging came from the backup screen, which shows everything
+        # at once and so needs pages. This screen SCROLLS. It never
+        # needed them, and with them gone the boxes number themselves
+        # 1 to 28 and a mistake at box 3 does not block box 20.
+        typed = self._check_typed(label, text)
+        if typed is None:
+            return False
+        return self._confirm_typed_key(typed, name, xfp)
 
     def _confirm_typed_key(self, typed, name, xfp):
         """Core reads what was typed and says whether it is the same key.
@@ -1738,23 +1753,48 @@ class Session:
         self.buttons.read()
         return True
 
-    def _check_page(self, label, i, pages, want):
-        """One page typed back and judged, with the mistakes shown in place.
+    def _check_typed(self, label, want):
+        """The whole key typed back and judged, with mistakes in place.
+
+        THE WHOLE KEY. This took one page of 48 characters at a time and
+        would not leave a page until every character on it matched, so a
+        single capital typed in lower case pinned a person on boxes 1 to
+        12 and the rest of the key could not be reached by typing at all
+        (Ben, on the board, three times, 2026-09-18 and 2026-09-19). The
+        screen scrolls, so it never needed pages; the backup screen
+        needs them because it shows everything at once.
 
         There is no verdict screen when something is wrong (Ben,
-        2026-09-18). The page redraws with the wrong characters outlined
-        in red and the cursor on the first one, and fixing it walks to
-        the next. A screen that says "three are wrong" and then makes a
-        person find them has counted rather than helped.
+        2026-09-18). The screen redraws with the wrong characters
+        outlined in red and the cursor on the first one, and fixing it
+        walks to the next. A screen that says "three are wrong" and then
+        makes a person find them has counted rather than helped.
 
-        The verdict survives for the good news: a page that matches is
+        The verdict survives for the good news: a key that matches is
         put to Core, which is the one moment somebody wants to stop and
         read a screen.
         """
-        typed, caret, marked = "", 0, False
+        # THE PREFIX IS ALREADY THERE. Every Core master key on a given
+        # network starts with the same 16 characters, because a master
+        # key is depth 0 with no parent and no child number (Ben, on the
+        # board, 2026-09-19: "It also always starts with xprv 9s21 ZrQH
+        # 143K so let's have that prefilled"). Four boxes of 28.
+        #
+        # The cost, stated plainly: those four boxes are no longer
+        # checked against the paper. A person who copied them down wrong
+        # will not be told. They are the same on every key and the value
+        # is public, so a wrong one is recoverable by anyone who knows
+        # what a Core key looks like; the other 24 boxes are not.
+        # From the key in hand, not from the node, so a key that does
+        # not begin with a prefix we have actually measured is typed in
+        # full rather than partly assumed.
+        prefix = next((p for p in signer.MASTER_PREFIXES
+                       if want.startswith(p)), "")
+        typed = want[:len(prefix)]
+        caret, marked = len(typed), False
         while True:
-            typed, caret = self._check_entry(label, i, pages, want, typed,
-                                             caret, marked)
+            typed, caret = self._check_entry(label, want, typed, caret,
+                                             marked)
             if typed is None:
                 return None
             wrong = _wrong_at(typed, want)
@@ -1771,7 +1811,7 @@ class Session:
             # the end of what was typed when the page stops short.
             caret = min(wrong) if wrong else len(typed)
 
-    def _check_entry(self, label, i, pages, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
+    def _check_entry(self, label, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
                      caret, marked=False):
         """Type or correct one page, with every mistake marked as you go.
 
@@ -1786,18 +1826,17 @@ class Session:
         cur, mode, sel = 0, 0, None
         while True:
             cells = screens.mode_cells(runs[mode][1])
-            title = (f"{label}  ·  TYPE  {i + 1}/{pages}" if pages > 1
-                     else f"{label}  ·  TYPE  IT  BACK")
+            # How far through, in characters, because that is what a
+            # person is counting off their paper. It said "TYPE 1/3",
+            # which was the page number of a paging scheme that is gone.
+            title = (f"{label}  ·  ALL  {len(want)}  TYPED"
+                     if len(typed) >= len(want)
+                     else f"{label}  ·  {len(typed)}/{len(want)}")
             self.display.show(screens.text_entry(
                 self.w, self.h, title, typed, cur, charset, mode,
                 actions_sel=sel, caret=caret, actions=("ABORT", "CHECK"),
                 wrong=_wrong_at(typed, want) if marked else (),
                 want_len=len(want),
-                # Box 13 is on page 2, not box 1 again. Every page
-                # numbered from 1, so 12 was the highest number the
-                # device drew and the last 16 boxes of a key had no
-                # names (Ben, on the board, 2026-09-19).
-                first_box=i * screens.CHARS_PER_PAGE // 4 + 1,
                 hint=self._type_hint(runs, mode, charset)),
                 sensitive=True)
             key = self.buttons.read()
