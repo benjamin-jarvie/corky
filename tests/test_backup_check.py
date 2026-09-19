@@ -77,7 +77,8 @@ PAGES = screens.text_pages(KEY)
 # No trailing "a": text_keys walks to the bar and takes CHECK itself, and
 # a correct page returns from _check_page with no verdict in between.
 
-sess, got = run_page(text_keys("xprv", PAGES[0]), PAGES[0])
+sess, got = run_page(text_keys("xprv", PAGES[0], page_full=True),
+                     PAGES[0])
 if got != PAGES[0]:
     bad(f"a correctly typed page was not accepted: {got!r}")
 else:
@@ -91,7 +92,8 @@ else:
 AT = 5
 BAD_PAGE = PAGES[0][:AT] + ("2" if PAGES[0][AT] != "2" else "3") + PAGES[0][AT + 1:]
 
-sess, got = run_page(text_keys("xprv", BAD_PAGE), PAGES[0])
+sess, got = run_page(text_keys("xprv", BAD_PAGE, page_full=True),
+                     PAGES[0])
 if got != "ran out of presses":
     bad(f"a wrong page returned {got!r} instead of asking for a fix")
 elif not drew(sess, screens.text_entry(
@@ -375,7 +377,7 @@ flags_for("the paper backup pages", "aaa",
 
 # A full page typed, then committed, so every frame of a real page is
 # counted. Without the commit the script never leaves the entry screen.
-_a_page = text_keys("xprv", PAGES[0]) + "a"
+_a_page = text_keys("xprv", PAGES[0], page_full=True)
 flags_for("the check entry", _a_page,
           lambda s: s._check_page(LABEL, 0, 3, PAGES[0]),
           len(_a_page) - 5)

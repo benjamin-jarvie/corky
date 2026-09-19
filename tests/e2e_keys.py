@@ -100,9 +100,18 @@ def commit_presses(charset, mode, cur):
     return "d" * (downs + 1) + "a"
 
 
-def text_keys(charset, want):
-    """Presses that type `want` and then take the bar's action."""
+def text_keys(charset, want, page_full=False):
+    """Presses that type `want` and then take the bar's action.
+
+    `page_full` when the screen KNOWS how long the page is and `want`
+    fills it, which only the backup check does. There the bar takes the
+    focus on the last character, so the walk down to it is already done
+    and one press finishes. Everywhere else the screen cannot know when
+    you have finished, so the presses go down to the bar as before.
+    """
     presses, mode, cur = grid_presses(charset, want)
+    if page_full:
+        return presses + "a"
     return presses + commit_presses(charset, mode, cur)
 
 
@@ -310,14 +319,17 @@ def main():
                   + key_menu_press("Receiving addresses", 0)
                   + "dda" + "b"                   # page on, back
                   + key_menu_press("Backup key", 2)
-                  + "aaa"                         # 3 pages, paper is the only kind
+                  # Two pages on, then LEFT to DONE and take it. CHECK
+                  # IT is the pre-selected button now (Ben, 2026-09-19),
+                  # so a bare A on the last page starts the verify.
+                  + "aa" + "la"
                   + key_menu_press("Discard key", 0)
                   + "ra"                          # confirm: DISCARD
                   + "da" + "a" + "c"              # Tools -> Check for leaks -> C leaves
                   + "b"                           # Tools -> home
                   + "ra" + keys_press(0, "New key")   # Keys -> New key, done
                   + key_menu_press("Backup key", 0)
-                  + "aaa"                         # 3 pages
+                  + "aa" + "la"                   # 3 pages, then DONE
                   + "b" + "b"                     # key menu -> keys -> home
                   + "draa")
         r = run_device(datadir, script, work / "framesK3", qr_key=key_a)
@@ -527,14 +539,19 @@ def main():
         # NO VERDICT SCREEN when a page is wrong (map typing, T4). CHECK
         # redraws the page with the mistake outlined and the cursor on
         # it, so the fix is: type the right character, then CHECK again.
-        fix, fix_mode, fix_cur = grid_presses("xprv", right)
+        # The bar takes the focus on the last character of a page, so a
+        # full page commits with ONE press and the walk down to the bar
+        # is already done (Ben, 2026-09-19: "I can only get to the 12th
+        # box"). Fixing the last wrong character does the same, because
+        # then there is nothing left to type and nothing left to fix.
+        fix, _fix_mode, _fix_cur = grid_presses("xprv", right)
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
                   + key_menu_press("Backup key", 0)  # paper, no chooser
-                  + "aa" + "ra"                  # 3 pages, then CHECK IT
-                  + text_keys("xprv", page1_bad)  # page 1, one wrong
-                  + fix + commit_presses("xprv", fix_mode, fix_cur)
-                  + text_keys("xprv", pages9[1])
-                  + text_keys("xprv", pages9[2])
+                  + "aa" + "a"                   # 3 pages, then CHECK IT
+                  + text_keys("xprv", page1_bad, page_full=True)
+                  + fix + "a"                    # the fix, then CHECK
+                  + text_keys("xprv", pages9[1], page_full=True)
+                  + text_keys("xprv", pages9[2], page_full=True)
                   + "a"                          # Core's verdict, dismissed
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK9", qr_key=key_a)

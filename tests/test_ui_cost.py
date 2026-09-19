@@ -126,7 +126,7 @@ try:
     screens.backup_page = (
         lambda _w, _h, page_text, _label, page, pages, actions_sel=0:
         backup_calls.append((page_text, page, pages)) or "backup")
-    buttons = ScriptedButtons("aac")
+    buttons = ScriptedButtons("aac")   # page, page, abort
     session = coresigner_main.Session(RecordingDisplay(), buttons, FakeRpc())
     completed = session._show_backup("x" * 97, "KEY  D2B7E45C")
     abort_calls = list(backup_calls)
@@ -138,12 +138,14 @@ try:
     succeeded = success_session._show_backup("y" * 49, "KEY  D2B7E45C")
     success_calls = list(backup_calls)
 
-    # The last page's bar is live: DONE is pre-selected and CHECK IT is
-    # one press right of it. Both must reach the caller.
+    # The last page's bar is live: CHECK IT is pre-selected and DONE is
+    # one press LEFT of it (Ben, 2026-09-19: the safe choice belongs
+    # under the thumb, and leaving without checking is the risky one).
+    # Both must reach the caller.
     backup_calls.clear()
     check_session = coresigner_main.Session(
-        RecordingDisplay(), ScriptedButtons("ara"), FakeRpc())
-    chose_check = check_session._show_backup("z" * 49, "KEY  D2B7E45C")
+        RecordingDisplay(), ScriptedButtons("ala"), FakeRpc())
+    chose_done = check_session._show_backup("z" * 49, "KEY  D2B7E45C")
 
     # DOWN turns the page everywhere else, so it turns the page here too
     # (057d910). On the LAST page there is nowhere to turn to, and it must
@@ -162,23 +164,27 @@ expected_abort = [("x" * 48, 0, 3), ("x" * 48, 1, 3), ("x", 2, 3)]
 expected_success = [("y" * 48, 0, 2), ("y", 1, 2)]
 if (completed is not None or abort_calls != expected_abort
         or buttons.reads != 3
-        or succeeded != "done" or success_calls != expected_success
+        or succeeded != "check" or success_calls != expected_success
         or success_buttons.reads != 2):
     bad("backup pagination/abort drifted: "
         f"abort={abort_calls}, success={success_calls}")
 else:
     ok("backup strings paginate in order, complete, and abort immediately")
 
-if chose_check != "check":
-    bad(f"CHECK IT on the last backup page returned {chose_check!r}")
+if succeeded != "check":
+    bad("A on the last backup page did not choose CHECK IT. The safe "
+        "choice has to be the one already under the thumb.")
+elif chose_done != "done":
+    bad(f"LEFT then A on the last backup page returned {chose_done!r}, "
+        "so DONE is not reachable beside CHECK IT")
 else:
-    ok("CHECK IT on the last backup page reaches the caller")
+    ok("CHECK IT is the default, and LEFT reaches DONE without checking")
 
 # "d" turns page 0 -> 1, then "d" on the last page redraws it, then "a"
 # finishes. Four paints for three presses: pages 0, 1, and 1 again.
 expected_down = [("w" * 48, 0, 2), ("w", 1, 2), ("w", 1, 2)]
-if down_result != "done":
-    bad(f"DOWN then DONE on the last backup page returned {down_result!r}")
+if down_result != "check":
+    bad(f"DOWN then A on the last backup page returned {down_result!r}")
 elif down_calls != expected_down:
     bad(f"DOWN on the LAST backup page did not simply redraw it: "
         f"{down_calls}")
@@ -284,7 +290,7 @@ KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
        "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
 
 typing_in = len(_type_keys("xprv", KEY))
-checking = sum(len(_type_keys("xprv", page))
+checking = sum(len(_type_keys("xprv", page, page_full=True))
                for page in screens.text_pages(KEY))
 
 for label, got, budget in (

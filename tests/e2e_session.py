@@ -420,7 +420,10 @@ def main():
                        + "d" * [lab for lab, _n, _k in
                                 scr.KEY_MENU_OPTIONS].index("Backup key")
                        + "a"
-                       + "a" * xprv_pages         # one press per page
+                       # One press per page, then LEFT to DONE. CHECK IT
+                       # is the pre-selected button on the last page
+                       # since 2026-09-19, so a bare A starts the verify.
+                       + "a" * (xprv_pages - 1) + "la"
                        + "b" + "b" + "draa",      # key menu -> Keys -> home -> off
                        fg)
         assert r.returncode == 0, f"G failed:\n{r.stderr}"

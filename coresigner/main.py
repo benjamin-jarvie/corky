@@ -1644,7 +1644,13 @@ class Session:
         "check", or None if the user abandoned it.
         """
         pages = screens.text_pages(text)
-        i, sel = 0, 0
+        # CHECK IT is pre-selected, and DONE is one press LEFT. It was
+        # the other way round, on the argument that a backup flow you
+        # cannot leave in one press is the flow Ben threw out on
+        # 2026-09-05. He read the finished screen on 2026-09-19 and
+        # called it: the safe choice should be the one under your
+        # thumb, and leaving without checking is the risky one.
+        i, sel = 0, 1
         while True:
             self.display.show(screens.backup_page(
                 self.w, self.h, pages[i], label,
@@ -1657,7 +1663,7 @@ class Session:
                 if i == 0:
                     return None     # nothing earlier: BACK is ABORT here
                 i -= 1
-                sel = 0
+                sel = 1
             elif key in ("l", "r") and last:
                 sel = 1 - sel
             elif key in ("a", "p", "d"):
@@ -1745,21 +1751,28 @@ class Session:
         put to Core, which is the one moment somebody wants to stop and
         read a screen.
         """
-        typed, caret = "", 0
+        typed, caret, marked = "", 0, False
         while True:
             typed, caret = self._check_entry(label, i, pages, want, typed,
-                                             caret)
+                                             caret, marked)
             if typed is None:
                 return None
             wrong = _wrong_at(typed, want)
             if not wrong and len(typed) == len(want):
                 return typed
+            # CHECK has been pressed, so from here the mistakes are
+            # marked and fixing one walks to the next. Nothing is marked
+            # before that: Ben typed a page with the case wrong and the
+            # screen painted red round most of it as he went, which is
+            # a screen shouting at somebody who has not finished their
+            # sentence (on the board, 2026-09-19).
+            marked = True
             # The first thing to fix: the earliest wrong character, or
             # the end of what was typed when the page stops short.
             caret = min(wrong) if wrong else len(typed)
 
     def _check_entry(self, label, i, pages, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
-                     caret):
+                     caret, marked=False):
         """Type or correct one page, with every mistake marked as you go.
 
         `want` is the page as the device holds it, so the screen can
@@ -1777,8 +1790,8 @@ class Session:
                      else f"{label}  ·  TYPE  IT  BACK")
             self.display.show(screens.text_entry(
                 self.w, self.h, title, typed, cur, charset, mode,
-                actions_sel=sel, caret=caret,
-                actions=("ABORT", "CHECK"), wrong=_wrong_at(typed, want),
+                actions_sel=sel, caret=caret, actions=("ABORT", "CHECK"),
+                wrong=_wrong_at(typed, want) if marked else (),
                 want_len=len(want),
                 hint=self._type_hint(runs, mode, charset)),
                 sensitive=True)
@@ -1806,7 +1819,22 @@ class Session:
                 else:
                     typed += " " * max(0, caret - len(typed))
                     typed = typed[:caret] + ch + typed[caret + 1:]
-                    caret = _next_gap(typed, want, caret)
+                    if marked:
+                        caret = _next_gap(typed, want, caret)
+                        if (len(typed) == len(want)
+                                and not _wrong_at(typed, want)):
+                            sel = 1
+                    elif caret + 1 < len(want):
+                        caret += 1
+                    else:
+                        # THE PAGE IS FULL, so the bar takes the focus
+                        # and CHECK is under the next press. The caret
+                        # stopped on the last character instead, which
+                        # made every further press overwrite it: "I can
+                        # only get to the 12th box, so I can not even
+                        # re-enter all of the words" (Ben, on the
+                        # board, 2026-09-19). UP goes back to the grid.
+                        sel = 1
             elif key == "c" and len(runs) > 1:
                 mode = (mode + 1) % len(runs)
                 cur = _same_cell(cells, cur,

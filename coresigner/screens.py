@@ -17,7 +17,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 INK = "#1A1714"
 CREAM = "#F5EFE0"
-RED = "#9E2B25"
+#: Brighter since 2026-09-19. The old #9E2B25 is a deep brick that
+#: reads as brown beside CREAM on this panel, and a wrong character
+#: outlined in it is barely visible at arm's length (Ben, on the
+#: board). Every red on the device is this one, so the FAILED ring
+#: moved with it.
+RED = "#FF4B3E"
 GREY = "#B8B2A6"
 # The one gold. Ben set it to #FBDC7B on 2026-09-05: "which will be the
 # universal color where we currently have gold". It was #C8912F, which
