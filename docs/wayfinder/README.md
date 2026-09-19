@@ -3,9 +3,15 @@
 Charted efforts for this repo. Each is a `map.md` plus numbered decision
 tickets, worked one at a time.
 
-- **beta-audit** — **open, and the current one.** An evidenced go or
+- **beta-audit** — **open.** An evidenced go or
   no-go on a private beta: eleven tickets, every finding weighed as
   blocking or not blocking. Charted 2026-09-06.
+- **correction** — **open, and the current one.** A wrong character
+  cannot pass, the device says what the paper should say, and the last
+  screen is honest about what was corrected. Six tickets, three closed
+  in the charting session. Charted 2026-09-19, after Ben reported the
+  same wall three times and two correct fixes turned out to be the
+  wrong bug.
 - **multisig-cosigner** — **open.** A Core key as one cosigner in a
   multivendor quorum, signed for on the device. Five tickets. Charted
   2026-09-09, after charting found that Core signs a quorum share with
