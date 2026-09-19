@@ -304,18 +304,6 @@ def _same_cell(cells, cur, into):
     return 0
 
 
-def _next_gap(typed, want, after):
-    """Where the cursor goes once a character is entered.
-
-    The NEXT thing that does not match, so correcting three mistakes
-    costs three corrections and no hunting (Ben, 2026-09-18). When
-    everything past here matches, it steps one right like any typing
-    screen, so filling a blank page still reads left to right.
-    """
-    wrong = sorted(n for n in _wrong_at(typed, want) if n > after)
-    return wrong[0] if wrong else min(after + 1, max(0, len(want) - 1))
-
-
 class Session:
     def __init__(self, display, buttons, rpc, stick_dir=None, qr_source=None,
                  animate=False, on_device=False, card_dir=None):
@@ -364,13 +352,13 @@ class Session:
             # exists to prevent: a key from an earlier session, still
             # loaded, on a device that says nothing about it (D17's twin).
             dropped = []
-            self._hold(f"could not clear old keys: {str(exc)[:40]}")
+            self._hold(f"Could not clear old keys: {str(exc)[:40]}")
         if dropped:
             # ok=True: this is housekeeping, not a fault. It drew FAILED
             # over a sentence describing the device working exactly as
             # designed, which is a screen telling a person something
             # untrue (Ben, on the board, 2026-09-18).
-            self._hold(f"cleared {len(dropped)} key(s) from an earlier "
+            self._hold(f"Cleared {len(dropped)} key(s) from an earlier "
                        "session", ok=True)
         teardown = None
         try:
@@ -384,7 +372,7 @@ class Session:
                 # says it is off. Say so instead.
                 teardown = exc
         if teardown is not None:
-            self._hold(f"key not cleared: {str(teardown)[:44]}")
+            self._hold(f"Key not cleared: {str(teardown)[:44]}")
         # state_home only returns when the user chose POWER OFF, on the
         # result screen or in settings. A crash raises instead, and systemd
         # restarts the unit, so the device must NOT halt on that path.
@@ -597,7 +585,7 @@ class Session:
         """
         self._refresh_keys()
         if not self.keys:
-            self._hold("load a key first")
+            self._hold("Load a key first")
             return None
         return self._sign_loop(self.state_load)
 
@@ -609,7 +597,7 @@ class Session:
         """
         self._refresh_keys()
         if not self.keys:
-            self._hold("load a key first")
+            self._hold("Load a key first")
             return
         try:
             _kind, payload = self._scan_until(
@@ -630,7 +618,7 @@ class Session:
         address on the other screen belongs to the key in your hand.
         """
         if not self.keys:
-            self._hold("load a key first")
+            self._hold("Load a key first")
             return None
         address = payload.strip()
         if address.lower().startswith("bitcoin:"):
@@ -655,7 +643,7 @@ class Session:
         # worse than one that says what it checked, so it says what it
         # checked. See ADDRESS_CHECK_DEPTH for why that is a floor and how
         # it was measured.
-        self._hold(f"not in the first {ADDRESS_CHECK_DEPTH} addresses "
+        self._hold(f"Not in the first {ADDRESS_CHECK_DEPTH} addresses "
                    f"of any loaded key")
         return None
 
@@ -800,7 +788,7 @@ class Session:
         user backed out or there is nothing to write to."""
         channels = self._file_channels()
         if not channels:
-            self._hold("no stick or card to write to")
+            self._hold("No stick or card to write to")
             return None
         # Asked every time, even when there is one medium (ticket 04). The
         # screen is what tells you where the file went, and that is the
@@ -829,7 +817,7 @@ class Session:
         order = signer.available_kinds(self.rpc, name)
         if not order:
             # Nothing to offer. Saying so beats a menu with no rows.
-            return self._hold("this key has no policies to export")
+            return self._hold("This key has no policies to export")
         # The cosigner rows sit under the four policies (M1 decision 3).
         # `order` stays the four, and the extra rows are indexed past it,
         # so `available_kinds` keeps meaning what it always did.
@@ -978,7 +966,7 @@ class Session:
             # devices, each with its own Scan button, so they pick
             # Specter DIY and then point the camera. Saying it after the
             # code is dismissed is saying it too late.
-            self._hold("in your coordinator choose Specter DIY, then Scan",
+            self._hold("In your coordinator choose Specter DIY, then Scan",
                        ok=True)
             return bool(self._export_qr(name, payload,
                                         screens.MULTISIG_KIND))
@@ -1136,7 +1124,7 @@ class Session:
             # export menu fixed alongside this: available_kinds returns
             # only the policies a wallet HOLDS, and a wallet imported as a
             # bare descriptor need not hold any (2026-09-07).
-            return self._hold("this key derives no addresses")
+            return self._hold("This key derives no addresses")
         if kind not in order:
             kind = order[0]
         # LEFT and RIGHT change the policy only where the policy was not
@@ -1585,7 +1573,7 @@ class Session:
             # will never finish. Measured 2026-09-07 while trying to
             # delete it as duplication.
             stop()
-            return self._hold(f"leak check did not run: {str(exc)[:38]}")
+            return self._hold(f"Leak check did not run: {str(exc)[:38]}")
         finally:
             stop()
         leaks, clear = [], []
@@ -1606,7 +1594,7 @@ class Session:
                 clear.append((label, state, "normal"))
         rows = leaks + clear          # what you opened this for comes first
         if not rows:
-            return self._hold("leak check produced no report")
+            return self._hold("Leak check produced no report")
         cursor = 0
         while True:
             self.display.show(screens.leak_report(self.w, self.h, rows, cursor))
@@ -1715,12 +1703,12 @@ class Session:
         # at once and so needs pages. This screen SCROLLS. It never
         # needed them, and with them gone the boxes number themselves
         # 1 to 28 and a mistake at box 3 does not block box 20.
-        typed = self._check_typed(label, text)
+        typed, made = self._check_typed(label, text)
         if typed is None:
             return False
-        return self._confirm_typed_key(typed, name, xfp)
+        return self._confirm_typed_key(typed, name, xfp, made)
 
-    def _confirm_typed_key(self, typed, name, xfp):
+    def _confirm_typed_key(self, typed, name, xfp, made=()):
         """Core reads what was typed and says whether it is the same key.
 
         The pages already matched character by character, so a comparison
@@ -1744,14 +1732,30 @@ class Session:
         finally:
             stop()
         if not same:
-            self._hold("that key does not open this wallet")
+            self._hold("That key does not open this wallet")
             return False
-        self.display.show(screens.verified(
-            self.w, self.h,
-            "your paper opens\n"
-            f"key {(xfp or '').upper()}"))
-        self.buttons.read()
-        return True
+        if not made:
+            self.display.show(screens.verified(
+                self.w, self.h,
+                "Your paper opens\n"
+                f"key {(xfp or '').upper()}"))
+            self.buttons.read()
+            return True
+        # SOMETHING WAS CORRECTED, so "your paper opens this key" is not
+        # a thing the device knows any more. It knows how many and
+        # where, and that the paper only opens the wallet if the person
+        # went back and wrote them down (map correction, C2).
+        page = 0
+        while True:
+            self.display.show(screens.corrections(
+                self.w, self.h, list(made), xfp or "", page=page))
+            key = self.buttons.read()
+            if key == "d" and page == 0:
+                page = 1
+            elif key == "u" and page == 1:
+                page = 0
+            elif key in ("a", "p", "b", "c"):
+                return True
 
     def _check_typed(self, label, want):
         """The whole key typed back and judged, with mistakes in place.
@@ -1788,55 +1792,43 @@ class Session:
         # From the key in hand, not from the node, so a key that does
         # not begin with a prefix we have actually measured is typed in
         # full rather than partly assumed.
+        # From the key in hand, not from the node, so a key that does
+        # not begin with a prefix we have actually measured is typed in
+        # full rather than partly assumed.
         prefix = next((p for p in signer.MASTER_PREFIXES
                        if want.startswith(p)), "")
-        typed = want[:len(prefix)]
-        caret, marked = len(typed), False
-        while True:
-            typed, caret = self._check_entry(label, want, typed, caret,
-                                             marked)
-            if typed is None:
-                return None
-            wrong = _wrong_at(typed, want)
-            if not wrong and len(typed) == len(want):
-                return typed
-            # CHECK has been pressed, so from here the mistakes are
-            # marked and fixing one walks to the next. Nothing is marked
-            # before that: Ben typed a page with the case wrong and the
-            # screen painted red round most of it as he went, which is
-            # a screen shouting at somebody who has not finished their
-            # sentence (on the board, 2026-09-19).
-            marked = True
-            # The first thing to fix: the earliest wrong character, or
-            # the end of what was typed when the page stops short.
-            caret = min(wrong) if wrong else len(typed)
+        return self._check_entry(label, want, want[:len(prefix)])
 
-    def _check_entry(self, label, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
-                     caret, marked=False):
-        """Type or correct one page, with every mistake marked as you go.
+    def _check_entry(self, label, want, typed):  # noqa: C901 - one keypad state machine, like _text_entry
+        """Type the key back, one character at a time, none of them wrong.
 
-        `want` is the page as the device holds it, so the screen can
-        outline what does not match without a round trip through a
-        verdict screen. Typing over a wrong character moves to the NEXT
-        wrong one, which makes a page with three mistakes three presses
-        of work instead of a hunt.
+        A character that does not match goes red where it sits and the
+        caret moves on, so at most ONE can be outstanding. The moment a
+        person adds another character with that one still red, the
+        screen stops them and shows both characters (map correction,
+        C1). Pressing B and retyping costs nothing, which is what makes
+        a slipped thumb free.
+
+        Returns `(typed, corrections)`, or `(None, [])` if they left.
+        `corrections` is every place the device put the right character
+        in, as (box, character), counted per CHARACTER (C4).
         """
         charset = "xprv"
         runs = screens.modes(charset)
         cur, mode, sel = 0, 0, None
+        caret, made = len(typed), []
         while True:
             cells = screens.mode_cells(runs[mode][1])
+            wrong = _wrong_at(typed, want)
             # How far through, in characters, because that is what a
-            # person is counting off their paper. It said "TYPE 1/3",
-            # which was the page number of a paging scheme that is gone.
+            # person is counting off their paper.
             title = (f"{label}  ·  ALL  {len(want)}  TYPED"
-                     if len(typed) >= len(want)
+                     if len(typed) >= len(want) and not wrong
                      else f"{label}  ·  {len(typed)}/{len(want)}")
             self.display.show(screens.text_entry(
                 self.w, self.h, title, typed, cur, charset, mode,
-                actions_sel=sel, caret=caret, actions=("ABORT", "CHECK"),
-                wrong=_wrong_at(typed, want) if marked else (),
-                want_len=len(want),
+                actions_sel=sel, caret=caret, actions=("ABORT", "DONE"),
+                wrong=wrong, want_len=len(want),
                 hint=self._type_hint(runs, mode, charset)),
                 sensitive=True)
             key = self.buttons.read()
@@ -1844,7 +1836,22 @@ class Session:
                 if key in ("l", "r"):
                     sel = 1 - sel
                 elif key in ("a", "p"):
-                    return (typed, caret) if sel == 1 else (None, 0)
+                    if sel != 1:
+                        return None, []
+                    if wrong:                   # DONE is forward too
+                        typed, caret = self._fix_one(
+                            min(wrong), typed, want, made)
+                        sel = None
+                        continue
+                    if len(typed) < len(want):
+                        # DONE on a key that is not finished puts you
+                        # back where the typing stopped. Without this it
+                        # returned a short string and Core refused it in
+                        # Core's own words, which says nothing about the
+                        # 40 characters still to type.
+                        caret, sel = len(typed), None
+                        continue
+                    return typed, made
                 elif key == "d":
                     sel, cur = None, 0          # the d-pad loops
                 elif key in ("u", "b", "c"):
@@ -1857,27 +1864,22 @@ class Session:
             elif key in ("a", "p"):
                 ch = cells[cur]
                 if ch == screens.CARET_LEFT:
-                    caret = max(0, caret - 1)
+                    caret = max(0, caret - 1)   # backwards is never blocked
+                elif wrong:
+                    # FORWARD WITH ONE STILL RED. The press is spent on
+                    # the message; they read it, write it on the paper,
+                    # and type the next character themselves.
+                    typed, caret = self._fix_one(min(wrong), typed, want,
+                                                 made)
                 elif ch == screens.CARET_RIGHT:
                     caret = min(len(want) - 1, caret + 1)
                 else:
                     typed += " " * max(0, caret - len(typed))
                     typed = typed[:caret] + ch + typed[caret + 1:]
-                    if marked:
-                        caret = _next_gap(typed, want, caret)
-                        if (len(typed) == len(want)
-                                and not _wrong_at(typed, want)):
-                            sel = 1
-                    elif caret + 1 < len(want):
-                        caret += 1
-                    else:
-                        # THE PAGE IS FULL, so the bar takes the focus
-                        # and CHECK is under the next press. The caret
-                        # stopped on the last character instead, which
-                        # made every further press overwrite it: "I can
-                        # only get to the 12th box, so I can not even
-                        # re-enter all of the words" (Ben, on the
-                        # board, 2026-09-19). UP goes back to the grid.
+                    caret = min(caret + 1, len(want) - 1)
+                    if len(typed) >= len(want) and typed[-1] == want[-1]:
+                        # Nothing left to type and nothing red, so the
+                        # bar takes the focus and DONE is one press.
                         sel = 1
             elif key == "c" and len(runs) > 1:
                 mode = (mode + 1) % len(runs)
@@ -1885,9 +1887,25 @@ class Session:
                                  screens.mode_cells(runs[mode][1]))
             elif key == "b":
                 if not typed:
-                    return None, 0
+                    return None, []
                 caret = max(0, caret - 1)
                 typed = typed[:caret] + typed[caret + 1:]
+
+    def _fix_one(self, at, typed, want, made):
+        """Show what the paper should say, then put it right on screen.
+
+        The typed string is scaffolding and the device owns it; the
+        paper is the artifact and only the person can fix that, so the
+        screen says which box and character to write on (map
+        correction, C1 and C2).
+        """
+        box, char = at // 4 + 1, at % 4 + 1
+        self.display.show(screens.wrong_character(
+            self.w, self.h, box, char, typed[at], want[at]), sensitive=True)
+        self.buttons.read()
+        made.append((box, char))
+        return typed[:at] + want[at] + typed[at + 1:], min(at + 1,
+                                                           len(want) - 1)
 
     # -- PSBT load: stick first, then QR frames ---------------------------
 
@@ -2068,7 +2086,7 @@ class Session:
         """
         self._refresh_keys()
         if not self.keys:
-            self._hold("load a key first")
+            self._hold("Load a key first")
             return None
         owners = signer.owners(self.rpc, psbt)
         matches = [k for k in self.keys if k.xfp in owners]
@@ -2204,7 +2222,7 @@ class Session:
                 # "file channel" is CONTEXT.md's word for stick and card
                 # together, which is exactly what can have failed here.
                 # "file" was not a word this codebase defines.
-                self._hold(f"file channel failed: {str(exc)[:34]}")
+                self._hold(f"File channel failed: {str(exc)[:34]}")
         if detail is None:
             frames = qrchannel.psbt_to_frames(signed["psbt"])
             try:
@@ -2215,7 +2233,7 @@ class Session:
                 # where a message gets redacted, and this was the one
                 # exception on its way to the panel that went around it
                 # (two-axis review, 2026-09-08).
-                self._hold(f"signed, but not shown: {exc}")
+                self._hold(f"Signed, but not shown: {exc}")
                 return TO_HOME
             detail = f"shown as {len(frames)} QR frames"
         return self._state_signed(detail, signed["complete"])

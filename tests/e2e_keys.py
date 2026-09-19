@@ -59,10 +59,15 @@ def _mode_of(charset, ch):
     raise AssertionError(f"{ch!r} is in no mode of {charset}")
 
 
-def grid_presses(charset, want):
-    """Presses that type `want` on the grid, without the closing press."""
+def grid_presses(charset, want, mode=0, cur=0):
+    """Presses that type `want` on the grid, without the closing press.
+
+    `mode` and `cur` carry the cursor in from an earlier run, so a
+    sequence broken by something else, a message that has to be
+    dismissed, can be written as two calls.
+    """
     runs = scr.modes(charset)
-    mode, cur, out = 0, 0, []
+    out = []
     for ch in want:
         want_mode, target = _mode_of(charset, ch)
         while mode != want_mode:              # C cycles, one press each
@@ -422,7 +427,7 @@ def main():
         # ok=True: clearing an inherited key is the device working, not a
         # fault. It drew FAILED over that sentence until 2026-09-18.
         assert _has(fr4, _render(scr.result, ok=True, label="DONE",
-                                 detail="cleared 1 key(s) from an earlier session")), \
+                                 detail="Cleared 1 key(s) from an earlier session")), \
             "K4: the device did not say it had cleared an inherited key"
         assert _has(fr4, _render(scr.home, 0)), \
             "K4: home still showed a fingerprint after the clear"
@@ -568,24 +573,34 @@ def main():
         typo = "2" if right != "2" else "3"
         assert typo in scr.BASE58, "K9: the substitute is not a base58 character"
         # NO VERDICT SCREEN when something is wrong (map typing, T4).
-        # CHECK redraws with the mistake outlined and the cursor on it,
-        # so the fix is: type the right character, then CHECK again.
+        #
+        # A WRONG CHARACTER CANNOT PASS (map correction, C1). It goes
+        # red where it sits, and the moment another character is added
+        # the screen stops and shows both. That press is spent on the
+        # message, one more dismisses it, the device puts the right
+        # character in, and typing carries on. Three segments, because
+        # that is three things a person does.
         #
         # THE WHOLE KEY IN ONE GO. It was checked one 48-character page
         # at a time and a page would not let you out until it was
         # perfect, so a mistake at character 6 meant characters 49 to
         # 111 could not be typed at all (Ben, on the board, three times,
-        # ending 2026-09-19). The bar takes the focus on the last
-        # character, so a full key commits with ONE press, and fixing
-        # the last wrong character does the same.
-        whole_bad = XPRV_A[:wrong_at] + typo + XPRV_A[wrong_at + 1:]
-        fix, _fix_mode, _fix_cur = grid_presses("xprv", right)
+        # ending 2026-09-19).
+        pre9 = len(signer.TESTNET_PREFIX)            # already on screen
+        typed9, m9, c9 = grid_presses(
+            "xprv", XPRV_A[pre9:wrong_at] + typo)
+        trip9, m9b, c9b = grid_presses(
+            "xprv", XPRV_A[wrong_at + 1], m9, c9)    # stopped by the message
+        rest9, m9c, c9c = grid_presses(
+            "xprv", XPRV_A[wrong_at + 1:], m9b, c9b)
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
                   + key_menu_press("Backup key", 0)  # paper, no chooser
                   + "aa" + "a"                   # 3 pages, then CHECK IT
-                  + check_keys(XPRV_A, whole_bad)
-                  + fix + "a"                    # the fix, then CHECK
-                  + "a"                          # Core's verdict, dismissed
+                  + typed9 + trip9               # up to the mistake, then on
+                  + "a"                          # dismiss the message
+                  + rest9                        # the rest of the key
+                  + "a"                          # DONE, the bar has focus
+                  + "a"                          # the corrections screen
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK9", qr_key=key_a)
         assert r.returncode == 0, f"K9 failed:\n{r.stderr[-1500:]}"
@@ -596,9 +611,17 @@ def main():
         # directly. What this session proves is the part only a real
         # device and a real node can: the flow runs end to end on Core's
         # own key and Core agrees at the end.
-        assert _has(fr9, _render(scr.verified,
-                                 f"your paper opens\nkey {xfp_a.upper()}")), \
-            "K9: Core never confirmed the typed key opens this wallet"
+        # ONE correction was made, so the flow does NOT end on "your
+        # paper opens key X": that is no longer a thing the device knows
+        # (map correction, C2). It ends on the count, the fingerprint
+        # Core confirmed, and the warning.
+        box9, char9 = wrong_at // 4 + 1, wrong_at % 4 + 1
+        assert _has(fr9, _render(scr.corrections, [(box9, char9)], xfp_a)), \
+            "K9: the corrections screen never reached the panel"
+        assert not _has(fr9, _render(
+            scr.verified, f"Your paper opens\nkey {xfp_a.upper()}")), \
+            ("K9: the panel claimed the paper opens the key after "
+             "correcting a character of it, which it cannot know")
         # And the check can actually FAIL, or the assertion above proves
         # nothing. Audit A6 found the old comparison could not: the pages
         # had already matched character for character, so Core was asked
@@ -611,7 +634,9 @@ def main():
         assert not signer.opens_wallet(rpc, name9, other), \
             "K9: a different key was judged to open this wallet"
         try:
-            signer.opens_wallet(rpc, name9, whole_bad)
+            signer.opens_wallet(
+                rpc, name9,
+                XPRV_A[:wrong_at] + typo + XPRV_A[wrong_at + 1:])
             raise AssertionError("K9: Core accepted a mistyped key")
         except RuntimeError as exc:
             assert XPRV_A[:20] not in str(exc) and typo not in str(exc)[:8], \
@@ -744,7 +769,7 @@ def main():
                 scr.verified, f"key {xfp_a.upper()}\nowns this address"))
             refused = _has(fr11, _render(
                 scr.result, ok=False, label="FAILED",
-                detail=f"not in the first {coresigner_main.ADDRESS_CHECK_DEPTH} "
+                detail=f"Not in the first {coresigner_main.ADDRESS_CHECK_DEPTH} "
                        f"addresses of any loaded key"))
             if want == "owned":
                 assert owned and not refused, \

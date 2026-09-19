@@ -99,3 +99,22 @@ as strings. Layer 3 is opaque to secrets.
 
 **lab**: the full build, kept in the butlers-playground repository: seed
 words, codex32, SeedQR, and everything main refused.
+
+## How the device writes
+
+**box**: four characters of a key, numbered. A key is 28 boxes. The
+paper backup, the typing screen and every message about a place in a key
+use the same numbering, so "box 7, character 3" means one thing on the
+panel and on the paper. _Avoid_: group, word, chunk.
+
+**correction**: one character the check found did not match, counted per
+character and never per box. The device corrects what was typed and the
+person corrects the paper.
+
+**Sentences start with a capital letter** (Ben, 2026-09-19). Titles,
+button labels and the character grid are not sentences: those stay upper
+case, upper case and as-typed. This is the device's panel and not the
+documents, which already read as prose.
+`tests/test_screen_fit.py` checks it on the source of every `_fit`,
+`_fit_block`, `_hold` and `_row` call, so a new screen cannot quietly
+break it.

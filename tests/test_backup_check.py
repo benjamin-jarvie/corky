@@ -22,7 +22,7 @@ import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
 import signer                           # noqa: E402
 from e2e_keys import (check_keys, commit_presses,  # noqa: E402
-                      text_keys)
+                      grid_presses, text_keys)
 
 # A real regtest master private key, the one every other suite signs with.
 KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
@@ -69,11 +69,26 @@ def session(script):
 
 
 def run_page(script, want):
+    """Drives the check and returns (session, typed) or the exhaustion.
+
+    `_check_typed` hands back (typed, corrections); the corrections are
+    checked where they matter and most cases here only care whether the
+    key was accepted.
+    """
+    sess = session(script)
+    try:
+        return sess, sess._check_typed(LABEL, want)[0]
+    except hal.ScriptExhausted:
+        return sess, "ran out of presses"
+
+
+def run_full(script, want):
+    """The same, keeping the corrections the device made."""
     sess = session(script)
     try:
         return sess, sess._check_typed(LABEL, want)
     except hal.ScriptExhausted:
-        return sess, "ran out of presses"
+        return sess, ("ran out of presses", [])
 
 
 def drew(sess, image):
@@ -94,10 +109,9 @@ if got != PAGES[0]:
 else:
     ok("a page typed correctly is accepted, with no screen in the way")
 
-# --- 2. a wrong character is marked, in place, with no verdict screen ----
-# Ben, 2026-09-18: CHECK redraws the page with the mistake outlined and
-# the cursor on it. The old flow put up a screen that counted the
-# mistakes and then made a person find them.
+# --- 2. a wrong character goes red where it sits ------------------------
+# Map correction C1. It goes red immediately and the caret moves on, so
+# at most one can ever be outstanding.
 
 # PAST THE PREFIX. The first 16 characters are prefilled, so they can
 # no longer be got wrong, and a check that puts the mistake there is
@@ -105,22 +119,25 @@ else:
 AT = len(signer.TESTNET_PREFIX) + 4
 BAD_PAGE = PAGES[0][:AT] + ("2" if PAGES[0][AT] != "2" else "3") + PAGES[0][AT + 1:]
 
-sess, got = run_page(check_keys(PAGES[0], BAD_PAGE), PAGES[0])
+# Typed only as far as the mistake, and NOT committed: the key is not
+# finished, so nothing moves the focus to the bar and a trailing press
+# would simply type another character.
+_upto = BAD_PAGE[:AT + 1]
+_presses, _mode, _cur = grid_presses(
+    "xprv", _upto[len(signer.TESTNET_PREFIX):])
+sess, got = run_page(_presses, PAGES[0])
 if got != "ran out of presses":
-    bad(f"a wrong page returned {got!r} instead of asking for a fix")
+    bad(f"the key was accepted with a wrong character in it: {got!r}")
 elif not drew(sess, screens.text_entry(
-        320, 240, f"{LABEL}  ·  ALL  {len(PAGES[0])}  TYPED",
-        BAD_PAGE, 0, "xprv", 0,
-        # actions_sel None: the grid has the focus when the page comes
-        # back marked, so neither button is lit (Ben, 2026-09-18).
-        actions_sel=None, caret=AT, actions=("ABORT", "CHECK"), wrong={AT},
-        want_len=len(PAGES[0]),
+        320, 240, f"{LABEL}  ·  {AT + 1}/{len(PAGES[0])}",
+        _upto, _cur, "xprv", _mode,
+        actions_sel=None, caret=AT + 1, actions=("ABORT", "DONE"),
+        wrong={AT}, want_len=len(PAGES[0]),
         hint=coresigner_main.Session._type_hint(screens.modes("xprv"), 0,
                                                 "xprv"))):
-    bad("the page was not redrawn with position 5 marked and the "
-        "cursor on it")
+    bad(f"the screen was not redrawn with position {AT} marked")
 else:
-    ok("a wrong character is outlined in place, cursor already on it")
+    ok("a wrong character goes red where it sits, and the caret moves on")
 
 # A marked page and a clean one must not render the same, or the red
 # outline is decoration.
@@ -135,29 +152,40 @@ if (screens.text_entry(320, 240, "T", PAGES[0], 0, "xprv", 0, caret=AT,
 else:
     ok("the red outline actually changes what is drawn")
 
-# --- 3. fixing one mistake walks to the next ----------------------------
-# The whole point of the jump: three mistakes cost three corrections and
-# no hunting.
+# --- 3. you cannot add a character with one still red ------------------
+# The whole of map correction C1. Ben, 2026-09-19: "if you type
+# something incorrect, the box goes red and you can't move forward."
 
-THREE = (PAGES[0][:3] + "2" + PAGES[0][4:9] + "2" + PAGES[0][10:20]
-         + "2" + PAGES[0][21:])
-wrong_three = sorted(coresigner_main._wrong_at(THREE, PAGES[0]))
-if wrong_three != [3, 9, 20]:
-    bad(f"the fixture does not have three mistakes: {wrong_three}")
+_one_more = BAD_PAGE[:AT + 2]          # the wrong one, then one more
+sess, (got, made) = run_full(check_keys(PAGES[0], _one_more), PAGES[0])
+_box, _char = AT // 4 + 1, AT % 4 + 1
+if not drew(sess, screens.wrong_character(320, 240, _box, _char,
+                                          BAD_PAGE[AT], PAGES[0][AT])):
+    bad(f"typing on past a wrong character did not stop with the "
+        f"message naming box {_box}, character {_char}")
 else:
-    caret = wrong_three[0]
-    fixed = THREE
-    walked = [caret]
-    for _ in range(3):
-        fixed = fixed[:caret] + PAGES[0][caret] + fixed[caret + 1:]
-        caret = coresigner_main._next_gap(fixed, PAGES[0], caret)
-        walked.append(caret)
-    if fixed != PAGES[0]:
-        bad(f"walking the mistakes did not repair the page: {fixed!r}")
-    elif walked[:3] != [3, 9, 20]:
-        bad(f"the cursor did not walk mistake to mistake: {walked}")
-    else:
-        ok("fixing walks 3 -> 9 -> 20, one correction each")
+    ok(f"adding a character with one still red stops, and names box "
+       f"{_box}, character {_char}")
+
+# AND THE DEVICE PUTS THE RIGHT CHARACTER IN, so the person carries on.
+# Driven on a short key, because the presses have to be written out: the
+# press that triggers the message is spent on it, so the character is
+# typed, dismissed, and typed again. That is what a person does.
+
+SHORT_WANT = "abcdefgh"
+_p1, _m1, _c1 = grid_presses("xprv", "abcx")      # x is wrong at 3
+_p2, _m2, _c2 = grid_presses("xprv", "e", _m1, _c1)   # this one is stopped
+_p3, _m3, _c3 = grid_presses("xprv", "efgh", _m2, _c2)  # dismissed, retyped
+# No walk down to the bar: the last character finishes the key, so the
+# focus is already there and one press takes DONE.
+sess3 = session(_p1 + _p2 + "a" + _p3 + "a")
+got3, made3 = sess3._check_entry(LABEL, SHORT_WANT, "")
+if got3 != SHORT_WANT:
+    bad(f"the key was not repaired by the correction: {got3!r}")
+elif made3 != [(1, 4)]:
+    bad(f"the corrections recorded are {made3}, not [(1, 4)]")
+else:
+    ok("the device puts the right character in, and records where")
 
 # --- 4. a short page is not accepted, and is not accused either --------
 # Red marks what you typed wrong. Every position ahead of the caret was
@@ -171,13 +199,14 @@ if coresigner_main._wrong_at(short, PAGES[0]):
 else:
     ok("a page still being typed carries no red marks ahead of the caret")
 
-# Typed short, then CHECK. Running out of presses is the proof it did
-# NOT return: an accepted page returns the string and stops reading.
-_sess, got = run_page(text_keys("xprv", short) + "a", PAGES[0])
+# Typed short, then DONE. Running out of presses is the proof it did NOT
+# return: an accepted key returns the string and stops reading.
+_sess, got = run_page(check_keys(PAGES[0], short) + "a", PAGES[0])
 if got != "ran out of presses":
-    bad(f"a page that stops 28 characters early was accepted: {got!r}")
+    bad(f"a key that stops {len(PAGES[0]) - len(short)} characters early "
+        f"was accepted: {got!r}")
 else:
-    ok("a page that stops early is still not accepted")
+    ok("DONE on a key that is not finished puts you back in the grid")
 
 # --- 5. the caret keys ON the grid move the caret --------------------
 # SeedSigner puts cursor-left, cursor-right and backspace on the keyboard
@@ -213,11 +242,38 @@ def _to_bar(cur):
     return "d" * downs
 
 
-sess = session(_walk(0, _LEFT) + "aa" + "b" + _to_bar(_LEFT) + "a")
-typed, caret = sess._check_entry(LABEL, PAGES[0], "abcde", 5)
-if typed != "abde":
-    bad(f"the caret keys did not move the caret: typed is {typed!r}, "
-        "expected 'abde' after two lefts and a delete")
+# STARTED FROM A CORRECT STRING, because the device cannot produce any
+# other kind now: a wrong character is corrected the moment somebody
+# tries to move past it, so five wrong characters is a state that never
+# exists. Two lefts and a delete take the third of five away.
+# NOT COMMITTED, and read off the screen rather than the return value:
+# a delete in the middle leaves a character that no longer matches, so
+# pressing DONE would fire the correction message, which is the next
+# check's business and not this one's.
+_FIVE = PAGES[0][:5]
+_drawn = []
+_real_te = screens.text_entry
+
+
+def _tap(*a, **kw):
+    _drawn.append(a[3])                  # the typed string, as drawn
+    return _real_te(*a, **kw)
+
+
+screens.text_entry = _tap
+try:
+    sess = session(_walk(0, _LEFT) + "aa" + "b")
+    try:
+        sess._check_entry(LABEL, PAGES[0], _FIVE)
+    except hal.ScriptExhausted:
+        pass
+finally:
+    screens.text_entry = _real_te
+
+if _drawn[-1] != _FIVE[:2] + _FIVE[3:]:
+    bad(f"the caret keys did not move the caret: the screen shows "
+        f"{_drawn[-1]!r}, expected {_FIVE[:2] + _FIVE[3:]!r} after two "
+        "lefts and a delete")
 else:
     ok("the caret keys walk the typed text, and B deletes at the caret")
 
@@ -228,7 +284,7 @@ else:
 # returns to the top of the grid.
 
 sess = session(_to_bar(0) + "la")
-typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
+typed, _made = sess._check_entry(LABEL, PAGES[0], "")
 if typed is None:
     ok(f"DOWN x{len(_to_bar(0))} reaches the bar, then L and A abort")
 else:
@@ -236,14 +292,14 @@ else:
         "grid are not reachable by going down")
 
 sess = session(_to_bar(0) + "d" + _to_bar(0) + "la")
-typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
+typed, _made = sess._check_entry(LABEL, PAGES[0], "")
 if typed is None:
     ok("DOWN from the bar loops to the top of the grid, and round again")
 else:
     bad(f"the d-pad did not loop through the bar; got {typed!r}")
 
 sess = session("b")
-typed, _ = sess._check_entry(LABEL, PAGES[0], "", 0)
+typed, _made = sess._check_entry(LABEL, PAGES[0], "")
 if typed is not None:
     bad("B with nothing typed did not leave the check entry")
 else:
@@ -533,7 +589,7 @@ else:
 # the panel says.
 real_opens = signer.opens_wallet
 for verdict, want_text, why in (
-        (True, "your paper opens\nkey 73C5DA0A", "agrees"),
+        (True, "Your paper opens\nkey 73C5DA0A", "agrees"),
         (False, None, "refuses")):
     sess = session("a")
     signer.opens_wallet = lambda *a, _v=verdict, **k: _v
@@ -548,10 +604,36 @@ for verdict, want_text, why in (
     elif verdict and not drew(sess, screens.verified(320, 240, want_text)):
         bad("Core agreed and the panel never said the paper opens the key")
     elif not verdict and not drew(sess, screens.result(
-            320, 240, ok=False, detail="that key does not open this wallet")):
+            320, 240, ok=False, detail="That key does not open this wallet")):
         bad("Core refused and the panel did not say so")
     else:
         ok(f"Core {why} and the panel says so")
+
+# --- 6f. corrections replace the "your paper opens" screen -------------
+# Map correction C2. With something corrected, that sentence is no
+# longer a thing the device knows: the paper only opens the wallet if
+# the person went back and wrote the corrections down, which nothing on
+# the device can see.
+
+MADE = [(7, 3), (14, 1), (22, 4)]
+signer.opens_wallet = lambda *a, **k: True
+try:
+    sess = session("a")
+    got = sess._confirm_typed_key(KEY, "coresigner-73c5da0a", "73c5da0a",
+                                  MADE)
+finally:
+    signer.opens_wallet = real_opens
+
+if not got:
+    bad("a key Core agreed with was refused because it had corrections")
+elif drew(sess, screens.verified(320, 240,
+                                 "Your paper opens\nkey 73C5DA0A")):
+    bad("the panel claimed the paper opens the key after correcting 3 "
+        "characters of it, which it cannot know")
+elif not drew(sess, screens.corrections(320, 240, MADE, "73c5da0a")):
+    bad("the corrections screen was never drawn")
+else:
+    ok("3 corrections replace the claim with the count and the warning")
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

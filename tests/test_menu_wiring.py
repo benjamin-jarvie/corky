@@ -330,7 +330,7 @@ else:
     # back with no idea why, which passed this check until the message
     # was asserted (2026-09-07).
     want = screens.result(320, 240, ok=False,
-                          detail="this key has no policies to export",
+                          detail="This key has no policies to export",
                           label="FAILED").tobytes()
     if any(f.tobytes() == want for f in disp2.shown):
         ok("a key with no exportable policy is told so, not shown a "
@@ -355,7 +355,7 @@ except hal.ScriptExhausted:
     bad("_page_addresses opened a screen for a key with no policies")
 else:
     want3 = screens.result(320, 240, ok=False,
-                           detail="this key derives no addresses",
+                           detail="This key derives no addresses",
                            label="FAILED").tobytes()
     if any(f.tobytes() == want3 for f in disp3.shown):
         ok("a key that derives no addresses says so")

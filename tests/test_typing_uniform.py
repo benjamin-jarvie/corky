@@ -77,7 +77,7 @@ def _check(script):
     """Drives _check_entry, with the same shape of answer."""
     sess = session(script)
     try:
-        typed, _caret = sess._check_entry("KEY", PAGE, "", 0)
+        typed, _made = sess._check_entry("KEY", PAGE, "")
     except hal.ScriptExhausted:
         return "ran out of presses", sess
     return typed, sess

@@ -233,6 +233,21 @@ CASES = {
     "address-taproot": lambda w, h: screens.address_page(w, h, 2, "bcrt1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "tr"),
     "address-segwit": lambda w, h: screens.address_page(
         w, h, 0, "bc1q635yhaml2afumm27jxsjmqayczf5nf0xmm9zh0", "wpkh"),
+    # Map correction, C1 and C2. The interruption's worst case is two
+    # wide characters and a two-digit box; the summary's is a two-digit
+    # count, which widens every sentence on it, and a list long enough
+    # to need the bar.
+    "wrong-character": lambda w, h: screens.wrong_character(w, h, 28, 4,
+                                                            "W", "M"),
+    "corrections-claim": lambda w, h: screens.corrections(
+        w, h, [(3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4),
+               (25, 2), (27, 4), (28, 1), (11, 2), (12, 3), (13, 4)],
+        "73c5da0a"),
+    "corrections-one": lambda w, h: screens.corrections(w, h, [(7, 3)],
+                                                        "73c5da0a"),
+    "corrections-list": lambda w, h: screens.corrections(
+        w, h, [(3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4)],
+        "73c5da0a", page=1, first=2),
     "choose-channel": lambda w, h: screens.choose_channel(
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),
@@ -743,6 +758,59 @@ if _on_check.crop(_BAR).tobytes() != _on_abort.crop(_BAR).tobytes():
     ok("and LEFT moves the mark from CHECK to ABORT")
 else:
     bad("LEFT does not change which button is marked")
+
+# 8. EVERY SENTENCE THE DEVICE DRAWS STARTS WITH A CAPITAL. Ben's rule
+#    (2026-09-19, map correction C5). The device's copy was lower case
+#    on purpose once: "write this down. it opens the wallet".
+#
+#    Checked on the SOURCE, not on the render, and that matters. A
+#    rendered line can be the middle of a wrapped sentence, so a render
+#    check flags "them, you may not be able to recover" and is useless.
+#    The source knows which string STARTS a piece of copy: the argument
+#    _fit is given, or the first line of the list _fit_block is given.
+#    Titles, button labels and the character grid are not sentences and
+#    are not passed to either.
+
+COPY_ARG = {"_fit": 2, "_fit_block": 1, "_hold": 1, "_row": 4}
+
+
+def _opening_text(node):
+    """The literal a piece of copy starts with, when it is literal."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr) and node.values:
+        head = node.values[0]
+        if isinstance(head, ast.Constant) and isinstance(head.value, str):
+            return head.value
+        return None          # opens with a substitution: nothing to judge
+    if isinstance(node, (ast.List, ast.Tuple)) and node.elts:
+        return _opening_text(node.elts[0])
+    return None
+
+
+lower = []
+for _f in ("coresigner/screens.py", "coresigner/main.py"):
+    for _node in ast.walk(ast.parse((ROOT / _f).read_text())):
+        if not isinstance(_node, ast.Call):
+            continue
+        _name = (_node.func.attr if isinstance(_node.func, ast.Attribute)
+                 else getattr(_node.func, "id", ""))
+        if _name not in COPY_ARG:
+            continue
+        # self._hold(detail) puts the copy one argument earlier.
+        _i = 0 if (_name == "_hold"
+                   and isinstance(_node.func, ast.Attribute)) else COPY_ARG[_name]
+        if len(_node.args) <= _i:
+            continue
+        _t = _opening_text(_node.args[_i])
+        if _t and " " in _t and _t[:1].isascii() and _t[:1].islower():
+            lower.append(f"{_f}:{_node.lineno} {_t!r}")
+
+if lower:
+    bad(f"{len(lower)} sentence(s) on screen start lower case: "
+        + "; ".join(lower[:3]) + ("; ..." if len(lower) > 3 else ""))
+else:
+    ok("every sentence the device draws starts with a capital letter")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

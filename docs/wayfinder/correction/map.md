@@ -73,11 +73,33 @@ Facts from the charting session, 2026-09-19. No ticket re-derives them.
   so CHECK can never fail and becomes DONE. The `marked` state, the
   fix-walking and the red-after-CHECK behaviour go with it.
 
+- [C4 The words on the two new screens](tickets/C4-the-words.md): both
+  drafted and rendered at both panel sizes. The corrections summary is
+  TWO screens, because with the list on it the warning came out in grey
+  type half the size of everything else, and the warning is the part
+  that matters. Counting is per character, which closes the map's one
+  unspecified question.
+- [C7 Can a skipped character be made impossible?](tickets/C7-skipped-character.md):
+  not by the device, which is not there when the pen is. So the backup
+  screen numbers its groups 1 to 28, as the typing screen does: a
+  skipped character leaves a box with three in it, seen while writing,
+  and "box 7, character 3" becomes a glance instead of a count. The
+  paper had no box numbers at all, so every message about a box was
+  addressed to a numbering nobody could see.
+
+- [C5 Sentence case on every screen the device draws](tickets/C5-sentence-case.md):
+  19 sentences capitalised, the rule in `CONTEXT.md`, and a check that
+  reads the SOURCE rather than the render, because a rendered line can
+  be the middle of a wrapped sentence.
+- [C6 Build it](tickets/C6-build-it.md): built, 48 suites green. One
+  thing C3 did not foresee: DONE on a key that is not finished returned
+  a short string for Core to refuse in Core's own words, and now puts
+  you back where the typing stopped. **The board run is owed**, and the
+  map is not done until it has happened.
+
 ## Not yet specified
 
-- **Counting.** Whether a correction is counted per character or per
-  box, and whether correcting the same character twice counts twice.
-  Cheap either way; it only matters to the sentence on the last screen.
+Nothing. Every question this map opened is answered.
 
 ## Out of scope
 

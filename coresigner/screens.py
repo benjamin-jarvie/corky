@@ -540,10 +540,10 @@ def review(w, h, outputs, fee_btc, input_total_btc=None,
          int(h * 0.06), int(h * 0.075), GREY, RED, gap)
     if input_total_btc is not None:
         _fit(d, (right, ky + int(h * 0.17)),
-             f"inputs {input_total_btc:.8f} BTC",
+             f"Inputs {input_total_btc:.8f} BTC",
              int(h * 0.045), GREY, "rm", right - left)
     if unseen_pages:
-        _fit(d, (w // 2, int(h * 0.80)), "see every output before you sign",
+        _fit(d, (w // 2, int(h * 0.80)), "See every output before you sign",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     if pages > 1:
         scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
@@ -1273,7 +1273,7 @@ def export_text(w, h, chunk, page=0, pages=1, title="PUBLIC  KEY"):
     head = title if pages == 1 else f"{title}  ·  PART  {page + 1}/{pages}"
     img, d = _frame(w, h, head)
     _fit(d, (w // 2, int(h * 0.855)),
-         "your public key and where it sits. no private key here",
+         "Your public key and where it sits. No private key here",
          int(h * 0.042), GREY, "mm", int(w * 0.94))
     groups = _groups(chunk)
     for row_start in range(0, len(groups), GROUPS_PER_ROW):
@@ -1600,9 +1600,15 @@ def _box(d, x, y, group, number, w, h, secret, caret, wrong, index,
         cx = x + slot * (i + 0.5)
         pos = index + i
         if pos in wrong:
-            d.rectangle([cx - slot / 2 + 2, y - bh // 2 + 2,
-                         cx + slot / 2 - 2, y + bh // 2 - 2],
-                        outline=RED, width=2)
+            # ON the border, top and bottom, at the caret's thickness
+            # (Ben, 2026-09-19: "I want the red around incorrect ones
+            # to be like our underscore where it shows over the border
+            # and the same thickness"). Drawn inside the box it was a
+            # second rectangle competing with the first for interior
+            # height the characters want.
+            for edge in (y - bh // 2, y + bh // 2):
+                d.rectangle([int(cx - slot / 2) + 2, edge - 1,
+                             int(cx + slot / 2) - 2, edge + 1], fill=RED)
         if caret is not None and pos == caret:
             # ON the border, not above it. A gold bar inside the box
             # took interior height the bigger type now wants, and two
@@ -1612,8 +1618,92 @@ def _box(d, x, y, group, number, w, h, secret, caret, wrong, index,
             d.rectangle([int(cx - slot / 2) + 3, y + bh // 2 - 1,
                          int(cx + slot / 2) - 3, y + bh // 2 + 1],
                         fill=INK)
+            # Drawn AFTER the red, so the notch reads on a slot that is
+            # both wrong and where you are standing.
         _fit(d, (cx, y), "*" if secret and ch != " " else ch, size,
              CREAM if ch != " " else GREY, "mm", int(slot * 0.9))
+
+def wrong_character(w, h, box, char, typed, want):
+    """The screen that stops you carrying on with a wrong character.
+
+    It fires when somebody tries to move FORWARD past one, never when
+    they fix it in place, so a slipped thumb they catch themselves
+    costs nothing (map correction, C1).
+
+    Both characters, big, because telling them apart is the whole job:
+    the person is holding the paper and decides in a glance whether
+    they mistyped or wrote it down wrong. The device never guesses
+    which, and never needs to.
+    """
+    img, d = _frame(w, h, f"BOX  {box}  ·  CHARACTER  {char}")
+    size = int(h * 0.11)
+    left, right = int(w * 0.08), int(w * 0.72)
+    for y, label, ch, fill in ((0.34, "You typed", typed, RED),
+                               (0.50, "The key is", want, OCHRE)):
+        _fit(d, (left, int(h * y)), label, int(h * 0.055), GREY, "lm",
+             int(w * 0.55))
+        d.rectangle([right - int(w * 0.02), int(h * y) - size // 2 - 3,
+                     right + size + int(w * 0.02), int(h * y) + size // 2 + 3],
+                    outline=fill, width=2)
+        _fit(d, (right + size // 2, int(h * y)), ch, size, fill, "mm", size * 2)
+    _fit_block(d, [f"Write {want} on your paper at box {box},",
+                   f"character {char}. I will fix it here."],
+               [(w // 2, int(h * 0.70)), (w // 2, int(h * 0.78))],
+               int(h * 0.05), CREAM, "mm", int(w * 0.92))
+    _actions(d, w, h, ["OK"], 0)
+    return img
+
+
+def corrections(w, h, made, xfp, page=0, first=0):
+    """What the check says when the paper and the key disagreed.
+
+    `made` is every place a character was corrected, as (box, char).
+    Counted per CHARACTER and not per box, because that is what the
+    interruption named and what the person wrote on their paper.
+
+    TWO SCREENS. The claim and the warning need room to be read, and a
+    list of corrections underneath them squeezed the warning to grey
+    type half the size of everything else (measured while prototyping,
+    map correction C4). The warning is the part that matters, so it
+    gets the first screen whole, and DOWN shows the places.
+
+    The list is a safety net for somebody who did not write the
+    corrections down as they were told to, one at a time, on the way
+    through. Every claim here is one the device verified; the thing it
+    cannot verify, that the paper was actually corrected, is a warning
+    and never an assertion (map correction, C2).
+    """
+    n = len(made)
+    plural = "s" if n != 1 else ""
+    img, d = _frame(w, h, f"{n}  CORRECTION{plural.upper()}")
+    if page == 0:
+        lines = [f"This key, with your {n} correction{plural},",
+                 f"opens {xfp.upper()}.",
+                 "",
+                 f"If you did not write {'those' if n != 1 else 'that'} "
+                 f"{n} down and test",
+                 "them, you may not be able to recover",
+                 "this key or its funds."]
+        _fit_block(d, lines,
+                   [(w // 2, int(h * (0.26 + i * 0.085))) for i in range(6)],
+                   int(h * 0.055), CREAM, "mm", int(w * 0.92))
+        _fit(d, (w // 2, int(h * 0.80)),
+             f"DOWN for the {n} place{plural}", int(h * 0.045), OCHRE, "mm",
+             int(w * 0.92))
+    else:
+        rows = [f"Box {b}, character {c}" for b, c in made]
+        shown = rows[first:first + 4]
+        _fit_block(d, shown,
+                   [(w // 2, int(h * (0.30 + i * 0.11)))
+                    for i in range(len(shown))],
+                   int(h * 0.06), OCHRE, "mm", int(w * 0.86))
+        _fit(d, (w // 2, int(h * 0.80)), "Write these on your paper.",
+             int(h * 0.045), GREY, "mm", int(w * 0.92))
+        if len(rows) > 4:
+            scrollbar(d, w, int(h * 0.24), int(h * 0.48), first, len(rows), 4)
+    _actions(d, w, h, ["DONE"], 0)
+    return img
+
 
 def text_pages(text):
     """Split a backup string into screenfuls, in order, losing nothing.
@@ -1663,19 +1753,36 @@ def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
         title = f"{label}  ·  PART  {page + 1}/{pages}"
     img, d = _frame(w, h, title)
     groups = _groups(chunk)
+    # NUMBERED, 1 to 28 across the whole key, exactly as the typing
+    # screen numbers them (map correction, C7). Two things close at
+    # once: a skipped character leaves a box with three in it, seen
+    # while writing rather than days later, and "box 7, character 3"
+    # becomes a glance instead of counting seven groups along your own
+    # handwriting. Until now the paper carried no box numbers at all,
+    # so every message the device sent about a box was addressed to a
+    # numbering nobody could see.
+    first = page * CHARS_PER_PAGE // 4 + 1
+    size = int(h * 0.068)
+    num_w = int(w * 0.055)
     for row_start in range(0, len(groups), GROUPS_PER_ROW):
         y = int(h * (0.26 + (row_start // GROUPS_PER_ROW) * 0.13))
-        _fit(d, (w // 2, y),
-             "  ".join(groups[row_start:row_start + GROUPS_PER_ROW]),
-             int(h * 0.075), CREAM, "mm", int(w * 0.92))
+        row = groups[row_start:row_start + GROUPS_PER_ROW]
+        cell = int(w * 0.92) // GROUPS_PER_ROW
+        x0 = (w - cell * len(row)) // 2
+        for i, group in enumerate(row):
+            x = x0 + i * cell
+            _fit(d, (x + num_w, y), str(first + row_start + i), size,
+                 GREY, "rm", num_w)
+            _fit(d, (x + num_w + (cell - num_w) // 2, y), group, size,
+                 CREAM, "mm", cell - num_w - int(w * 0.01))
     if pages > 1:
         _fit(d, (w // 2, int(h * 0.79)),
-             f"characters {page * CHARS_PER_PAGE + 1}"
+             f"Characters {page * CHARS_PER_PAGE + 1}"
              f"-{page * CHARS_PER_PAGE + len(chunk)} of the key",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     else:
         _fit(d, (w // 2, int(h * 0.79)),
-             "write this down. it opens the wallet",
+             "Write this down. It opens the wallet",
              int(h * 0.045), OCHRE, "mm", int(w * 0.92))
     if pages > 1:
         scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
