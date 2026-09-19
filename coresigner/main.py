@@ -1237,17 +1237,31 @@ class Session:
 
 
     @staticmethod
-    def _type_hint(runs, mode):
+    def _type_hint(runs, mode, charset=None):
         """What the screen says about the one control that is not obvious.
 
         The d-pad and A explain themselves. The mode button does not, so
         it is named, and only when there IS one: a charset that fits a
         single grid has no mode, and a hint about a button that does
         nothing is worse than silence.
+
+        On a key it also says that the first cell is a one. Ben read it
+        as a capital I and asked whether one was meant to be there (on
+        the board, 2026-09-18). It is not: base58 drops I, l, O and
+        zero because at this size they are each other, which is the
+        whole reason the alphabet exists. Our own type then draws the
+        one as a bare stroke and puts the confusion back.
+
+        Four characters are missing and only one sentence fits, so the
+        sentence is the one a person can act on. The rule in full is a
+        section of docs/TESTER-PACK.md.
         """
-        if len(runs) < 2:
-            return "A types  ·  B deletes"
-        return f"A types  ·  B deletes  ·  C for {runs[(mode + 1) % len(runs)][0]}"
+        parts = ["A types", "B deletes"]
+        if len(runs) > 1:
+            parts.append(f"C for {runs[(mode + 1) % len(runs)][0]}")
+        if charset == "xprv":
+            parts = parts[1:] + ["1 is a one"]
+        return "  ·  ".join(parts)
 
     def _text_entry(self, title, charset, secret=False):  # noqa: C901 - one keypad state machine; splitting it would hide the rules
         """Drive the paged text grid for one alphabet.
@@ -1265,7 +1279,7 @@ class Session:
             self.display.show(screens.text_entry(
                 self.w, self.h, title, text, cur, charset, mode, secret,
                 actions_sel=1 if sel is None else sel, caret=caret,
-                hint=self._type_hint(runs, mode)), sensitive=True)
+                hint=self._type_hint(runs, mode, charset)), sensitive=True)
             key = self.buttons.read()
             if sel is not None:            # focus is on the action bar
                 if key in ("l", "r"):
@@ -1690,7 +1704,8 @@ class Session:
                 actions_sel=1 if sel is None else sel, caret=caret,
                 actions=("ABORT", "CHECK"), wrong=_wrong_at(typed, want),
                 want_len=len(want),
-                hint=self._type_hint(runs, mode)), sensitive=True)
+                hint=self._type_hint(runs, mode, charset)),
+                sensitive=True)
             key = self.buttons.read()
             if sel is not None:                 # the action bar
                 if key in ("l", "r"):

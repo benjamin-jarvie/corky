@@ -1477,8 +1477,13 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
     rows = mode_grid(chars)
 
     # --- the typed text, as numbered boxes -----------------------------
-    width = max(want_len or 0, len(text))
-    padded = text + " " * (width - len(text))
+    # ONE EMPTY BOX AHEAD. A box appeared when its first character was
+    # typed, so box 2 did not exist until you had already committed to
+    # it, and the screen gave no sign there was more to type (Ben, on
+    # the board, 2026-09-18). Where the length is known, that answers
+    # it instead, and every box of the page is drawn from the start.
+    width = want_len or (max(len(text), caret or 0) // 4 + 1) * 4
+    padded = text + " " * max(0, width - len(text))
     groups = _groups(padded) or [""]
     here = (caret if caret is not None else max(0, len(text) - 1)) // 4
     row_of = here // ENTRY_GROUPS_PER_ROW

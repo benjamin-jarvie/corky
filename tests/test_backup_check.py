@@ -98,7 +98,8 @@ elif not drew(sess, screens.text_entry(
         320, 240, f"{LABEL}  ·  TYPE  1/3", BAD_PAGE, 0, "xprv", 0,
         actions_sel=1, caret=AT, actions=("ABORT", "CHECK"), wrong={AT},
         want_len=len(PAGES[0]),
-        hint=coresigner_main.Session._type_hint(screens.modes("xprv"), 0))):
+        hint=coresigner_main.Session._type_hint(screens.modes("xprv"), 0,
+                                                "xprv"))):
     bad("the page was not redrawn with position 5 marked and the "
         "cursor on it")
 else:

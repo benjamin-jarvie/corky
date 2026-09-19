@@ -41,6 +41,18 @@ descriptor function". Core Signer and Sparrow both know the standard
 convention and apply it for you. Software that expects a 12 or 24 word
 seed phrase does not, because Core Signer does not use one.
 
+## Four characters a key never has
+
+**`I`, `l`, `O` and zero are not in a key.** The grid you type on does
+not have them, and this is on purpose.
+
+Keys are written in base58, which drops those four because at the size
+of handwriting they are each other: a capital i, a lowercase L, a
+capital o and a zero. So when you read your own paper:
+
+- a bare vertical stroke is always **1**, the digit
+- a circle is always **o**, lowercase
+
 ## Checking an address
 
 The device shows a receive address in groups of four, with the first and

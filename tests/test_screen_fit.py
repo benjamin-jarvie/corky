@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "coresigner"))
 from PIL import Image, ImageColor, ImageDraw  # noqa: E402
+import main as coresigner_main  # noqa: E402
 import screens  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -643,6 +644,42 @@ else:
     bad(f"gold in box 1: {_gold(_img0, _BOX1)} with the caret in it, "
         f"{_gold(_img8, _BOX1)} with the caret in box 3. The active box "
         "is not marked, or the mark does not move")
+
+# 4. AN EMPTY BOX AHEAD, while a key is being typed. A box appeared
+#    when its first character was typed, so box 2 did not exist until
+#    you had already committed to it (Ben, 2026-09-18).
+_HINT = coresigner_main.Session._type_hint(screens.modes("xprv"), 0, "xprv")
+
+
+def _boxes_drawn(text, caret):
+    _ctx.update(w=320, h=240, name="text_entry", over=[], drawn=[])
+    screens.text_entry(320, 240, "MASTER  PRIVATE  KEY", text, 0, "xprv",
+                       0, caret=caret, hint=_HINT)
+    return {t for t, b in _ctx["drawn"] if b[3] < 240 * 0.5 and t.isdigit()}
+
+
+if "2" in _boxes_drawn("tprv", 4):
+    ok("box 2 is there the moment box 1 is full, empty and waiting")
+else:
+    bad("box 2 does not appear until its first character is typed")
+if _boxes_drawn("tpr", 3) == {"1"}:
+    ok("and no box appears before there is anywhere to put it")
+else:
+    bad(f"a part-typed box drew {_boxes_drawn('tpr', 3)}, not just box 1")
+
+# 5. The one on the grid is a ONE. Base58 has no capital I, no lowercase
+#    l, no capital O and no zero, because at this size they are each
+#    other; our type then draws the one as a bare stroke and puts the
+#    confusion back. Ben read it as a capital I (2026-09-18).
+_UPPER = screens.modes("xprv")[1][1]
+_LOWER = screens.modes("xprv")[0][1]
+_absent = [c for c in "IlO0" if c in _UPPER + _LOWER]
+if _absent:
+    bad(f"the key charset is not base58: it holds {_absent}")
+elif "1 is a one" not in _HINT:
+    bad(f"nothing on the key screen says the stroke is a one: {_HINT!r}")
+else:
+    ok("the key charset is base58, and the screen says the stroke is a 1")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)
