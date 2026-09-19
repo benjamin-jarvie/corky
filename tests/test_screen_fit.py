@@ -705,5 +705,44 @@ else:
     _ys = {y for _x, y in _moved}
     ok(f"the caret cuts an ink notch in the border, on {len(_ys)} rows")
 
+# 7. DOWN TO THE BAR HAS TO LOOK LIKE SOMETHING. CHECK was drawn gold
+#    while the cursor was still in the character grid, so pressing DOWN
+#    changed nothing on the panel and LEFT to ABORT was a move nobody
+#    would try (Ben, 2026-09-18).
+
+
+def _entry_bar(sel):
+    return screens.text_entry(320, 240, "MASTER  PRIVATE  KEY", "tprv", 14,
+                              "xprv", 0, caret=4, hint=_HINT,
+                              actions_sel=sel)
+
+
+_on_grid, _on_check, _on_abort = _entry_bar(None), _entry_bar(1), _entry_bar(0)
+_BAR = (0, int(240 * 0.87), 320, 240)
+_GRIDBAND = (0, int(240 * 0.60), 320, int(240 * 0.85))
+
+if _on_grid.crop(_BAR).tobytes() == _on_check.crop(_BAR).tobytes():
+    bad("the action bar looks the same whether it has focus or not, so "
+        "pressing DOWN into it shows nothing")
+elif _gold(_on_grid, _BAR) > 10:
+    bad(f"{_gold(_on_grid, _BAR)} gold pixels mark a button while the "
+        "grid still has focus")
+elif not _gold(_on_check, _BAR) > 10:
+    bad("no button is marked when the bar DOES have focus")
+else:
+    ok("no button is marked until the bar has focus, and then one is")
+
+if _gold(_on_grid, _GRIDBAND) > _gold(_on_check, _GRIDBAND) * 2:
+    ok("and the grid cursor goes from filled to outlined as focus leaves")
+else:
+    bad("the grid cursor looks the same with and without focus, so two "
+       f"things claim it: {_gold(_on_grid, _GRIDBAND)} gold pixels on "
+       f"the grid against {_gold(_on_check, _GRIDBAND)}")
+
+if _on_check.crop(_BAR).tobytes() != _on_abort.crop(_BAR).tobytes():
+    ok("and LEFT moves the mark from CHECK to ABORT")
+else:
+    bad("LEFT does not change which button is marked")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

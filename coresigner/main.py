@@ -1338,7 +1338,7 @@ class Session:
             cells = screens.mode_cells(runs[mode][1])
             self.display.show(screens.text_entry(
                 self.w, self.h, title, text, cur, charset, mode, secret,
-                actions_sel=1 if sel is None else sel, caret=caret,
+                actions_sel=sel, caret=caret,
                 hint=self._type_hint(runs, mode, charset)), sensitive=True)
             key = self.buttons.read()
             if sel is not None:            # focus is on the action bar
@@ -1777,7 +1777,7 @@ class Session:
                      else f"{label}  ·  TYPE  IT  BACK")
             self.display.show(screens.text_entry(
                 self.w, self.h, title, typed, cur, charset, mode,
-                actions_sel=1 if sel is None else sel, caret=caret,
+                actions_sel=sel, caret=caret,
                 actions=("ABORT", "CHECK"), wrong=_wrong_at(typed, want),
                 want_len=len(want),
                 hint=self._type_hint(runs, mode, charset)),

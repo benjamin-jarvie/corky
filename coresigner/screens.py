@@ -220,7 +220,15 @@ def _row(d, left, right, y, lhs, rhs, lhs_size, rhs_size, lhs_fill,
 def _actions(d, w, h, labels, selected=1):
     """The bottom action bar (Ben, 2026-09-01): actions are visible,
     d-pad-toggleable options in one place, never key legends in corners.
-    The gold box marks the active option; A activates it."""
+    The gold box marks the active option; A activates it.
+
+    `selected=None` means the FOCUS IS SOMEWHERE ELSE on this screen,
+    so no option is marked. The typing screen drew CHECK gold while the
+    cursor was still up in the character grid, so pressing DOWN to
+    reach the bar changed nothing on the panel: it already looked like
+    the bar had focus (Ben, on the board, 2026-09-18). A screen that
+    shows no change for a press has told a person the press did
+    nothing, and then LEFT to ABORT is a move nobody tries."""
     size = int(h * 0.05)
     box_h = int(h * 0.085)
     gap = int(w * 0.03)
@@ -229,7 +237,7 @@ def _actions(d, w, h, labels, selected=1):
     x = (w - sum(widths) - gap * (len(labels) - 1)) // 2
     cy = int(h * 0.93)
     for i, (t, bw) in enumerate(zip(labels, widths, strict=True)):
-        active = i == selected
+        active = selected is not None and i == selected
         d.rounded_rectangle([x, cy - box_h // 2, x + bw, cy + box_h // 2],
                             radius=4, outline=OCHRE if active else GREY)
         d.text((x + bw // 2, cy), t, font=_font(size),
@@ -1460,7 +1468,7 @@ CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 
 
 def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
-               secret=False, actions_sel=1, caret=None, hint=None,
+               secret=False, actions_sel=None, caret=None, hint=None,
                actions=("CANCEL", "DONE"), wrong=(), want_len=None):
     """Typing, shown the way the backup is shown: numbered boxes of four.
 
@@ -1535,11 +1543,19 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
             gx = x0 + c * cell_w + cell_w // 2
             gy = y0 + r * cell_h
             if i == cursor:
-                d.rectangle([gx - cell_w // 2 + 1, gy - cell_h // 2 + 1,
-                             gx + cell_w // 2 - 1, gy + cell_h // 2 - 1],
-                            fill=OCHRE)
+                # FILLED while the grid has focus, an outline while the
+                # buttons do. Exactly one thing on the screen is filled
+                # gold at a time, which is what makes DOWN to the bar
+                # and UP back again visible at all.
+                box = [gx - cell_w // 2 + 1, gy - cell_h // 2 + 1,
+                       gx + cell_w // 2 - 1, gy + cell_h // 2 - 1]
+                if actions_sel is None:
+                    d.rectangle(box, fill=OCHRE)
+                else:
+                    d.rectangle(box, outline=OCHRE, width=1)
+            here = i == cursor and actions_sel is None
             _fit(d, (gx, gy), ch, int(h * 0.05),
-                 INK if i == cursor else CREAM, "mm", cell_w)
+                 INK if here else CREAM, "mm", cell_w)
     _actions(d, w, h, list(actions), actions_sel)
     return img
 
