@@ -141,15 +141,25 @@ else:
     else:
         ok("fixing walks 3 -> 9 -> 20, one correction each")
 
-# --- 4. a short page is wrong, and every missing position is named ------
+# --- 4. a short page is not accepted, and is not accused either --------
+# Red marks what you typed wrong. Every position ahead of the caret was
+# in that set until 2026-09-18, so a page eight characters in drew forty
+# red boxes: the screen said "forty mistakes" to a person who had made
+# none. Whether the page is FINISHED is a question about its length.
 
 short = PAGES[0][:20]
-missing = coresigner_main._wrong_at(short, PAGES[0])
-if missing != set(range(20, len(PAGES[0]))):
-    bad(f"a page that stops early did not name every missing position: "
-        f"{sorted(missing)[:6]}...")
+if coresigner_main._wrong_at(short, PAGES[0]):
+    bad("a page still being typed is marked wrong where it is not typed")
 else:
-    ok("a page that stops early counts every unfilled position wrong")
+    ok("a page still being typed carries no red marks ahead of the caret")
+
+# Typed short, then CHECK. Running out of presses is the proof it did
+# NOT return: an accepted page returns the string and stops reading.
+_sess, got = run_page(text_keys("xprv", short) + "a", PAGES[0])
+if got != "ran out of presses":
+    bad(f"a page that stops 28 characters early was accepted: {got!r}")
+else:
+    ok("a page that stops early is still not accepted")
 
 # --- 5. the caret keys ON the grid move the caret --------------------
 # SeedSigner puts cursor-left, cursor-right and backspace on the keyboard

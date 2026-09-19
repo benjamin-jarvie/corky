@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "coresigner"))
-from PIL import Image, ImageDraw  # noqa: E402
+from PIL import Image, ImageColor, ImageDraw  # noqa: E402
 import screens  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -564,6 +564,85 @@ if _caption and "m/84'/0'/0'" in _caption[0]:
     ok("the export caption writes hardened steps the way Sparrow does")
 else:
     bad(f"the export caption still draws Core's h: {_caption}")
+
+# --- The typing screen's boxes -----------------------------------------
+# Ben, on the board, 2026-09-18: "entering a private key, the box should
+# be larger, it should be gold around the active one with the same size
+# number to its left."
+
+_TYPED = "tprv8ZgxMBicQKQx"
+_WANT = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6"
+
+
+def _entry(caret):
+    _ctx.update(w=320, h=240, name="text_entry", over=[], drawn=[])
+    img = screens.text_entry(320, 240, "KEY 73C5DA0A  ·  TYPE 1/3", _TYPED,
+                             5, "xprv", 0, caret=caret, wrong={14, 15},
+                             want_len=len(_WANT), actions=("ABORT", "CHECK"),
+                             hint="C changes case")
+    return img, list(_ctx["drawn"])
+
+
+_img0, _boxes0 = _entry(0)
+_img8, _ = _entry(8)
+
+# 1. BIGGER. The layout that shipped before drew the characters at
+#    h*0.048 and their numbers at h*0.030.
+_probe = ImageDraw.Draw(Image.new("RGB", (320, 240)))
+
+
+def _size_of(glyph, size):
+    """How wide and tall one glyph renders at one type size."""
+    x1, y1, x2, y2 = _probe.textbbox((0, 0), glyph, font=screens._font(size))
+    return x2 - x1, y2 - y1
+
+
+# Box glyphs only: the same letters appear on the keyboard grid below,
+# and the grid is not what Ben asked to grow. One glyph, measured on
+# both, because a descender makes a box taller without making the type
+# bigger.
+_chars = [b for t, b in _boxes0
+          if len(t) == 1 and t in _TYPED and b[3] < 240 * 0.5]
+_eight = next(b for t, b in _boxes0
+              if t == "8" and b[3] < 240 * 0.5)
+_now = (_eight[2] - _eight[0], _eight[3] - _eight[1])
+_was = _size_of("8", int(240 * 0.048))          # the size that shipped
+if _now[0] >= _was[0] * 1.4 and _now[1] >= _was[1] * 1.3:
+    ok(f"the typed characters grew from {_was[0]}x{_was[1]}px to "
+       f"{_now[0]}x{_now[1]}px")
+else:
+    bad(f"the typed characters are {_now[0]}x{_now[1]}px against "
+        f"{_was[0]}x{_was[1]}px before; Ben asked for a larger box")
+
+# 2. THE NUMBER, to the left of its box and the size of the characters.
+_num = next((b for t, b in _boxes0 if t == "1"), None)
+_first = min((b for b in _chars), key=lambda b: b[0])
+if _num is None:
+    bad("the box number is not drawn at all")
+elif _num[2] > _first[0]:
+    bad(f"the box number is not left of its box: {_num} against {_first}")
+elif (_num[3] - _num[1]) < _size_of("1", int(240 * 0.072))[1] * 0.9:
+    bad(f"the box number is {_num[3] - _num[1]}px tall, smaller than the "
+        "characters beside it")
+else:
+    ok("the box number is left of its box, at the size of the characters")
+
+
+# 3. GOLD ROUND THE ACTIVE BOX, and it moves with the caret.
+_GOLD = ImageColor.getrgb(screens.OCHRE)
+
+
+def _gold(img, region):
+    return sum(1 for p in img.crop(region).getdata() if p == _GOLD)
+
+
+_BOX1 = (0, int(240 * 0.14), 160, int(240 * 0.25))
+if _gold(_img0, _BOX1) > 100 and _gold(_img8, _BOX1) < 20:
+    ok("the active box is outlined in gold, and the gold follows the caret")
+else:
+    bad(f"gold in box 1: {_gold(_img0, _BOX1)} with the caret in it, "
+        f"{_gold(_img8, _BOX1)} with the caret in box 3. The active box "
+        "is not marked, or the mark does not move")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

@@ -257,10 +257,17 @@ def _cell_move(key, cells, cur):
 
 
 def _wrong_at(typed, want):
-    """Positions that do not match the paper, the unfilled ones included."""
-    bad = {n for n, ch in enumerate(typed)
-           if n >= len(want) or ch != want[n]}
-    return bad | set(range(len(typed), len(want)))
+    """Positions a person TYPED that do not match the paper.
+
+    Not the positions they have not reached. Those were in this set
+    until 2026-09-18, and `text_entry` outlines every position in it, so
+    the screen drew eight red boxes ahead of the caret and accused a
+    person of eight mistakes for having typed eight characters. Whether
+    a page is finished is a question about its length, and `_check_page`
+    asks it there.
+    """
+    return {n for n, ch in enumerate(typed)
+            if n >= len(want) or ch != want[n]}
 
 
 def _next_gap(typed, want, after):
@@ -1655,9 +1662,11 @@ class Session:
             if typed is None:
                 return None
             wrong = _wrong_at(typed, want)
-            if not wrong:
+            if not wrong and len(typed) == len(want):
                 return typed
-            caret = min(wrong)
+            # The first thing to fix: the earliest wrong character, or
+            # the end of what was typed when the page stops short.
+            caret = min(wrong) if wrong else len(typed)
 
     def _check_entry(self, label, i, pages, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
                      caret):

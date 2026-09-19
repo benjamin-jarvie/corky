@@ -1438,6 +1438,17 @@ def mode_grid(chars):
 #: a page and 28 boxes for a 111-character key.
 GROUPS_PER_ROW = 3
 ROWS_PER_PAGE = 4
+
+#: The entry screen puts TWO boxes on a row where the paper page puts
+#: three. The number moved to the left of its box at the size of the
+#: characters (Ben, on the board, 2026-09-18), and a number that size
+#: costs width no third box can pay. Nothing is lost by it: the box
+#: NUMBER is what names a place on either screen, and box 8 is box 8 on
+#: both whatever shape the rows are.
+ENTRY_GROUPS_PER_ROW = 2
+#: Three rows of two, so the same 24 characters stay in view as the
+#: three-across layout showed, at nearly twice the size.
+ENTRY_ROWS_SHOWN = 3
 CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 
 
@@ -1470,32 +1481,42 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
     padded = text + " " * (width - len(text))
     groups = _groups(padded) or [""]
     here = (caret if caret is not None else max(0, len(text) - 1)) // 4
-    row_of = here // GROUPS_PER_ROW
-    total_rows = -(-len(groups) // GROUPS_PER_ROW)
-    first = max(0, min(row_of - 1 if row_of else 0, max(0, total_rows - 2)))
-    y = int(h * 0.20)
-    for r in range(first, min(first + 2, total_rows)):
-        x = int(w * 0.055)
-        for g in range(r * GROUPS_PER_ROW,
-                       min((r + 1) * GROUPS_PER_ROW, len(groups))):
-            _box(d, x, y, groups[g], g + 1, w, h, secret, caret, wrong,
-                 g * 4)
-            x += int(w * 0.315)
-        y += int(h * 0.105)
+    row_of = here // ENTRY_GROUPS_PER_ROW
+    total_rows = -(-len(groups) // ENTRY_GROUPS_PER_ROW)
+    shown = min(ENTRY_ROWS_SHOWN, total_rows)
+    first = max(0, min(row_of - 1 if row_of else 0,
+                       max(0, total_rows - shown)))
+    slot = int(w * 0.094)
+    num_w = int(w * 0.075)
+    gap = int(w * 0.022)
+    pitch = num_w + slot * 4 + gap
+    left = (w - (pitch * ENTRY_GROUPS_PER_ROW - gap)) // 2
+    y = int(h * 0.19)
+    for r in range(first, first + shown):
+        x = left
+        for g in range(r * ENTRY_GROUPS_PER_ROW,
+                       min((r + 1) * ENTRY_GROUPS_PER_ROW, len(groups))):
+            _box(d, x + num_w, y, groups[g], g + 1, w, h, secret, caret,
+                 wrong, g * 4, slot, g == here)
+            x += pitch
+        y += int(h * 0.125)
 
-    # A screen that shows two rows of four and says so. The box numbers
-    # give the position, but only the bar says there is more below, and
-    # this panel has taught that lesson twice already.
-    if total_rows > 2:
-        scrollbar(d, w, int(h * 0.165), int(h * 0.215), first // 2,
-                  -(-total_rows // 2))
-    if hint:
-        _fit(d, (w // 2, int(h * 0.425)), hint, int(h * 0.036), GREY, "mm",
-             int(w * 0.92))
+    # The box numbers give the position, but only the bar says there is
+    # more below, and this panel has taught that lesson twice already.
+    if total_rows > shown:
+        scrollbar(d, w, int(h * 0.155), int(h * 0.34), first,
+                  total_rows, shown)
 
     # --- the character grid --------------------------------------------
-    cell_w, cell_h = w // (GRID_COLS + 1), int(h * 0.125)
-    x0, y0 = (w - GRID_COLS * cell_w) // 2, int(h * 0.53)
+    # The mode and the hint share one line, where they were two. The row
+    # of boxes above needed the height and reads at arm's length; these
+    # two are read once.
+    if label or hint:
+        _row(d, int(w * 0.05), int(w * 0.95), int(h * 0.535),
+             label, hint or "", int(h * 0.042), int(h * 0.042),
+             OCHRE, GREY, int(w * 0.04))
+    cell_w, cell_h = w // (GRID_COLS + 1), int(h * 0.105)
+    x0, y0 = (w - GRID_COLS * cell_w) // 2, int(h * 0.60)
     for r, run in enumerate(rows):
         for c, ch in enumerate(run):
             i = r * GRID_COLS + c
@@ -1507,34 +1528,43 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
                             fill=OCHRE)
             _fit(d, (gx, gy), ch, int(h * 0.05),
                  INK if i == cursor else CREAM, "mm", cell_w)
-    if label:
-        _fit(d, (int(w * 0.06), int(h * 0.485)), label, int(h * 0.038),
-             OCHRE, "lm", int(w * 0.22))
     _actions(d, w, h, list(actions), actions_sel)
     return img
 
 
-def _box(d, x, y, group, number, w, h, secret, caret, wrong, index):
-    """One numbered 4-character box, with the caret and the red marks."""
-    bw, bh = int(w * 0.265), int(h * 0.075)
-    d.rectangle([x, y - bh // 2, x + bw, y + bh // 2], outline=GREY, width=1)
-    _fit(d, (x + 1, y - bh // 2 - int(h * 0.026)), str(number),
-         int(h * 0.030), GREY, "lm", bw)
-    step = bw / 4
+def _box(d, x, y, group, number, w, h, secret, caret, wrong, index,
+         slot, active):
+    """One numbered 4-character box, with its number beside it.
+
+    The number sits to the LEFT of the box at the size of the characters
+    (Ben, on the board, 2026-09-18). It was small grey type above the
+    box, where it collided with the row above and could not be read from
+    the distance the characters are read from. "Box 8, word 3" is how a
+    person says where they are, so both halves of that have to carry.
+
+    The box holding the caret is outlined in gold. A two-pixel underline
+    was the only mark of where you were, and finding it took a hunt.
+    """
+    size = int(h * 0.072)
+    bw, bh = slot * 4, int(h * 0.105)
+    edge = OCHRE if active else GREY
+    _fit(d, (x - int(w * 0.018), y), str(number), size, edge, "rm",
+         int(w * 0.06))
+    d.rectangle([x, y - bh // 2, x + bw, y + bh // 2],
+                outline=edge, width=2 if active else 1)
     for i, ch in enumerate(group):
-        cx = x + step * (i + 0.5)
+        cx = x + slot * (i + 0.5)
         pos = index + i
         if pos in wrong:
-            d.rectangle([cx - step / 2 + 1, y - bh // 2 + 1,
-                         cx + step / 2 - 1, y + bh // 2 - 1],
+            d.rectangle([cx - slot / 2 + 2, y - bh // 2 + 2,
+                         cx + slot / 2 - 2, y + bh // 2 - 2],
                         outline=RED, width=2)
         if caret is not None and pos == caret:
-            d.rectangle([int(cx - step / 2) + 1, y + bh // 2 - 2,
-                         int(cx + step / 2) - 1, y + bh // 2],
+            d.rectangle([int(cx - slot / 2) + 3, y + bh // 2 - 4,
+                         int(cx + slot / 2) - 3, y + bh // 2 - 2],
                         fill=OCHRE)
-        _fit(d, (cx, y), "*" if secret and ch != " " else ch,
-             int(h * 0.048), CREAM if ch != " " else GREY, "mm", int(step))
-
+        _fit(d, (cx, y), "*" if secret and ch != " " else ch, size,
+             CREAM if ch != " " else GREY, "mm", int(slot * 0.9))
 
 def text_pages(text):
     """Split a backup string into screenfuls, in order, losing nothing.
