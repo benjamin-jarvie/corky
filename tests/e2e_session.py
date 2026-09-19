@@ -326,23 +326,22 @@ def main():
             """
             import main as _main
             runs = _scr.modes(charset)
-            cols = _scr.GRID_COLS
             mode, cur, out = 0, 0, []
 
             def route(cells, start, target):
+                # The ROUTE is searched, never written down. The MOVES
+                # are _cell_move's, because what one press does is the
+                # device's behaviour and not the grid's shape; a copy
+                # here walked routes the device would not walk once the
+                # wrap changed (2026-09-18). test_ui_cost pins what
+                # _cell_move itself has to do.
                 seen, queue = {start: ""}, [start]
                 while queue:
                     at = queue.pop(0)
                     if at == target:
                         return seen[at]
-                    row = at // cols
-                    lo = row * cols
-                    hi = min(lo + cols, len(cells)) - 1
-                    for k, nxt in (("u", at - cols if at >= cols else at),
-                                   ("d", at + cols if at + cols < len(cells)
-                                    else at),
-                                   ("l", hi if at == lo else at - 1),
-                                   ("r", lo if at == hi else at + 1)):
+                    for k in "udlr":
+                        nxt = _main._cell_move(k, cells, at)
                         if nxt not in seen:
                             seen[nxt] = seen[at] + k
                             queue.append(nxt)

@@ -297,21 +297,52 @@ for label, got, budget in (
 
 # The grid is one MODE at a time now and never a paged alphabet (map
 # typing, T2), so there is no page boundary left to cross. What has to
-# hold instead is that UP and DOWN CLAMP: DOWN that cannot move is what
-# means "the buttons", and a wrap would send a person round the alphabet
-# instead of to ABORT.
+# hold instead is that the d-pad reaches every cell from every cell, and
+# that DOWN from the bottom row is the ONE move that does not move,
+# because that is how the loop leaves the grid for ABORT and CHECK.
 _cells = screens.mode_cells(screens.modes("xprv")[0][1])
 _cols = screens.GRID_COLS
-if coresigner_main._cell_move("d", _cells, len(_cells) - 1) != len(_cells) - 1:
-    bad("DOWN moved past the last cell instead of clamping")
-elif coresigner_main._cell_move("u", _cells, 2) != 2:
-    bad("UP moved above the first row instead of clamping")
-elif coresigner_main._cell_move("r", _cells, _cols - 1) != 0:
-    bad("RIGHT at the end of a row does not wrap back to its start")
-elif coresigner_main._cell_move("l", _cells, 0) != _cols - 1:
-    bad("LEFT at the start of a row does not wrap to its end")
+_last = len(_cells) - 1
+_bottom = (_last // _cols) * _cols
+
+_stuck = [i for i in range(len(_cells))
+          for k in "udlr"
+          if coresigner_main._cell_move(k, _cells, i) == i
+          and not (k == "d" and i >= _bottom)]
+if _stuck:
+    bad(f"cells {sorted(set(_stuck))} have a d-pad press that does "
+        "nothing, and a press that does nothing reads as off the grid")
+elif coresigner_main._cell_move("d", _cells, _last) != _last:
+    bad("DOWN from the last cell moved instead of leaving for the bar")
+elif coresigner_main._cell_move("l", _cells, _bottom) != _bottom - 1:
+    bad("LEFT from the start of the last row does not reach the "
+        "character before it")
+elif coresigner_main._cell_move("d", _cells, _bottom - 1) != _last:
+    bad("DOWN from the long row above a ragged one does not land on "
+        "the end of it")
+elif coresigner_main._cell_move("u", _cells, 0) != _bottom:
+    bad("UP from the top row does not come round to the bottom")
 else:
-    ok("L and R wrap inside a row; U and D clamp at the ends")
+    ok("every cell moves on every press, except DOWN off the bottom")
+
+# Every cell is REACHABLE from every other, which is the property the
+# four checks above are each one example of.
+def _reach(start):
+    seen, queue = {start}, [start]
+    while queue:
+        at = queue.pop(0)
+        for k in "udlr":
+            nxt = coresigner_main._cell_move(k, _cells, at)
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return seen
+
+
+if all(len(_reach(i)) == len(_cells) for i in range(len(_cells))):
+    ok(f"and all {len(_cells)} cells reach all {len(_cells)} others")
+else:
+    bad("some cell cannot reach the whole grid with the d-pad")
 
 
 

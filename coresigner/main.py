@@ -234,33 +234,40 @@ def _next_kind(kind, key, order):
 
 
 def _cell_move(key, cells, cur):
-    """One step on the character grid: a flat strip read left to right.
+    """One d-pad press on the character grid.
 
-    No pages, so no page turn to discover: the alphabet is one mode at a
-    time and C changes the mode (map typing, T2). L and R step a cell and
-    cross rows; U and D jump a row and CLAMP at the ends, which is what
-    lets DOWN off the bottom mean the buttons.
+    THE GRID IS ONE SEQUENCE and LEFT and RIGHT walk it, end to end.
+    They wrapped inside a row, so LEFT from the first character of the
+    last row reached the arrow key at the far end of THAT row instead
+    of the character before it (Ben, on the board, 2026-09-18: "If I am
+    going backwards (left) from 2 it goes to >, I want to go to 1").
+
+    UP and DOWN move by a row and come round. A ragged last row used to
+    stop them dead: nothing sits under the last cell of the middle row,
+    so DOWN did nothing, and the caller reads a DOWN that does nothing
+    as DOWN off the grid and jumped to the buttons. It lands on the end
+    of the row below now, and UP from the top row comes round to the
+    bottom.
+
+    DOWN FROM THE BOTTOM ROW still returns `cur` unchanged. That is the
+    one move this does not make, because it is how the caller knows to
+    leave the grid for ABORT and CHECK.
     """
     cols = screens.GRID_COLS
-    # L and R WRAP WITHIN THE ROW, which is SeedSigner's choice on the
-    # same hardware: it passes auto_wrap=[WRAP_LEFT, WRAP_RIGHT] and
-    # never the vertical pair (map typing, T1). On a 13-wide strip the
-    # far end of a row is one press away instead of twelve, and the
-    # whole key costs 67 fewer presses. U and D still clamp, because
-    # DOWN that cannot move is what means "the buttons".
-    row = cur // cols
-    lo = row * cols
-    hi = min(lo + cols, len(cells)) - 1
     if key == "l":
-        return hi if cur == lo else cur - 1
+        return (cur - 1) % len(cells)
     if key == "r":
-        return lo if cur == hi else cur + 1
-    if key == "u":
-        return cur - cols if cur >= cols else cur
-    if key == "d":
-        return cur + cols if cur + cols < len(cells) else cur
+        return (cur + 1) % len(cells)
+    if key in ("u", "d"):
+        rows = -(-len(cells) // cols)
+        row, col = divmod(cur, cols)
+        if key == "d" and row == rows - 1:
+            return cur                      # off the grid: the buttons
+        nxt = (row + (1 if key == "d" else -1)) % rows
+        # Clamped to the end of the row it lands on, which is what makes
+        # a ragged bottom row reachable from the long row above it.
+        return min(nxt * cols + col, (nxt + 1) * cols - 1, len(cells) - 1)
     return cur
-
 
 def _wrong_at(typed, want):
     """Positions a person TYPED that do not match the paper.

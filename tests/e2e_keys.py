@@ -24,23 +24,20 @@ XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoL
 def _cell_route(cells, start, target):
     """Shortest presses from one grid cell to another, found by search.
 
-    The grid is ONE strip now, not a pair of pages (map typing, T2). The
-    rules are re-stated here from the strip's shape alone and the route
-    is SEARCHED for rather than written down: a helper that encodes a
-    route agrees with whatever produced it, where this one can only agree
-    about the rules, and a disagreement shows up as a wrong character in
-    the round trip (TESTING.md rule 2).
-    """
-    cols = scr.GRID_COLS
-    n = len(cells)
+    The ROUTE is searched for and never written down, which is what
+    TESTING.md rule 2 is protecting: a helper that encodes a route
+    agrees with whatever produced it. The MOVES come from the device,
+    because what one press does is behaviour and not the strip's shape.
+    This held its own copy of them until 2026-09-18 and then walked
+    routes the device would not walk, through a wrap it had dropped.
 
+    What keeps _cell_move honest is tests/test_ui_cost.py, which
+    asserts its properties directly: every cell moves on every press
+    but one, and every cell reaches every other.
+    """
     def moves(cur):
-        row = cur // cols
-        lo, hi = row * cols, min(row * cols + cols, n) - 1
-        yield "u", (cur - cols if cur >= cols else cur)
-        yield "d", (cur + cols if cur + cols < n else cur)
-        yield "l", (hi if cur == lo else cur - 1)      # wraps in the row
-        yield "r", (lo if cur == hi else cur + 1)
+        for k in "udlr":
+            yield k, coresigner_main._cell_move(k, cells, cur)
 
     seen, queue = {start: ""}, [start]
     while queue:
