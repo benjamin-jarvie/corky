@@ -21,7 +21,7 @@ import hal                              # noqa: E402
 import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
 import signer                           # noqa: E402
-from e2e_keys import grid_presses, text_keys   # noqa: E402
+from e2e_keys import text_keys          # noqa: E402
 
 # A real regtest master private key, the one every other suite signs with.
 KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
@@ -72,163 +72,154 @@ def drew(sess, image):
 
 PAGES = screens.text_pages(KEY)
 
-# --- 1. a page typed correctly is accepted ------------------------------
 
-sess, got = run_page(text_keys("xprv", PAGES[0]) + "a", PAGES[0])
+# --- 1. a page typed correctly is accepted ------------------------------
+# No trailing "a": text_keys walks to the bar and takes CHECK itself, and
+# a correct page returns from _check_page with no verdict in between.
+
+sess, got = run_page(text_keys("xprv", PAGES[0]), PAGES[0])
 if got != PAGES[0]:
     bad(f"a correctly typed page was not accepted: {got!r}")
-elif not drew(sess, screens.check_result(320, 240, PAGES[0], set(),
-                                         LABEL, 0, 3)):
-    bad("the verdict for a correct page was never drawn")
 else:
-    ok("a page typed back correctly is accepted, and says so")
+    ok("a page typed correctly is accepted, with no screen in the way")
 
-# --- 2. one wrong character is named, and only that one -----------------
-# Rule 1: the wrong character is chosen from the real key, not invented,
-# and the check asserts WHICH position was marked.
+# --- 2. a wrong character is marked, in place, with no verdict screen ----
+# Ben, 2026-09-18: CHECK redraws the page with the mistake outlined and
+# the cursor on it. The old flow put up a screen that counted the
+# mistakes and then made a person find them.
 
 AT = 5
-RIGHT = PAGES[0][AT]
-TYPO = "2" if RIGHT != "2" else "3"
-BAD_PAGE = PAGES[0][:AT] + TYPO + PAGES[0][AT + 1:]
+BAD_PAGE = PAGES[0][:AT] + ("2" if PAGES[0][AT] != "2" else "3") + PAGES[0][AT + 1:]
 
-sess, got = run_page(text_keys("xprv", BAD_PAGE) + "la", PAGES[0])
-if got is not None:
-    bad(f"ABORT on a failed check did not leave the flow: {got!r}")
-elif not drew(sess, screens.check_result(320, 240, BAD_PAGE, {AT},
-                                         LABEL, 0, 3)):
-    bad(f"the verdict did not mark position {AT} and only that position")
+sess, got = run_page(text_keys("xprv", BAD_PAGE), PAGES[0])
+if got != "ran out of presses":
+    bad(f"a wrong page returned {got!r} instead of asking for a fix")
+elif not drew(sess, screens.text_entry(
+        320, 240, f"{LABEL}  ·  TYPE  1/3", BAD_PAGE, 0, "xprv", 0,
+        actions_sel=1, caret=AT, actions=("ABORT", "CHECK"), wrong={AT},
+        want_len=len(PAGES[0]),
+        hint=coresigner_main.Session._type_hint(screens.modes("xprv"), 0))):
+    bad("the page was not redrawn with position 5 marked and the "
+        "cursor on it")
 else:
-    ok(f"one wrong character is marked at position {AT}, alone")
+    ok("a wrong character is outlined in place, cursor already on it")
 
-# The screen must actually differ from the all-correct one, or marking
-# proves nothing (a render that ignores `wrong` would pass the check above
-# only by accident of the text differing too).
-if (screens.check_result(320, 240, PAGES[0], {AT}, LABEL, 0, 3).tobytes()
-        == screens.check_result(320, 240, PAGES[0], set(), LABEL, 0, 3)
-        .tobytes()):
-    bad("check_result draws the same frame whether or not a character is wrong")
+# A marked page and a clean one must not render the same, or the red
+# outline is decoration.
+# Both renders carry the SAME caret, so the only difference is the
+# outline. Without it the window follows the caret to the end of the
+# page and position 5 is not on screen to be marked at all.
+if (screens.text_entry(320, 240, "T", PAGES[0], 0, "xprv", 0, caret=AT,
+                       wrong={AT}, want_len=48).tobytes()
+        == screens.text_entry(320, 240, "T", PAGES[0], 0, "xprv", 0,
+                              caret=AT, wrong=set(), want_len=48).tobytes()):
+    bad("a page with a mistake renders identically to a clean one")
 else:
-    ok("the verdict screen looks different when a character is wrong")
+    ok("the red outline actually changes what is drawn")
 
-# --- 3. FIX lands on the wrong character and overwrites it in place -----
-def _commit(charset, last_char):
-    """Presses from the cell holding `last_char` to the bar, and A.
+# --- 3. fixing one mistake walks to the next ----------------------------
+# The whole point of the jump: three mistakes cost three corrections and
+# no hunting.
 
-    Exact, because the d-pad loops: one press past the bar comes round
-    to the top of the grid.
-    """
-    pages = screens.charset_pages(charset)
-    page = next(i for i, pg in enumerate(pages) if last_char in pg)
-    cur = pages[page].index(last_char)
-    downs = 0
-    while True:
-        nxt = coresigner_main._grid_move("d", pages, page, cur)
-        if nxt == (page, cur):
-            break
-        page, cur = nxt
-        downs += 1
-    return "d" * (downs + 1) + "a"
-
-
-# This is the whole point of the caret: correcting position 5 must not
-# cost the 42 characters after it.
-
-fix = (text_keys("xprv", BAD_PAGE)          # type it wrong
-       + "a"                                 # verdict: FIX is pre-selected
-       # overwrite AT the caret, then walk to the bar and CHECK. Centre
-       # is SELECT now, so it types rather than finishing (2026-09-18).
-       + grid_presses("xprv", RIGHT) + _commit("xprv", RIGHT)
-       + "a")                                # verdict: matches
-sess, got = run_page(fix, PAGES[0])
-if got != PAGES[0]:
-    bad(f"FIX did not correct the character in place: {got!r}")
+THREE = (PAGES[0][:3] + "2" + PAGES[0][4:9] + "2" + PAGES[0][10:20]
+         + "2" + PAGES[0][21:])
+wrong_three = sorted(coresigner_main._wrong_at(THREE, PAGES[0]))
+if wrong_three != [3, 9, 20]:
+    bad(f"the fixture does not have three mistakes: {wrong_three}")
 else:
-    ok("FIX lands on the wrong character and overwrites it in place")
-
-# A short character count proves it overwrote rather than inserted.
-if got is not None and len(got) != len(PAGES[0]):
-    bad(f"FIX changed the page length to {len(got)}")
+    caret = wrong_three[0]
+    fixed = THREE
+    walked = [caret]
+    for _ in range(3):
+        fixed = fixed[:caret] + PAGES[0][caret] + fixed[caret + 1:]
+        caret = coresigner_main._next_gap(fixed, PAGES[0], caret)
+        walked.append(caret)
+    if fixed != PAGES[0]:
+        bad(f"walking the mistakes did not repair the page: {fixed!r}")
+    elif walked[:3] != [3, 9, 20]:
+        bad(f"the cursor did not walk mistake to mistake: {walked}")
+    else:
+        ok("fixing walks 3 -> 9 -> 20, one correction each")
 
 # --- 4. a short page is wrong, and every missing position is named ------
 
-short = PAGES[0][:10]
-sess, got = run_page(text_keys("xprv", short) + "la", PAGES[0])
-missing = set(range(10, len(PAGES[0])))
-if got is not None:
-    bad("a page that stops early was accepted")
-elif not drew(sess, screens.check_result(320, 240, short, missing,
-                                         LABEL, 0, 3)):
-    bad("a page that stops early did not name the characters still missing")
+short = PAGES[0][:20]
+missing = coresigner_main._wrong_at(short, PAGES[0])
+if missing != set(range(20, len(PAGES[0]))):
+    bad(f"a page that stops early did not name every missing position: "
+        f"{sorted(missing)[:6]}...")
 else:
-    ok("a page that stops early is refused, and the gap is named")
+    ok("a page that stops early counts every unfilled position wrong")
 
-# --- 5. the caret walks the typed text, which is what C is for ----------
-# L and R in text focus move the caret; B there deletes the character
-# under it. Without this a mistake 40 characters back costs 40 deletions.
+# --- 5. the caret keys ON the grid move the caret --------------------
+# SeedSigner puts cursor-left, cursor-right and backspace on the keyboard
+# itself (map typing, T1), so there is no mode to find. Ours needs two,
+# because B already deletes. Ben could not move the caret at all before:
+# it lived behind a C nothing mentioned.
 
-# to the caret, back 2, delete, then C again for the bar and A to take
-# it. The last press was "p", which finished from the caret; centre is
-# SELECT everywhere now, so it steps back to the grid instead.
-sess = session("c" + "ll" + "b" + "c" + "a")
-typed, caret = sess._check_entry(LABEL, 0, 3, 48, "abcde", 5)
-if typed != "abce":
-    bad(f"C then L,L then B deleted the wrong character: {typed!r}")
-elif caret != 3:
-    bad(f"the caret ended at {caret}, not on the gap it made")
+_CELLS = screens.mode_cells(screens.modes("xprv")[0][1])
+_LEFT = _CELLS.index(screens.CARET_LEFT)
+
+
+def _walk(cur, target):
+    """Presses that move the grid cursor from one cell to another."""
+    seen, queue = {cur: ""}, [cur]
+    while queue:
+        at = queue.pop(0)
+        if at == target:
+            return seen[at]
+        for k in ("u", "d", "l", "r"):
+            nxt = coresigner_main._cell_move(k, _CELLS, at)
+            if nxt not in seen:                 # a move that does not move
+                seen[nxt] = seen[at] + k        # is never put in the route
+                queue.append(nxt)
+    raise AssertionError(f"no route to cell {target}")
+
+
+def _to_bar(cur):
+    """Presses that take the cursor off the bottom of the grid, to the bar."""
+    at, downs = cur, 1
+    while coresigner_main._cell_move("d", _CELLS, at) != at:
+        at = coresigner_main._cell_move("d", _CELLS, at)
+        downs += 1
+    return "d" * downs
+
+
+sess = session(_walk(0, _LEFT) + "aa" + "b" + _to_bar(_LEFT) + "a")
+typed, caret = sess._check_entry(LABEL, 0, 3, PAGES[0], "abcde", 5)
+if typed != "abde":
+    bad(f"the caret keys did not move the caret: typed is {typed!r}, "
+        "expected 'abde' after two lefts and a delete")
 else:
-    ok("C moves focus to the text, L/R walk the caret, B deletes there")
+    ok("the caret keys walk the typed text, and B deletes at the caret")
 
-# --- 6. ABORT on the entry screen leaves, and B on an empty page leaves -
+# --- 6. ABORT is reachable by going DOWN, and the d-pad loops ----------
+# Ben, on the board (2026-09-11): "If you can't get to abort, remove the
+# button or make sure you can go down and left and actually get to the
+# button." DOWN off the bottom row now lands on the bar, and DOWN again
+# returns to the top of the grid.
 
-# DOWN OFF THE BOTTOM OF THE GRID reaches the bar, which is where a
-# person reaches for a row of buttons drawn under a grid. The check
-# below this one has passed since the flow was written and proves the
-# path EXISTS; it cannot prove anybody can find it, and Ben could not:
-# "If you can't get to abort, remove the button or make sure you can go
-# down and left and actually get to the button" (on the board,
-# 2026-09-11). The walk is computed from the real charset so it cannot
-# drift.
-_pages = screens.charset_pages("xprv")
-_pg, _cur, _downs = 0, 0, 0
-while True:                      # walk it the way the device would
-    _nxt = coresigner_main._grid_move("d", _pages, _pg, _cur)
-    if _nxt == (_pg, _cur):
-        break
-    _pg, _cur = _nxt
-    _downs += 1
-_downs += 1                      # the press that steps off the bottom
-sess = session("d" * _downs + "la")
-typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
+sess = session(_to_bar(0) + "la")
+typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
 if typed is None:
-    ok(f"DOWN x{_downs} off the grid reaches the bar, then L and A abort")
+    ok(f"DOWN x{len(_to_bar(0))} reaches the bar, then L and A abort")
 else:
-    bad(f"DOWN x{_downs} then L then A returned {typed!r}; the buttons "
-        "under the grid are not reachable by going down")
+    bad(f"DOWN then L then A returned {typed!r}; the buttons under the "
+        "grid are not reachable by going down")
 
-# AND THE LOOP CLOSES. Down again from the bar comes round to the top of
-# the grid, so the buttons are a place you pass through rather than a
-# room with one door.
-sess = session("d" * _downs + "d" + "a" + "d" * _downs + "la")
-typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
+sess = session(_to_bar(0) + "d" + _to_bar(0) + "la")
+typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
 if typed is None:
     ok("DOWN from the bar loops to the top of the grid, and round again")
 else:
     bad(f"the d-pad did not loop through the bar; got {typed!r}")
 
-sess = session("ccla")               # to the bar, to ABORT, take it
-typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
-if typed is not None:
-    bad(f"ABORT on the check entry returned {typed!r} instead of leaving")
-else:
-    ok("ABORT on the check entry leaves the flow")
-
 sess = session("b")
-typed, _ = sess._check_entry(LABEL, 0, 3, 48, "", 0)
+typed, _ = sess._check_entry(LABEL, 0, 3, PAGES[0], "", 0)
 if typed is not None:
     bad("B with nothing typed did not leave the check entry")
 else:
-    ok("B with nothing typed leaves, like B everywhere else")
+    ok("B with nothing typed leaves, the way B leaves everywhere else")
 
 # --- 7. every screen that can show a key is marked sensitive ------------
 # hal.DevDisplay blanks a frame shown with sensitive=True, which is what
@@ -284,12 +275,12 @@ flags_for("typing a key on the grid", "a" * 30,
 flags_for("the paper backup pages", "aaa",
           lambda s: s._show_backup(KEY, LABEL), 3)
 
-# A full page typed, then committed, so the VERDICT is reached. Without
-# this the script never leaves the entry screen, which is the bug above.
-_to_verdict = text_keys("xprv", PAGES[0]) + "a"
-flags_for("the check entry and its verdict", _to_verdict,
+# A full page typed, then committed, so every frame of a real page is
+# counted. Without the commit the script never leaves the entry screen.
+_a_page = text_keys("xprv", PAGES[0]) + "a"
+flags_for("the check entry", _a_page,
           lambda s: s._check_page(LABEL, 0, 3, PAGES[0]),
-          len(_to_verdict) - 5)
+          len(_a_page) - 5)
 
 
 # The camera viewfinder is a screen that can show a key too, because a key

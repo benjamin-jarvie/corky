@@ -227,71 +227,52 @@ def _next_kind(kind, key, order):
     return order[(order.index(kind) + step) % len(order)]
 
 
-def _grid_move(key, pages, page, cur):
-    """One step of the character grid, shared by every typed screen.
+def _cell_move(key, cells, cur):
+    """One step on the character grid: a flat strip read left to right.
 
-    The grid is one strip read left to right: L and R step a cell and
-    cross rows, U and D jump a row. A page turns at the strip's ends with
-    L or R, and ALSO when U or D would leave the top or bottom row, which
-    is the cheap way across and lands on the same column.
-
-    **That second rule is worth 62 presses, and the first version of this
-    docstring claimed 710.** The claim came from comparing the shortest
-    route under the new rules against the OLD TEST HELPER's route, which
-    walked to the end of the strip on every page turn because it was
-    written that way. Comparing like with like, by searching for the
-    shortest route under each rule set, typing the whole key costs 646
-    presses under the old rules and 584 under the new.
-
-    So most of the saving was never the code's: it came from replacing a
-    helper that wrote a route down with one that searches for it. Rule 6
-    exists for exactly this, and it caught me
-    (tests/test_ui_cost.py measures the current cost).
-
-    Returns the new (page, cur). An unrelated key gives them back unchanged.
+    No pages, so no page turn to discover: the alphabet is one mode at a
+    time and C changes the mode (map typing, T2). L and R step a cell and
+    cross rows; U and D jump a row and CLAMP at the ends, which is what
+    lets DOWN off the bottom mean the buttons.
     """
-    n = len(pages[page])
-    if key == "u":
-        if cur < 8 and page > 0:
-            page -= 1
-            return page, min(((len(pages[page]) - 1) // 8) * 8 + cur % 8,
-                             len(pages[page]) - 1)
-        return page, max(0, cur - 8)
-    if key == "d":
-        if cur // 8 == (n - 1) // 8 and page + 1 < len(pages):
-            page += 1
-            return page, min(cur % 8, len(pages[page]) - 1)
-        return page, min(n - 1, cur + 8)
+    cols = screens.GRID_COLS
+    # L and R WRAP WITHIN THE ROW, which is SeedSigner's choice on the
+    # same hardware: it passes auto_wrap=[WRAP_LEFT, WRAP_RIGHT] and
+    # never the vertical pair (map typing, T1). On a 13-wide strip the
+    # far end of a row is one press away instead of twelve, and the
+    # whole key costs 67 fewer presses. U and D still clamp, because
+    # DOWN that cannot move is what means "the buttons".
+    row = cur // cols
+    lo = row * cols
+    hi = min(lo + cols, len(cells)) - 1
     if key == "l":
-        if cur == 0 and page > 0:
-            return page - 1, len(pages[page - 1]) - 1
-        return page, max(0, cur - 1)
+        return hi if cur == lo else cur - 1
     if key == "r":
-        if cur == n - 1 and page + 1 < len(pages):
-            return page + 1, 0
-        return page, min(n - 1, cur + 1)
-    return page, cur
+        return lo if cur == hi else cur + 1
+    if key == "u":
+        return cur - cols if cur >= cols else cur
+    if key == "d":
+        return cur + cols if cur + cols < len(cells) else cur
+    return cur
 
 
-def _leaves_grid(key, pages, page, cur):
-    """Does DOWN step off the bottom of the grid?
+def _wrong_at(typed, want):
+    """Positions that do not match the paper, the unfilled ones included."""
+    bad = {n for n, ch in enumerate(typed)
+           if n >= len(want) or ch != want[n]}
+    return bad | set(range(len(typed), len(want)))
 
-    True on the last row of the last page, where `_grid_move` has
-    nowhere to go and hands the same cell back. Every screen with a
-    character grid also has an action bar UNDER it, and the bar used to
-    be reachable only with C.
 
-    Ben, on the board, 2026-09-11: "If you can't get to abort, remove the
-    button or make sure you can go down and left and actually get to the
-    button." The bar is drawn below the grid, so DOWN is where a person
-    reaches for it. C still works and the hint still names it.
+def _next_gap(typed, want, after):
+    """Where the cursor goes once a character is entered.
+
+    The NEXT thing that does not match, so correcting three mistakes
+    costs three corrections and no hunting (Ben, 2026-09-18). When
+    everything past here matches, it steps one right like any typing
+    screen, so filling a blank page still reads left to right.
     """
-    # Only when DOWN would do NOTHING. The first version called the whole
-    # bottom row the edge, which stole a real move: on a partial last row
-    # `_grid_move` steps sideways to the final cell, and the route search
-    # in tests/test_ui_cost.py uses it. Ask the mover instead of
-    # second-guessing it.
-    return key == "d" and _grid_move(key, pages, page, cur) == (page, cur)
+    wrong = sorted(n for n in _wrong_at(typed, want) if n > after)
+    return wrong[0] if wrong else min(after + 1, max(0, len(want) - 1))
 
 
 class Session:
@@ -830,7 +811,8 @@ class Session:
             paths = {k: signer.cosigner_path(self.rpc, k,
                                              self.cosigner_account)
                      for k in ("wsh", "sh-wsh")}
-            shown = {k: "m/" + v.replace("h", "'") for k, v in paths.items()}
+            shown = {k: "m/" + screens.shown_path(v)
+                     for k, v in paths.items()}
             rows = screens.multisig_rows(shown["wsh"], shown["sh-wsh"],
                                          self.cosigner_account)
             chosen = self._pick(
@@ -883,7 +865,7 @@ class Session:
         # `_discard`'s loop and not `_pick`'s: `_pick` drives list rows
         # with UP and DOWN. BACK is pre-selected, so the export is
         # chosen and never landed on.
-        shown = "m/" + path.replace("h", "'")
+        shown = "m/" + screens.shown_path(path)
         selected = 0
         while True:
             self.display.show(screens.path_echo(self.w, self.h, shown,
@@ -1092,6 +1074,12 @@ class Session:
             return self._hold("this key derives no addresses")
         if kind not in order:
             kind = order[0]
+        # LEFT and RIGHT change the policy only where the policy was not
+        # already chosen. On the three after an export it would walk off
+        # the descriptor the coordinator just read, and the screen no
+        # longer names the policy there, so the presses would change
+        # something the screen does not show (E-7 item 3).
+        switchable = limit is None
         i, base, block = 0, 0, []
         while True:
             if not block or not base <= i < base + len(block):
@@ -1102,11 +1090,12 @@ class Session:
                 except RuntimeError as exc:
                     return self._show_core_error(exc)
             self.display.show(screens.address_page(
-                self.w, self.h, i, block[i - base], kind, total=limit))
+                self.w, self.h, i, block[i - base], kind, total=limit,
+                switchable=switchable))
             key = self.buttons.read()
             if key in ("b", "c"):
                 return
-            if key in ("l", "r"):
+            if key in ("l", "r") and switchable:
                 # Switch script policy here rather than gating the screen
                 # behind a chooser (Ben, 2026-09-05). All four of Core's,
                 # in the same order the export walks them (map T0), so a
@@ -1240,6 +1229,19 @@ class Session:
         return True
 
 
+    @staticmethod
+    def _type_hint(runs, mode):
+        """What the screen says about the one control that is not obvious.
+
+        The d-pad and A explain themselves. The mode button does not, so
+        it is named, and only when there IS one: a charset that fits a
+        single grid has no mode, and a hint about a button that does
+        nothing is worse than silence.
+        """
+        if len(runs) < 2:
+            return "A types  ·  B deletes"
+        return f"A types  ·  B deletes  ·  C for {runs[(mode + 1) % len(runs)][0]}"
+
     def _text_entry(self, title, charset, secret=False):  # noqa: C901 - one keypad state machine; splitting it would hide the rules
         """Drive the paged text grid for one alphabet.
 
@@ -1249,12 +1251,14 @@ class Session:
         where CANCEL really cancels and DONE commits. Returns None on
         cancel, which is distinct from the empty string.
         """
-        pages = screens.charset_pages(charset)
-        text, cur, page, sel = "", 0, 0, None
+        runs = screens.modes(charset)
+        text, cur, mode, sel, caret = "", 0, 0, None, 0
         while True:
+            cells = screens.mode_cells(runs[mode][1])
             self.display.show(screens.text_entry(
-                self.w, self.h, title, text, cur, charset, page, secret,
-                actions_sel=1 if sel is None else sel), sensitive=True)
+                self.w, self.h, title, text, cur, charset, mode, secret,
+                actions_sel=1 if sel is None else sel, caret=caret,
+                hint=self._type_hint(runs, mode)), sensitive=True)
             key = self.buttons.read()
             if sel is not None:            # focus is on the action bar
                 if key in ("l", "r"):
@@ -1266,16 +1270,16 @@ class Session:
                     # and down again comes round to the top (Ben,
                     # 2026-09-11). A row of buttons you can enter and not
                     # leave the same way is a trap with one door.
-                    sel, page, cur = None, 0, 0
+                    sel, cur = None, 0
                 elif key == "u":
                     sel = None         # back up into the grid, where you were
                 elif key in ("b", "c"):
                     sel = None
                 continue
-            if _leaves_grid(key, pages, page, cur):
+            if key == "d" and _cell_move("d", cells, cur) == cur:
                 sel = 1              # DOWN off the bottom: the buttons
             elif key in ("u", "d", "l", "r"):
-                page, cur = _grid_move(key, pages, page, cur)
+                cur = _cell_move(key, cells, cur)
             elif key in ("a", "p"):
                 # THE CENTRE PRESS IS SELECT. Everywhere on this device,
                 # with no exception for this screen. It used to return
@@ -1283,7 +1287,17 @@ class Session:
                 # to choose a character left the screen instead, and on
                 # an empty page that scored every character wrong at
                 # once (Ben, on the board, 2026-09-18).
-                text += pages[page][cur]
+                ch = cells[cur]
+                if ch == screens.CARET_LEFT:
+                    caret = max(0, caret - 1)
+                elif ch == screens.CARET_RIGHT:
+                    caret = min(len(text), caret + 1)
+                else:
+                    text = text[:caret] + ch + text[caret + 1:]
+                    caret += 1
+            elif key == "c" and len(runs) > 1:
+                mode = (mode + 1) % len(runs)       # abc / ABC, one press
+                cur = min(cur, len(screens.mode_cells(runs[mode][1])) - 1)
             elif key == "b":
                 if not text:
                     # Nothing to delete, so B is what B is everywhere else
@@ -1291,9 +1305,8 @@ class Session:
                     # visible way out and the button did nothing at all
                     # (Ben, on the board, 2026-09-05).
                     return None
-                text = text[:-1]
-            elif key == "c":
-                sel = 1              # jump to the action bar
+                caret = max(0, caret - 1)
+                text = text[:caret] + text[caret + 1:]
 
 
     def _keymaterial(self, kind):
@@ -1623,107 +1636,85 @@ class Session:
         return True
 
     def _check_page(self, label, i, pages, want):
-        """One page typed back and judged. Returns the text, or None.
+        """One page typed back and judged, with the mistakes shown in place.
 
-        Loops entry -> verdict -> entry, so FIX returns to the same
-        characters with the caret already on the first wrong one. The
-        writer never hunts for the mistake the device has already found.
+        There is no verdict screen when something is wrong (Ben,
+        2026-09-18). The page redraws with the wrong characters outlined
+        in red and the cursor on the first one, and fixing it walks to
+        the next. A screen that says "three are wrong" and then makes a
+        person find them has counted rather than helped.
+
+        The verdict survives for the good news: a page that matches is
+        put to Core, which is the one moment somebody wants to stop and
+        read a screen.
         """
         typed, caret = "", 0
         while True:
-            typed, caret = self._check_entry(label, i, pages, len(want),
-                                             typed, caret)
+            typed, caret = self._check_entry(label, i, pages, want, typed,
+                                             caret)
             if typed is None:
                 return None
-            wrong = {n for n, ch in enumerate(typed)
-                     if n >= len(want) or ch != want[n]}
-            wrong |= set(range(len(typed), len(want)))
-            sel = 1
-            while True:
-                self.display.show(screens.check_result(
-                    self.w, self.h, typed, wrong, label, i, pages),
-                    sensitive=True)
-                key = self.buttons.read()
-                if wrong and key in ("l", "r"):
-                    sel = 1 - sel
-                elif key in ("a", "p"):
-                    if not wrong:
-                        return typed
-                    if sel == 0:
-                        return None
-                    caret = min(wrong)      # FIX: land on the first one
-                    break
-                elif key in ("b", "c"):
-                    if not wrong:
-                        return typed
-                    break
+            wrong = _wrong_at(typed, want)
+            if not wrong:
+                return typed
+            caret = min(wrong)
 
-    def _check_entry(self, label, i, pages, want_len, typed,  # noqa: C901 - one keypad state machine, like _text_entry
+    def _check_entry(self, label, i, pages, want, typed,  # noqa: C901 - one keypad state machine, like _text_entry
                      caret):
-        """The typing surface for a check. Returns (text, caret), or
-        (None, 0) if the user left.
+        """Type or correct one page, with every mistake marked as you go.
 
-        Three focuses, cycled with C: the character grid, the typed text,
-        and the action bar. The text focus is what Ben asked for: L and R
-        walk the caret through what you have typed, so a wrong character
-        forty along is fixed where it is, instead of deleting the forty
-        after it. A writes the highlighted character AT the caret, which
-        is an overwrite when the caret sits on an existing character.
+        `want` is the page as the device holds it, so the screen can
+        outline what does not match without a round trip through a
+        verdict screen. Typing over a wrong character moves to the NEXT
+        wrong one, which makes a page with three mistakes three presses
+        of work instead of a hunt.
         """
         charset = "xprv"
-        grid = screens.charset_pages(charset)
-        cur, page, focus, sel = 0, 0, "grid", 1
+        runs = screens.modes(charset)
+        cur, mode, sel = 0, 0, None
         while True:
+            cells = screens.mode_cells(runs[mode][1])
             title = (f"{label}  ·  TYPE  {i + 1}/{pages}" if pages > 1
                      else f"{label}  ·  TYPE  IT  BACK")
             self.display.show(screens.text_entry(
-                self.w, self.h, title, typed, cur, charset, page,
-                actions_sel=sel, caret=caret,
-                actions=("ABORT", "CHECK"),
-                hint=screens.CHECK_HINTS[focus] % (len(typed), want_len)),
-                sensitive=True)
+                self.w, self.h, title, typed, cur, charset, mode,
+                actions_sel=1 if sel is None else sel, caret=caret,
+                actions=("ABORT", "CHECK"), wrong=_wrong_at(typed, want),
+                want_len=len(want),
+                hint=self._type_hint(runs, mode)), sensitive=True)
             key = self.buttons.read()
-            if focus == "bar":
+            if sel is not None:                 # the action bar
                 if key in ("l", "r"):
                     sel = 1 - sel
                 elif key in ("a", "p"):
                     return (typed, caret) if sel == 1 else (None, 0)
                 elif key == "d":
-                    focus, page, cur = "grid", 0, 0   # round to the top
-                elif key == "u":
-                    focus = "grid"     # back up into the grid
-                elif key in ("b", "c"):
-                    focus = "grid"
-            elif focus == "text":
-                if key == "l":
-                    caret = max(0, caret - 1)
-                elif key == "r":
-                    caret = min(len(typed), caret + 1)
-                elif key == "b" and caret < len(typed):
-                    typed = typed[:caret] + typed[caret + 1:]
-                elif key in ("a", "p"):
-                    focus = "grid"      # back to the grid to overwrite it
-                elif key == "c":
-                    focus = "bar"
-            elif _leaves_grid(key, grid, page, cur):
-                focus = "bar"        # DOWN off the bottom: the buttons
+                    sel, cur = None, 0          # the d-pad loops
+                elif key in ("u", "b", "c"):
+                    sel = None
+                continue
+            if key == "d" and _cell_move("d", cells, cur) == cur:
+                sel = 1                         # DOWN off the bottom
             elif key in ("u", "d", "l", "r"):
-                page, cur = _grid_move(key, grid, page, cur)
+                cur = _cell_move(key, cells, cur)
             elif key in ("a", "p"):
-                # Centre is select here too. It returned the page, which
-                # is how Ben got a screen of wrong characters without
-                # having entered one.
-                typed = typed[:caret] + grid[page][cur] + typed[caret + 1:]
-                caret = min(len(typed), caret + 1)
+                ch = cells[cur]
+                if ch == screens.CARET_LEFT:
+                    caret = max(0, caret - 1)
+                elif ch == screens.CARET_RIGHT:
+                    caret = min(len(want) - 1, caret + 1)
+                else:
+                    typed += " " * max(0, caret - len(typed))
+                    typed = typed[:caret] + ch + typed[caret + 1:]
+                    caret = _next_gap(typed, want, caret)
+            elif key == "c" and len(runs) > 1:
+                mode = (mode + 1) % len(runs)
+                cur = min(cur, len(screens.mode_cells(runs[mode][1])) - 1)
             elif key == "b":
                 if not typed:
                     return None, 0
-                if caret > 0:
-                    typed = typed[:caret - 1] + typed[caret:]
-                    caret -= 1
-            elif key == "c":
-                focus = "text"
-
+                caret = max(0, caret - 1)
+                typed = typed[:caret] + typed[caret + 1:]
 
     # -- PSBT load: stick first, then QR frames ---------------------------
 

@@ -295,18 +295,23 @@ for label, got, budget in (
     else:
         bad(f"{label}: {got} presses, over the {budget} budget")
 
-# The page-crossing rule is the whole reason those fit. Pin it directly,
-# because a change that quietly restored the old behaviour would double
-# the numbers above and still read as a small diff.
-_pages = screens.charset_pages("xprv")
-if coresigner_main._grid_move("d", _pages, 0, 24) != (1, 0):
-    bad("DOWN from the last row does not cross to the next page")
-elif coresigner_main._grid_move("u", _pages, 1, 3) != (0, 27):
-    bad("UP from the top row does not cross to the previous page")
-elif coresigner_main._grid_move("d", _pages, 1, 24) != (1, 25):
-    bad("DOWN past the last page moved off the end of the charset")
+# The grid is one MODE at a time now and never a paged alphabet (map
+# typing, T2), so there is no page boundary left to cross. What has to
+# hold instead is that UP and DOWN CLAMP: DOWN that cannot move is what
+# means "the buttons", and a wrap would send a person round the alphabet
+# instead of to ABORT.
+_cells = screens.mode_cells(screens.modes("xprv")[0][1])
+_cols = screens.GRID_COLS
+if coresigner_main._cell_move("d", _cells, len(_cells) - 1) != len(_cells) - 1:
+    bad("DOWN moved past the last cell instead of clamping")
+elif coresigner_main._cell_move("u", _cells, 2) != 2:
+    bad("UP moved above the first row instead of clamping")
+elif coresigner_main._cell_move("r", _cells, _cols - 1) != 0:
+    bad("RIGHT at the end of a row does not wrap back to its start")
+elif coresigner_main._cell_move("l", _cells, 0) != _cols - 1:
+    bad("LEFT at the start of a row does not wrap to its end")
 else:
-    ok("up and down cross a page boundary and stop at the charset's ends")
+    ok("L and R wrap inside a row; U and D clamp at the ends")
 
 
 

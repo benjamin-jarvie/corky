@@ -1,7 +1,6 @@
 """Several keys, on the device: scripted dev-HAL sessions for map
 e2e-before-testers tickets 03 and 10. Run: python3 tests/e2e_keys.py
 (needs bitcoind)."""
-import collections
 import io
 import os
 import random
@@ -22,99 +21,85 @@ import qrchannel  # noqa: E402
 XPRV_A = "tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ssvpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd"
 
 
-def _grid_route(pages, start, target):
+def _cell_route(cells, start, target):
     """Shortest presses from one grid cell to another, found by search.
 
-    A cell is (page, index). The rules are re-stated here from the
-    SCREEN's shape alone (screens.charset_pages), not read out of
-    main._grid_move, and the route is searched for rather than written
-    down. A helper that encodes a route agrees with whatever the code does
-    to produce that route; this one can only agree about the rules, and a
-    disagreement shows up as a wrong character in the round trip
-    (TESTING.md rule 2).
+    The grid is ONE strip now, not a pair of pages (map typing, T2). The
+    rules are re-stated here from the strip's shape alone and the route
+    is SEARCHED for rather than written down: a helper that encodes a
+    route agrees with whatever produced it, where this one can only agree
+    about the rules, and a disagreement shows up as a wrong character in
+    the round trip (TESTING.md rule 2).
     """
-    def moves(page, cur):
-        n = len(pages[page])
-        row, col, last = cur // 8, cur % 8, (n - 1) // 8
-        if row == 0 and page > 0:
-            prev = len(pages[page - 1])
-            yield "u", (page - 1, min(((prev - 1) // 8) * 8 + col, prev - 1))
-        else:
-            yield "u", (page, max(0, cur - 8))
-        if row == last and page + 1 < len(pages):
-            yield "d", (page + 1, min(col, len(pages[page + 1]) - 1))
-        else:
-            yield "d", (page, min(n - 1, cur + 8))
-        if cur == 0 and page > 0:
-            yield "l", (page - 1, len(pages[page - 1]) - 1)
-        else:
-            yield "l", (page, max(0, cur - 1))
-        if cur == n - 1 and page + 1 < len(pages):
-            yield "r", (page + 1, 0)
-        else:
-            yield "r", (page, min(n - 1, cur + 1))
+    cols = scr.GRID_COLS
+    n = len(cells)
 
-    seen, queue = {start: []}, collections.deque([start])
+    def moves(cur):
+        row = cur // cols
+        lo, hi = row * cols, min(row * cols + cols, n) - 1
+        yield "u", (cur - cols if cur >= cols else cur)
+        yield "d", (cur + cols if cur + cols < n else cur)
+        yield "l", (hi if cur == lo else cur - 1)      # wraps in the row
+        yield "r", (lo if cur == hi else cur + 1)
+
+    seen, queue = {start: ""}, [start]
     while queue:
-        at = queue.popleft()
-        if at == target:
-            return seen[at]
-        for press, nxt in moves(*at):
+        cur = queue.pop(0)
+        if cur == target:
+            return seen[cur]
+        for key, nxt in moves(cur):
             if nxt not in seen:
-                seen[nxt] = seen[at] + [press]
+                seen[nxt] = seen[cur] + key
                 queue.append(nxt)
-    raise AssertionError(f"no route from {start} to {target}")
+    raise AssertionError(f"no route to cell {target}")
+
+
+def _mode_of(charset, ch):
+    """Which mode holds a character, and where in its strip."""
+    for m, (_label, run) in enumerate(scr.modes(charset)):
+        if ch in run:
+            return m, scr.mode_cells(run).index(ch)
+    raise AssertionError(f"{ch!r} is in no mode of {charset}")
 
 
 def grid_presses(charset, want):
     """Presses that type `want` on the grid, without the closing press."""
-    pages = scr.charset_pages(charset)
-    at, out = (0, 0), []
+    runs = scr.modes(charset)
+    mode, cur, out = 0, 0, []
     for ch in want:
-        tp = next(i for i, pg in enumerate(pages) if ch in pg)
-        target = (tp, pages[tp].index(ch))
-        out += _grid_route(pages, at, target) + ["a"]
-        at = target
-    return "".join(out)
+        want_mode, target = _mode_of(charset, ch)
+        while mode != want_mode:              # C cycles, one press each
+            mode = (mode + 1) % len(runs)
+            cur = min(cur, len(scr.mode_cells(runs[mode][1])) - 1)
+            out.append("c")
+        cells = scr.mode_cells(runs[mode][1])
+        out.append(_cell_route(cells, cur, target) + "a")
+        cur = target
+    return "".join(out), mode, cur
 
 
-def _cell(charset, ch):
-    """Where one character sits on the grid, as (page, index)."""
-    pages = scr.charset_pages(charset)
-    page = next(i for i, pg in enumerate(pages) if ch in pg)
-    return page, pages[page].index(ch)
+def commit_presses(charset, mode, cur):
+    """Presses that leave the grid for the buttons and take the action.
 
+    The centre press used to commit from anywhere. It does not: centre is
+    SELECT on every screen (Ben, 2026-09-18), so finishing means reaching
+    the buttons, which is what DOWN off the bottom does.
 
-def commit_presses(charset, at):
-    """Presses that leave the grid for the button bar and take the action.
-
-    The centre press used to commit a page from anywhere. It does not:
-    centre is SELECT on every screen (Ben, 2026-09-18), so finishing
-    means reaching the buttons, which is what DOWN off the bottom does.
-
-    The count has to be EXACT. One press too few sits in the grid; one
-    too many loops off the bar and back to the top, because the d-pad
-    loops. So walk it the way the device would.
+    EXACT, because the d-pad loops: one press too many comes off the bar
+    and back to the top of the grid.
     """
-    pages = scr.charset_pages(charset)
-    page, cur, downs = at[0], at[1], 0
-    while True:
-        nxt = coresigner_main._grid_move("d", pages, page, cur)
-        if nxt == (page, cur):
-            break
-        page, cur = nxt
+    cells = scr.mode_cells(scr.modes(charset)[mode][1])
+    downs = 0
+    while coresigner_main._cell_move("d", cells, cur) != cur:
+        cur = coresigner_main._cell_move("d", cells, cur)
         downs += 1
-    return "d" * (downs + 1) + "a"     # +1 steps off the bottom
+    return "d" * (downs + 1) + "a"
 
 
 def text_keys(charset, want):
     """Presses that type `want` and then take the bar's action."""
-    pages = scr.charset_pages(charset)
-    at = (0, 0)
-    for ch in want:
-        tp = next(i for i, pg in enumerate(pages) if ch in pg)
-        at = (tp, pages[tp].index(ch))
-    return grid_presses(charset, want) + commit_presses(charset, at)
+    presses, mode, cur = grid_presses(charset, want)
+    return presses + commit_presses(charset, mode, cur)
 
 
 def home_press(tile, start=0):
@@ -535,18 +520,17 @@ def main():
         assert typo in scr.BASE58, "K9: the substitute is not a base58 character"
         page1_bad = pages9[0][:wrong_at] + typo + pages9[0][wrong_at + 1:]
 
+        # NO VERDICT SCREEN when a page is wrong (map typing, T4). CHECK
+        # redraws the page with the mistake outlined and the cursor on
+        # it, so the fix is: type the right character, then CHECK again.
+        fix, fix_mode, fix_cur = grid_presses("xprv", right)
         script = ("ra" + keys_press(0, "Scan a key") + "a"   # Keys -> Scan
                   + key_menu_press("Backup key", 0)  # paper, no chooser
                   + "aa" + "ra"                  # 3 pages, then CHECK IT
                   + text_keys("xprv", page1_bad)  # page 1, one wrong
-                  + "a"                          # verdict: FIX is selected
-                  # overwrite AT the caret, then walk to the bar and
-                  # CHECK. The centre press used to do this from here.
-                  + grid_presses("xprv", right)
-                  + commit_presses("xprv", _cell("xprv", right))
-                  + "a"                          # verdict: matches, go on
-                  + text_keys("xprv", pages9[1]) + "a"
-                  + text_keys("xprv", pages9[2]) + "a"
+                  + fix + commit_presses("xprv", fix_mode, fix_cur)
+                  + text_keys("xprv", pages9[1])
+                  + text_keys("xprv", pages9[2])
                   + "a"                          # Core's verdict, dismissed
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK9", qr_key=key_a)
@@ -747,7 +731,8 @@ def main():
         # the number of steps taken to get there.
         missing12 = [k for k in order12
                      if not _has(work / "framesK12",
-                                 _render(scr.address_page, 0, first12[k], k))]
+                                 _render(scr.address_page, 0, first12[k], k,
+                                         switchable=True))]
         assert not missing12, (
             f"K12: LEFT/RIGHT never showed these policies: {missing12}; "
             f"the walk covers {order12}")

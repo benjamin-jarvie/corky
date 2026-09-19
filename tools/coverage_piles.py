@@ -48,7 +48,7 @@ C = [
   "no PSBT file in a dev session"),
  ("coresigner/main.py", "_next_kind", 1,
   "called with a policy not in the ring"),
- ("coresigner/main.py", "_grid_move", 1,
+ ("coresigner/main.py", "_cell_move", 1,
   "given a key it does not handle"),
  ("coresigner/main.py", "Session.run", 1,
   "startup clear-out and power-off teardown raise"),

@@ -27,37 +27,6 @@ rule is that fixed items leave; the measurements are in the commit.
 
 ## Open
 
-### E-7 The receive address screen, and hardened paths, read wrong
-
-Ben, on the board, 2026-09-18, exporting a key for the first time. Five
-things, none of which stops the device working and all of which cost a
-person effort at the moment they are comparing a screen to a laptop.
-
-1. **`h` where Sparrow shows `'`.** Ours draws `m/84h/0h/0h`, Sparrow
-   draws `m/84'/0'/0'`. Both are correct: BIP32 wrote hardened steps
-   with an apostrophe, Core emits `h` because an apostrophe is painful
-   in a shell and accepts either on input. Our screens print Core's own
-   string back rather than reshaping it, which is the rule that keeps
-   Core the only parser. It is also the wrong call here, because the
-   person is comparing our screen to Sparrow's and we are making them
-   translate. Show `'`.
-2. **The address screen does not say WHICH address it is.** The title is
-   `RECEIVE  0  ·  NATIVE SEGWIT` (`screens.address_page:1158`). It
-   should read as "1st receive address", then 2nd, 3rd as the d-pad
-   walks on. A bare index beside a policy name is not what a person
-   asked the screen.
-3. **Drop the policy from that title.** You chose the script type two
-   screens ago; repeating it costs the width the address needs.
-4. **Drop "compare every group"** (`:1185`). It was there to stop a
-   person matching only the ends, which is the shortcut
-   address-replacement malware relies on. Ben wants it gone; the
-   reasoning it was protecting should go somewhere or be dropped on
-   purpose rather than by accident.
-5. **The text can be bigger.** Removing 3 and 4 frees the room.
-
-None of this is the typing map. It is the export path, and it wants its
-own pass.
-
 ### E-4 The five coordinators are unproven on a device
 
 The coordinator chooser was removed from the export because the research
@@ -151,3 +120,14 @@ ordinary inputs (PLAN A-21).
 - **E-6** (two of Core's four script policies). Fixed: all four are
   exported and browsable, LEFT and RIGHT walk them, and session K12
   proves each policy's own addresses reach the panel.
+- **E-7** (the receive address screen, and hardened paths, read wrong).
+  All five fixed on 2026-09-18. The title says "1st receive address" and
+  counts in ordinals; the policy is drawn only where LEFT and RIGHT can
+  change it, and those presses now do nothing on the three after an
+  export, where the policy was chosen two screens before; the
+  compare-every-group footer is gone and its reasoning is a section of
+  docs/TESTER-PACK.md; the type grew from 16px to 21px by choosing the
+  row shape instead of fixing four groups to a row; and the caption
+  under an export QR writes `m/84'/0'/0'` the way Sparrow does. Only
+  captions are reshaped: a descriptor carries a checksum over its exact
+  characters, so `export_text` still draws what Core said.

@@ -1029,11 +1029,40 @@ SCRIPT_LABELS = {"wpkh": "Native segwit", "tr": "Taproot",
                  MULTISIG_KIND: "Cosigner"}
 
 
+def shown_path(path):
+    """A derivation path in the notation the wallet beside you uses.
+
+    BIP32 wrote hardened steps with an apostrophe. Core emits `h`,
+    because an apostrophe is painful in a shell, and accepts either on
+    input. Both are correct, and Sparrow draws `m/84'/0'/0'` while we
+    drew `m/84h/0h/0h`, which left the person comparing the two screens
+    to do the translation (Ben, on the board, 2026-09-18).
+
+    CAPTIONS ONLY. A descriptor carries a checksum computed over its
+    exact characters, so reshaping one invalidates it: `export_text`
+    draws what Core said, unchanged, because a person types that string
+    back in. This is for the line of identity beside a code, which
+    nothing parses.
+    """
+    return path.replace("h", "'")
+
+
+def _ordinal(n):
+    """`1` as `1st`, the way a person says it out loud."""
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+
+
 def _groups(text):
     return [text[i:i + 4] for i in range(0, len(text), 4)]
 
 
-ADDR_GROUPS_PER_ROW = 4
+#: Row pitch as a multiple of the type size, on the address screen. The
+#: font's own line height is tighter than this and runs the rows of a
+#: taproot address together; 1.45 keeps them apart at every size the
+#: chooser below picks.
+LINE_SPACING = 1.45
 
 
 #: The QR is rendered no taller than this, so the light card and the line
@@ -1120,7 +1149,8 @@ def qr_export(w, h, code, xfp, kind, path):
     # screen, which is what Ben asked for and what stops the line looking
     # tacked onto the card.
     _fit(d, (w // 2, (below + h) // 2),
-         f"{xfp.upper()}  ·  {SCRIPT_LABELS[kind].upper()}  ·  {path}",
+         f"{xfp.upper()}  ·  {SCRIPT_LABELS[kind].upper()}  ·  "
+         f"{shown_path(path)}",
          int(h * 0.045), CREAM, "mm", int(w * 0.94))
     return img
 
@@ -1147,33 +1177,63 @@ def qr_frame(w, h, code):
     return _qr_card(w, h, code)[0]
 
 
-def address_page(w, h, index, address, kind, total=None):
+def address_page(w, h, index, address, kind, total=None, switchable=False):
     """One receive address, in full, for comparison against a coordinator.
 
     Ben's rule: never truncate, group in fours, colour the first and last
-    group differently from the middle. The middle keeps the same size and
-    weight, and the footer asks for every group, because matching only the
-    ends is the shortcut address-replacement malware relies on.
+    group differently from the middle.
+
+    The title says WHICH address, in the words a person says out loud:
+    "1st receive address", then 2nd, then 3rd. It read
+    `RECEIVE  0  ·  NATIVE SEGWIT`, which counted from zero and repeated
+    the policy chosen two screens before (Ben, on the board, 2026-09-18).
+
+    The footer said "compare every group" and it is gone at Ben's word.
+    It was there because matching only the two coloured ends is the
+    shortcut address-replacement malware relies on, so that reasoning
+    moves to docs/TESTER-PACK.md, where a tester reads it once and can
+    act on it. The colouring stays: it marks the ends, and never says
+    the ends are enough.
+
+    `switchable` says LEFT and RIGHT change the policy on this screen,
+    which only the endless browse does. The name stays there, because it
+    is the only thing that shows what those two presses did.
     """
-    img, d = _frame(w, h, f"RECEIVE  {index}  ·  {SCRIPT_LABELS[kind].upper()}")
+    img, d = _frame(w, h, f"{_ordinal(index + 1).upper()}  RECEIVE  ADDRESS")
     groups = _groups(address)
-    rows = [groups[i:i + ADDR_GROUPS_PER_ROW]
-            for i in range(0, len(groups), ADDR_GROUPS_PER_ROW)]
-    size = int(h * 0.075)
-    top = 0.26 if len(rows) <= 3 else 0.22
-    step = 0.13 if len(rows) <= 3 else 0.105
-    # One row is measured whole, then drawn group by group at that spacing,
-    # so the first and last group carry their colour IN PLACE. Colouring
-    # them anywhere else would not help the eye track the comparison.
-    widest = max(len(" ".join(r)) for r in rows)
-    while size > int(h * 0.03):
-        if d.textlength("W" * widest, font=_font(size)) <= int(w * 0.92):
-            break
-        size -= 1
+    # Fewer groups on a row makes every character bigger, and the height
+    # to pay for it came from dropping the footer (E-7 item 5). So the
+    # shape is chosen and not fixed: the largest type that still fits the
+    # band under the title. A 42-character segwit address took 3 rows of
+    # 4 at 15px and takes 4 rows of 3 at 20px.
+    top, floor = h * 0.24, h * (0.86 if switchable else 0.95)
+    best = None
+    for per_row in (4, 3, 2):
+        rows = [groups[i:i + per_row]
+                for i in range(0, len(groups), per_row)]
+        widest = max(len(" ".join(r)) for r in rows)
+        size = int(h * 0.12)
+        while size > 6:
+            wide_enough = d.textlength("W" * widest,
+                                       font=_font(size)) <= w * 0.92
+            if wide_enough and len(rows) * size * LINE_SPACING <= floor - top:
+                break
+            size -= 1
+        if best is None or size > best[0]:
+            best = (size, rows)
+    size, rows = best
     font = _font(size)
+    step = size * LINE_SPACING
     space = d.textlength(" ", font=font)
+    # Centred in the band, so a 3-row segwit address and a 6-row taproot
+    # one both sit under the title rather than against it.
+    y0 = top + ((floor - top) - len(rows) * step) / 2 + step / 2
+    # One row is measured whole, then drawn group by group at that
+    # spacing, so the first and last group carry their colour IN PLACE.
+    # Colouring them anywhere else would not help the eye track the
+    # comparison.
     for r, row in enumerate(rows):
-        y = int(h * (top + r * step))
+        y = y0 + r * step
         line_w = d.textlength(" ".join(row), font=font)
         x = (w - line_w) / 2
         for g, group in enumerate(row):
@@ -1182,8 +1242,9 @@ def address_page(w, h, index, address, kind, total=None):
             d.text((x, y), group, font=font,
                    fill=OCHRE if (first or last) else CREAM, anchor="lm")
             x += d.textlength(group, font=font) + space
-    _fit(d, (w // 2, int(h * 0.90)), "compare every group", int(h * 0.045),
-         GREY, "mm", int(w * 0.6))
+    if switchable:
+        _fit(d, (w // 2, int(h * 0.92)), SCRIPT_LABELS[kind].upper(),
+             int(h * 0.05), GREY, "mm", int(w * 0.7))
     # Two kinds of bar, which is D3's whole point. Browsing receiving
     # addresses has no end, so the thumb moves and never arrives. The
     # three at the end of an export DO have an end, and drawing them the
@@ -1279,7 +1340,6 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
     return img
 
 
-CELLS_PER_PAGE = 32          # 8 columns x 4 rows, above the action bar
 BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
           "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l
 DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
@@ -1296,126 +1356,184 @@ PATH_CHARSET = "0123456789h'/"
 CHARSETS = {"xprv": BASE58, "descriptor": DESCRIPTOR_CHARSET,
             "path": PATH_CHARSET}
 
-
-def charset_pages(name):
-    """The charset for a job, split into screenfuls."""
-    cs = CHARSETS[name]
-    return [cs[i:i + CELLS_PER_PAGE]
-            for i in range(0, len(cs), CELLS_PER_PAGE)]
-
-
-def _echo_with_caret(d, w, h, shown, at):
-    """The typed characters on one line, with a box on the edit position.
-
-    Each character gets the same cell width, so the box lands on one
-    character however wide that character's glyph is.
-    """
-    size = int(h * 0.06)
-    cell = int(w * 0.92) // ECHO_WINDOW
-    x0 = (w - cell * ECHO_WINDOW) // 2
-    y = int(h * 0.16)
-    for i, ch in enumerate(shown):
-        cx = x0 + i * cell + cell // 2
-        d.text((cx, y), ch, font=_font(size),
-               fill=OCHRE if i == at else CREAM, anchor="mm")
-    bx = x0 + at * cell
-    d.rectangle([bx, y + size // 2 + 1, bx + cell - 1, y + size // 2 + 2],
-                fill=OCHRE)
-
-
-#: What C does next, per focus, on the check-entry screen. Each carries
-#: the count so the writer knows how far through the page they are. The
-#: focus a screen is in has to be readable FROM the screen; a modal
-#: surface with no statement of its mode is how a button comes to "do
-#: nothing" (Ben, on the board, 2026-09-05).
-#: EVERY hint names the next move, because C cycles grid -> caret ->
-#: buttons and only the first two steps were written down. ABORT lives on
-#: the button bar, so the only way out of a half-typed page was two
-#: presses of a key nothing mentioned twice. Ben hit exactly that on the
-#: board, 2026-09-11: "I CAN'T get to the abort button."
+#: MODES, not pages (map typing, T2). SeedSigner refuses to page a
+#: charset at all: its keyboard raises if one will not fit, and the
+#: page-turn key it ships is used by no screen. Ben hit the same wall
+#: from the other side, walking off an edge to find the capitals with
+#: nothing saying they were there.
 #:
-#: The hardware calls C abort (`hal`: "c = abort/KEY3"), which is why a
-#: person presses it expecting to leave and why it must lead somewhere
-#: that says what it does.
-CHECK_HINTS = {
-    "grid": "%d/%d typed   ·   DOWN for ABORT, C for the caret",
-    "text": "%d/%d typed   ·   L/R move, A to the grid, C for ABORT",
-    "bar": "%d/%d typed   ·   L/R choose, A does it, DOWN loops round",
-}
+#: base58 splits 34 and 24. TWELVE columns by THREE rows holds 36, and
+#: the third row is what pays for the typed text to be shown as the
+#: numbered boxes the paper backup uses. Measured against the pocket
+#: panel's budget: two rows of boxes and four grid rows come to 0.995 of
+#: the height with no margin at all; three grid rows come to 0.870.
+#:
+#: Cells go from 26 pixels wide to 18 on a 240 panel. They are pointed
+#: at with a cursor, never touched, so what matters is that the glyph is
+#: legible and not that the cell is thumb-sized.
+GRID_COLS = 13
+GRID_ROWS = 3
 
-#: How many typed characters the echo line can hold at this font size.
-ECHO_WINDOW = 30
+#: Two keys ON the grid that move the caret instead of typing. This is
+#: SeedSigner's answer (map typing, T1): its cursor-left, cursor-right
+#: and backspace are keys on the keyboard's last row, reached by
+#: navigating to them, so there is no mode to discover and no button to
+#: learn. Ours needs only the two arrows, because B already deletes.
+#:
+#: They are why the grid is 13 columns and not 12: base58's lowercase is
+#: 34 and a descriptor's is 36, and both need room for these beside them.
+#: ASCII, because the panel font has no arrow glyphs and drew them as
+#: empty boxes. Neither character appears in any charset, so neither can
+#: be mistaken for one a person meant to type.
+CARET_LEFT, CARET_RIGHT = "<", ">"
+CARET_KEYS = (CARET_LEFT, CARET_RIGHT)
 
+def modes(name):
+    """The mode list for a charset: (button label, characters) pairs.
 
-def echo_window(text, caret):
-    """The slice of typed text to echo, and where the caret sits in it.
+    DERIVED, never typed beside the charset. A hand-written mode list is
+    the two-lists defect of TESTING.md rule 11 in its other form: add a
+    character to a charset and one of the two lists forgets it.
 
-    Appending shows the tail, which is what the writer is watching. Editing
-    a character in the middle has to bring that character into view, so the
-    window follows the caret and keeps a little of both sides.
+    A charset that fits one grid gets ONE mode and no button, because a
+    mode button that never changes anything is a control to learn for
+    nothing. Only when it does not fit is it split, and then by the
+    thing a person already knows about characters: case, then symbols.
     """
-    if caret is None or len(text) <= ECHO_WINDOW:
-        start = max(0, len(text) - ECHO_WINDOW) if caret is None else 0
-        return text[start:start + ECHO_WINDOW], (caret or 0) - start
-    start = min(max(0, caret - ECHO_WINDOW // 2), len(text) - ECHO_WINDOW)
-    return text[start:start + ECHO_WINDOW], caret - start
+    # DEDUPED, order kept. DESCRIPTOR_CHARSET is BASE58 + "0()[]'/*#hl",
+    # and base58's lowercase already holds an h, so the grid has been
+    # drawing that character twice since it was written. Two cells that
+    # type the same thing is not a choice, it is a cell wasted on the one
+    # screen with none to spare.
+    chars = "".join(dict.fromkeys(CHARSETS[name]))
+    if len(chars) <= GRID_COLS * GRID_ROWS:
+        return [("", chars)]
+    lower = "".join(c for c in chars if not c.isupper() and not _is_symbol(c))
+    upper = "".join(c for c in chars if c.isupper())
+    symbol = "".join(c for c in chars if _is_symbol(c))
+    out = [("abc", lower), ("ABC", upper)]
+    if symbol:
+        out.append(("#/*", symbol))
+    return [(label, run) for label, run in out if run]
 
 
-def text_entry(w, h, title, text, cursor=0, charset="xprv", page=0,
+def _is_symbol(c):
+    return not c.isalnum()
+
+
+def mode_cells(chars):
+    """One mode's cells: its characters, then the two caret keys."""
+    return list(chars) + list(CARET_KEYS)
+
+
+def mode_grid(chars):
+    """One mode's cells as rows, for drawing and for navigation."""
+    cells = mode_cells(chars)
+    return ["".join(cells[i:i + GRID_COLS])
+            for i in range(0, len(cells), GRID_COLS)]
+
+
+#: How the KEY is laid out, on paper and now on the typing screen too.
+#: 4-character groups, three to a row, four rows to a page: 48 characters
+#: a page and 28 boxes for a 111-character key.
+GROUPS_PER_ROW = 3
+ROWS_PER_PAGE = 4
+CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
+
+
+def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
                secret=False, actions_sel=1, caret=None, hint=None,
-               actions=("CANCEL", "DONE")):
-    """Text on a paged 8x4 grid: passphrases (S2), typed keys and
-    descriptors (S3), and typing a written backup back in to check it.
+               actions=("CANCEL", "DONE"), wrong=(), want_len=None):
+    """Typing, shown the way the backup is shown: numbered boxes of four.
 
-    `secret=True` masks the echo. It was written for the backup
-    passphrase, which went with PLAN A-24; a typed key uses it too,
-    because a key on a panel is shoulder-surfable in the same way. `cursor` indexes the CURRENT page of the grid.
-    The action bar is selectable, so CANCEL really cancels.
+    The old screen drew a flat echo line with a caret while the backup
+    page drew numbered 4-character groups, and a person checking one
+    against the other did the mapping in their head. Ben, on the board,
+    2026-09-18: "the chars written should be like the ones shown ... show
+    a number and then the box with 4 characters, so we can easily
+    navigate it." Box 8 is now a thing that can be found.
 
-    `caret` is the position being EDITED inside `text`. None means the
-    plain appending mode every other screen uses, drawn with a trailing
-    underscore. A number puts a gold box on that character and scrolls the
-    echo to keep it visible, which is what lets a mistyped character 40
-    along be fixed without deleting the 40 after it (Ben, 2026-09-05).
+    `caret` is the position being typed or edited. `wrong` holds the
+    positions that do not match the paper, drawn with a red outline, so
+    the screen says WHICH to fix rather than how many.
+
+    `mode` indexes `modes(charset)`. One mode at a time, never a paged
+    alphabet: see that function for why.
     """
     img, d = _frame(w, h, title)
-    if secret:
-        _fit(d, (w // 2, int(h * 0.16)), "*" * len(text) + "_",
-             int(h * 0.06), CREAM, "mm", int(w * 0.92))
-    elif caret is None:
-        _fit(d, (w // 2, int(h * 0.16)), text[-ECHO_WINDOW:] + "_",
-             int(h * 0.06), CREAM, "mm", int(w * 0.92))
-    else:
-        _echo_with_caret(d, w, h, *echo_window(text, caret))
-    pages = charset_pages(charset)
-    page = max(0, min(page, len(pages) - 1))
-    cells = pages[page]
-    if hint is None and len(pages) > 1:
-        hint = (f"page {page + 1}/{len(pages)}"
-                "   L/R past the end turns the page")
+    runs = modes(charset)
+    label, chars = runs[mode % len(runs)]
+    rows = mode_grid(chars)
+
+    # --- the typed text, as numbered boxes -----------------------------
+    width = max(want_len or 0, len(text))
+    padded = text + " " * (width - len(text))
+    groups = _groups(padded) or [""]
+    here = (caret if caret is not None else max(0, len(text) - 1)) // 4
+    row_of = here // GROUPS_PER_ROW
+    total_rows = -(-len(groups) // GROUPS_PER_ROW)
+    first = max(0, min(row_of - 1 if row_of else 0, max(0, total_rows - 2)))
+    y = int(h * 0.20)
+    for r in range(first, min(first + 2, total_rows)):
+        x = int(w * 0.055)
+        for g in range(r * GROUPS_PER_ROW,
+                       min((r + 1) * GROUPS_PER_ROW, len(groups))):
+            _box(d, x, y, groups[g], g + 1, w, h, secret, caret, wrong,
+                 g * 4)
+            x += int(w * 0.315)
+        y += int(h * 0.105)
+
+    # A screen that shows two rows of four and says so. The box numbers
+    # give the position, but only the bar says there is more below, and
+    # this panel has taught that lesson twice already.
+    if total_rows > 2:
+        scrollbar(d, w, int(h * 0.165), int(h * 0.215), first // 2,
+                  -(-total_rows // 2))
     if hint:
-        _fit(d, (w // 2, int(h * 0.235)), hint,
-             int(h * 0.038), GREY, "mm", int(w * 0.92))
-    cell_w, cell_h = w // 9, int(h * 0.135)
-    x0, y0 = (w - 8 * cell_w) // 2, int(h * 0.29)
-    for i, ch in enumerate(cells):
-        r, c = divmod(i, 8)
-        gx = x0 + c * cell_w + cell_w // 2
-        gy = y0 + r * cell_h + cell_h // 2
-        if i == cursor:
-            d.rounded_rectangle([gx - cell_w // 2 + 2, gy - cell_h // 2 + 2,
-                                 gx + cell_w // 2 - 2, gy + cell_h // 2 - 2],
-                                radius=4, outline=OCHRE)
-        label = "space" if ch == " " else ch
-        _fit(d, (gx, gy), label, int(h * 0.055),
-             CREAM if i == cursor else GREY, "mm", cell_w - 2)
+        _fit(d, (w // 2, int(h * 0.425)), hint, int(h * 0.036), GREY, "mm",
+             int(w * 0.92))
+
+    # --- the character grid --------------------------------------------
+    cell_w, cell_h = w // (GRID_COLS + 1), int(h * 0.125)
+    x0, y0 = (w - GRID_COLS * cell_w) // 2, int(h * 0.53)
+    for r, run in enumerate(rows):
+        for c, ch in enumerate(run):
+            i = r * GRID_COLS + c
+            gx = x0 + c * cell_w + cell_w // 2
+            gy = y0 + r * cell_h
+            if i == cursor:
+                d.rectangle([gx - cell_w // 2 + 1, gy - cell_h // 2 + 1,
+                             gx + cell_w // 2 - 1, gy + cell_h // 2 - 1],
+                            fill=OCHRE)
+            _fit(d, (gx, gy), ch, int(h * 0.05),
+                 INK if i == cursor else CREAM, "mm", cell_w)
+    if label:
+        _fit(d, (int(w * 0.06), int(h * 0.485)), label, int(h * 0.038),
+             OCHRE, "lm", int(w * 0.22))
     _actions(d, w, h, list(actions), actions_sel)
     return img
 
 
-GROUPS_PER_ROW = 3          # 4-char groups across one line
-ROWS_PER_PAGE = 4           # rows between the title and the footer note
-CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
+def _box(d, x, y, group, number, w, h, secret, caret, wrong, index):
+    """One numbered 4-character box, with the caret and the red marks."""
+    bw, bh = int(w * 0.265), int(h * 0.075)
+    d.rectangle([x, y - bh // 2, x + bw, y + bh // 2], outline=GREY, width=1)
+    _fit(d, (x + 1, y - bh // 2 - int(h * 0.026)), str(number),
+         int(h * 0.030), GREY, "lm", bw)
+    step = bw / 4
+    for i, ch in enumerate(group):
+        cx = x + step * (i + 0.5)
+        pos = index + i
+        if pos in wrong:
+            d.rectangle([cx - step / 2 + 1, y - bh // 2 + 1,
+                         cx + step / 2 - 1, y + bh // 2 - 1],
+                        outline=RED, width=2)
+        if caret is not None and pos == caret:
+            d.rectangle([int(cx - step / 2) + 1, y + bh // 2 - 2,
+                         int(cx + step / 2) - 1, y + bh // 2],
+                        fill=OCHRE)
+        _fit(d, (cx, y), "*" if secret and ch != " " else ch,
+             int(h * 0.048), CREAM if ch != " " else GREY, "mm", int(step))
 
 
 def text_pages(text):
@@ -1492,50 +1610,6 @@ def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
         # is, which the old VERIFY label did not, because it did nothing.
         _actions(d, w, h, ["DONE", "CHECK IT"], actions_sel)
     return img
-
-def check_result(w, h, typed, wrong, label, page=0, pages=1):
-    """The verdict on one page of a backup that was typed back in.
-
-    `wrong` is the positions in `typed` that do not match, so the writer
-    sees WHICH characters to correct rather than being told the page is
-    wrong and left to find it. An empty `wrong` is a pass.
-
-    Core Signer can only mark the wrong ones because it holds the true key at
-    this moment, which it already does: this screen runs inside the paper
-    backup, where the key is on the panel anyway. It opens no new window
-    on the key. Core, separately, is what confirms the whole key matches
-    (signer.opens_wallet); this screen is the human half.
-    """
-    passed = not wrong
-    img, d = _frame(w, h, f"{label}  ·  CHECK  {page + 1}/{pages}"
-                    if pages > 1 else f"{label}  ·  CHECK")
-    _fit(d, (w // 2, int(h * 0.20)),
-         "this page matches" if passed
-         else f"{len(wrong)} character{'s' if len(wrong) > 1 else ''}"
-              " to correct",
-         int(h * 0.06), OCHRE if passed else RED, "mm", int(w * 0.92))
-    # The same 4-character groups the backup page used, so the eye lands
-    # in the same place on both screens.
-    groups = _groups(typed)
-    size = int(h * 0.07)
-    for row_start in range(0, len(groups), GROUPS_PER_ROW):
-        row = groups[row_start:row_start + GROUPS_PER_ROW]
-        y = int(h * (0.34 + (row_start // GROUPS_PER_ROW) * 0.125))
-        cell = int(w * 0.86) // (GROUPS_PER_ROW * 5)
-        x0 = (w - cell * (len(row) * 5 - 1)) // 2
-        for gi, group in enumerate(row):
-            for ci, ch in enumerate(group):
-                at = (row_start + gi) * 4 + ci
-                cx = x0 + (gi * 5 + ci) * cell + cell // 2
-                d.text((cx, y), ch, font=_font(size),
-                       fill=RED if at in wrong else CREAM, anchor="mm")
-    if pages > 1:
-        scrollbar(d, w, int(h * 0.16), int(h * 0.62), page, pages)
-    _actions(d, w, h, ["DONE"] if passed else ["ABORT", "FIX"],
-             0 if passed else 1)
-    return img
-
-
 def verified(w, h, kind="ok"):
     """`kind` may carry newlines; each line is fitted separately."""
     img, d = _frame(w, h)

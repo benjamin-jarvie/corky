@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "coresigner"))
-from PIL import ImageDraw  # noqa: E402
+from PIL import Image, ImageDraw  # noqa: E402
 import screens  # noqa: E402
 import qrchannel  # noqa: E402
 
@@ -188,10 +188,23 @@ CASES = {
     "text-entry": lambda w, h: screens.text_entry(
         w, h, "BIP32  EXTENDED  PRIVATE  KEY", "tprv8ZgxMBicQKsPe", 7,
         secret=True, caret=17),
-    "check-result-pass": lambda w, h: screens.check_result(
-        w, h, XPRV[:48], set(), "KEY  D2B7E45C", page=0, pages=3),
-    "check-result-fail": lambda w, h: screens.check_result(
-        w, h, XPRV[:48], {3, 11, 40}, "KEY  D2B7E45C", page=1, pages=3),
+    # The typing screen, on the box model (map typing, T3). Worst case
+    # is a page with mistakes marked, the caret on one of them, and the
+    # widest mode drawn under it.
+    "typing": lambda w, h: screens.text_entry(
+        w, h, "KEY  73C5DA0A  ·  TYPE  1/3", "xprv9s21ZrQH143K3QTDL",
+        cursor=0, charset="xprv", mode=0, caret=20,
+        hint="A types  ·  B deletes  ·  C for ABC",
+        actions=("ABORT", "CHECK"), wrong={3, 11}, want_len=48),
+    "typing-caps": lambda w, h: screens.text_entry(
+        w, h, "KEY  73C5DA0A  ·  TYPE  1/3", "xprv9s21ZrQH143K3QTDL",
+        cursor=25, charset="xprv", mode=1, caret=21,
+        hint="A types  ·  B deletes  ·  C for abc",
+        actions=("ABORT", "CHECK"), want_len=48),
+    "typing-descriptor": lambda w, h: screens.text_entry(
+        w, h, "DESCRIPTOR", "wpkh([73c5da0a/84h", cursor=37,
+        charset="descriptor", mode=0, caret=18,
+        hint="A types  ·  B deletes  ·  C for ABC", want_len=40),
     "verified": lambda w, h: screens.verified(
         w, h, "key 73C5DA0A\nowns this address"),
     "result-ok": lambda w, h: screens.result(w, h),
@@ -321,13 +334,13 @@ for w, h in [(320, 240), (240, 240)]:
 
 # EVERY screen must have a case, or the two checks above are reporting on
 # whatever somebody remembered to add. Six had none until 2026-09-08:
-# about, scanning, qr_export, text_entry, check_result and verified,
+# about, scanning, qr_export, text_entry and verified,
 # which between them are the export card, the viewfinder, the keyboard a
 # key is typed into and the screen that says a paper backup is good.
 #
 # A screen is a public function in screens.py whose first two parameters
 # are w and h. That leaves out scrollbar (which draws onto a canvas it is
-# handed), and charset_pages, echo_window and text_pages, which return
+# handed), and modes, mode_cells and text_pages, which return
 # data rather than a frame.
 _tree = ast.parse((ROOT / "coresigner" / "screens.py").read_text())
 _screens = [n.name for n in _tree.body
@@ -475,6 +488,82 @@ if not any("m/48h" in t for t in
     ok("and shows NO path when this key is not one of the cosigners")
 else:
     bad("the review shows a stranger's path as the wallet being signed for")
+
+# --- The receive address screen, after E-7 -----------------------------
+# Five things Ben read wrong on the board on 2026-09-18, exporting a key
+# for the first time. Each is asserted by what the screen SAYS, per
+# TESTING.md rule 11, so a layout change cannot quietly undo one.
+
+ADDR42 = "bcrt1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"
+
+
+def _drawn(render):
+    """Every string one render draws, with the box it drew it in."""
+    _ctx.update(w=320, h=240, name="address", over=[], drawn=[])
+    render(320, 240)
+    return list(_ctx["drawn"])
+
+
+_export = _drawn(lambda w, h: screens.address_page(w, h, 0, ADDR42, "wpkh",
+                                                   total=3))
+_browse = _drawn(lambda w, h: screens.address_page(w, h, 10, ADDR42, "wpkh",
+                                                   switchable=True))
+_said = [t for t, _ in _export]
+
+# 1. WHICH address, in the words a person uses out loud.
+if any(t.startswith("1ST  RECEIVE") for t in _said):
+    ok("the address screen says WHICH address it is, as 1ST")
+else:
+    bad(f"the address screen never says 1ST: {_said[:2]}")
+if any("11TH  RECEIVE" in t for t, _ in _browse):
+    ok("and counts on, in ordinals, past the teens")
+else:
+    bad("index 10 is not drawn as 11TH")
+
+# 2. NOT the policy, on the walk after an export, where it was chosen
+#    two screens ago. It stays on the endless browse, where LEFT and
+#    RIGHT change it and nothing else would show that they had.
+if not any("SEGWIT" in t for t in _said):
+    ok("the export walk does not repeat the policy you already chose")
+else:
+    bad("the policy is still on the export walk's address screen")
+if any("NATIVE SEGWIT" in t for t, _ in _browse):
+    ok("the browse, where LEFT and RIGHT switch it, still names it")
+else:
+    bad("the browse screen no longer says which policy it is showing")
+
+# 3. No footer.
+if not any("compare" in t for t in _said + [t for t, _ in _browse]):
+    ok("the compare-every-group footer is gone")
+else:
+    bad("the compare-every-group footer is still drawn")
+
+# 4. BIGGER. Measured against the layout Ben complained about, which
+#    fixed four groups to a row and shrank from h*0.075 to fit the
+#    width. Not a re-derivation of the new rule: it is the old one.
+_probe = ImageDraw.Draw(Image.new("RGB", (320, 240)))
+_was = int(240 * 0.075)
+while _was > int(240 * 0.03):
+    if _probe.textlength("W" * 19, font=screens._font(_was)) <= int(320 * .92):
+        break
+    _was -= 1
+_old_h = _probe.textbbox((0, 0), "8z30", font=screens._font(_was))[3]
+_new_h = max(b[3] - b[1] for t, b in _export if len(t) == 4)
+if _new_h >= _old_h * 1.25:
+    ok(f"the address type grew from {_old_h}px to {_new_h}px tall")
+else:
+    bad(f"the address type is {_new_h}px tall against {_old_h}px before; "
+        "E-7 item 5 asked for the room the footer freed")
+
+# 5. The hardened mark, in the notation of the wallet beside you.
+_ctx.update(w=320, h=240, name="qr-export", over=[], drawn=[])
+screens.qr_export(320, 240, Image.new("RGB", (100, 100)), "73c5da0a",
+                  "wpkh", "m/84h/0h/0h")
+_caption = [t for t, _ in _ctx["drawn"] if "84" in t]
+if _caption and "m/84'/0'/0'" in _caption[0]:
+    ok("the export caption writes hardened steps the way Sparrow does")
+else:
+    bad(f"the export caption still draws Core's h: {_caption}")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

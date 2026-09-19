@@ -41,6 +41,16 @@ descriptor function". Core Signer and Sparrow both know the standard
 convention and apply it for you. Software that expects a 12 or 24 word
 seed phrase does not, because Core Signer does not use one.
 
+## Checking an address
+
+The device shows a receive address in groups of four, with the first and
+last group in gold. **Read every group.** The gold is there to mark the
+ends of the string, and it does not say the ends are enough.
+
+Malware that swaps an address on a laptop screen picks a replacement
+that starts and ends the same way. Matching only the two gold groups is
+the exact shortcut that attack is built to survive.
+
 ## How much it will sign
 
 | | ceiling | measured |

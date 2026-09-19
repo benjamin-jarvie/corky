@@ -56,7 +56,8 @@ SCROLLABLE = {
             w, h, [(f"thing {i}", "off", "normal") for i in range(20)], 9),
         "bounded"),
     "address_page, browsing": (
-        lambda w, h: screens.address_page(w, h, 7, ADDR, "wpkh"), "endless"),
+        lambda w, h: screens.address_page(w, h, 7, ADDR, "wpkh",
+                                          switchable=True), "endless"),
     "address_page, the three after an export": (
         lambda w, h: screens.address_page(w, h, 1, ADDR, "wpkh", total=3),
         "bounded"),
@@ -68,10 +69,11 @@ SCROLLABLE = {
         lambda w, h: screens.backup_page(
             w, h, screens.text_pages(KEY)[1], "KEY 73C5DA0A",
             page=1, pages=3), "bounded"),
-    "check_result": (
-        lambda w, h: screens.check_result(
-            w, h, screens.text_pages(KEY)[0], {3}, "KEY 73C5DA0A",
-            page=1, pages=3), "bounded"),
+    "text_entry": (
+        lambda w, h: screens.text_entry(
+            w, h, "KEY 73C5DA0A  ·  TYPE 1/3", screens.text_pages(KEY)[0][:20],
+            cursor=0, charset="xprv", caret=20, wrong={3}, want_len=48),
+        "bounded"),
     "review": (
         lambda w, h: screens.review(
             w, h, [(f"{ADDR}{i}", 1.0) for i in range(6)], 0.0001, page=1),

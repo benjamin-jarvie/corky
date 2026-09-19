@@ -315,51 +315,58 @@ def main():
         # build with no camera. Both modes were shipped once with a charset
         # that could not express them (no 'B', no brackets), so these type a
         # REAL xprv and a REAL descriptor character by character.
-        import main as _main            # for _grid_move, below
         import screens as _scr          # was imported by a session A-22 removed
         def text_keys(charset, want):
-            """Keys that type `want` on the paged text grid, computed by
-            walking the same rules main._text_entry uses."""
-            pages = _scr.charset_pages(charset)
-            page, cur, out = 0, 0, []
+            """Keys that type `want`, then take the bar's action.
+
+            Re-states the grid's rules from the SCREEN's shape, never
+            read out of main (TESTING.md rule 2). One mode at a time
+            since map typing T2, so a character in another mode costs a
+            C first, and L and R wrap inside a row.
+            """
+            import main as _main
+            runs = _scr.modes(charset)
+            cols = _scr.GRID_COLS
+            mode, cur, out = 0, 0, []
+
+            def route(cells, start, target):
+                seen, queue = {start: ""}, [start]
+                while queue:
+                    at = queue.pop(0)
+                    if at == target:
+                        return seen[at]
+                    row = at // cols
+                    lo = row * cols
+                    hi = min(lo + cols, len(cells)) - 1
+                    for k, nxt in (("u", at - cols if at >= cols else at),
+                                   ("d", at + cols if at + cols < len(cells)
+                                    else at),
+                                   ("l", hi if at == lo else at - 1),
+                                   ("r", lo if at == hi else at + 1)):
+                        if nxt not in seen:
+                            seen[nxt] = seen[at] + k
+                            queue.append(nxt)
+                raise AssertionError("no route")
+
             for ch in want:
-                tp = next(i for i, pg in enumerate(pages) if ch in pg)
-                ti = pages[tp].index(ch)
-                while page < tp:                  # r past the end pages on
-                    n = len(pages[page])
-                    while cur < n - 1:
-                        out.append("r"); cur += 1
-                    out.append("r"); page += 1; cur = 0
-                while page > tp:                  # l past the start pages back
-                    while cur > 0:
-                        out.append("l"); cur -= 1
-                    out.append("l"); page -= 1; cur = len(pages[page]) - 1
-                n = len(pages[page])
-                while cur + 8 <= ti:
-                    out.append("d"); cur = min(n - 1, cur + 8)
-                while cur - 8 >= ti:
-                    out.append("u"); cur = max(0, cur - 8)
-                while cur < ti:
-                    out.append("r"); cur += 1
-                while cur > ti:
-                    out.append("l"); cur -= 1
-                out.append("a")
-            # Walk to the button bar and take its action. The centre
-            # press used to finish from anywhere; centre is SELECT on
-            # every screen now (Ben, 2026-09-18), so finishing means
-            # reaching the buttons. The count is exact because the d-pad
-            # LOOPS: one press too many comes back to the top of the grid.
+                target_mode = next(m for m, (_l, run) in enumerate(runs)
+                                   if ch in run)
+                while mode != target_mode:
+                    mode = (mode + 1) % len(runs)
+                    cur = min(cur, len(_scr.mode_cells(runs[mode][1])) - 1)
+                    out.append("c")
+                cells = _scr.mode_cells(runs[mode][1])
+                target = cells.index(ch)
+                out.append(route(cells, cur, target) + "a")
+                cur = target
+            cells = _scr.mode_cells(runs[mode][1])
             downs = 0
-            while True:
-                nxt = _main._grid_move("d", pages, page, cur)
-                if nxt == (page, cur):
-                    break
-                page, cur = nxt
+            while _main._cell_move("d", cells, cur) != cur:
+                cur = _main._cell_move("d", cells, cur)
                 downs += 1
             out.append("d" * (downs + 1) + "a")
             return "".join(out)
 
-        stickt = None
         typed_xprv = XPRV
         assert not {c for c in typed_xprv
                     if c not in _scr.CHARSETS["xprv"]}, \
