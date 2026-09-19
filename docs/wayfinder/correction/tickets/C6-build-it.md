@@ -78,10 +78,28 @@ mistake and on, dismiss, type the rest.
 
 48 suites green. Typing a key in is 472 presses, checking one 469.
 
-### Owed
+### On the board
 
-**The house rule of this map is not yet satisfied.** The same drive,
-with a mistake in it, has to run on the board against its own installed
-copy. It passed on this machine; the board dropped off the network
-mid-push and the run has not happened. `diag4.py` in the session
-scratchpad is the script.
+The house rule of this map, satisfied 2026-09-19 against
+`/opt/coresigner/coresigner`, the code the board is running.
+
+A key typed with character 19 (`Y`) entered as `2`:
+
+    typed back:     the key exactly
+    corrections:    [(5, 3)]
+    the message:    shown, naming box 5 character 3
+    boxes drawn:    1 to 28
+    title:          KEY · 16/111  ...  KEY · ALL 111 TYPED
+
+And the rest of C6 and C7, on the same copy:
+
+| claim | measured |
+|---|---|
+| the paper numbers 1 to 28 across its three parts | `[1..28]` |
+| the red mark is two segments ON the border | 162 pixels on 6 rows, `[62, 63, 64, 86, 87, 88]`, which is the top and bottom edges of one box and nothing between them |
+| DONE on a 16-of-111 key does not return | did not return |
+| the corrections screen renders both pages on both panels | yes |
+
+This is the check that was missing three times over. Reading the loop
+found two real defects and neither was the one Ben was hitting; typing
+a key with a mistake in it finds it in one run.

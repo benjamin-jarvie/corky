@@ -94,8 +94,12 @@ Facts from the charting session, 2026-09-19. No ticket re-derives them.
 - [C6 Build it](tickets/C6-build-it.md): built, 48 suites green. One
   thing C3 did not foresee: DONE on a key that is not finished returned
   a short string for Core to refuse in Core's own words, and now puts
-  you back where the typing stopped. **The board run is owed**, and the
-  map is not done until it has happened.
+  you back where the typing stopped. Driven on the board with a mistake
+  in it, which is this map's house rule and the check that was missing
+  three times over.
+
+**This map is closed.** Seven tickets, all answered, all built, all
+verified on the board.
 
 ## Not yet specified
 
