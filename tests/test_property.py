@@ -146,9 +146,13 @@ def prop_no_key_reaches_the_panel():
             funnels = {
                 "_hold":
                     lambda s: session()._hold(f"import failed: {s}"),
+                # NOT "is not valid": that message is replaced whole
+                # with a sentence, so it would prove the redactor
+                # nothing. This is a Core refusal quoting a key that
+                # the funnel has to redact itself.
                 "_show_core_error":
                     lambda s: session()._show_core_error(
-                        RuntimeError(f"key '{s}' is not valid")),
+                        RuntimeError(f"importdescriptors: '{s}' refused")),
             }
             for label, run in funnels.items():
                 seen.clear()
@@ -159,6 +163,18 @@ def prop_no_key_reaches_the_panel():
                     f"in the journal on the card: {seen[0][:60]}")
                 assert "<key redacted>" in seen[0], (
                     f"{label} did not redact: {seen[0][:60]}")
+
+            # The one message that is replaced rather than redacted.
+            # Core says `pkh(): key '<yours>' is not valid` for anything
+            # that is not a key, and the panel says so in its own words,
+            # so no part of the key survives to need redacting.
+            seen.clear()
+            session()._show_core_error(
+                RuntimeError(f"pkh(): key '{secret}' is not valid"))
+            assert seen and secret not in seen[0], (
+                f"a refused key put the key on the panel: {seen[0][:60]}")
+            assert "not a valid key" in seen[0], (
+                f"a refused key does not say so plainly: {seen[0][:60]}")
     finally:
         scr.result = real
     # And the redactor must leave an ordinary message alone, or this

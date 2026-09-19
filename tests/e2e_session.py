@@ -352,8 +352,16 @@ def main():
                 target_mode = next(m for m, (_l, run) in enumerate(runs)
                                    if ch in run)
                 while mode != target_mode:
+                    # _same_cell, like _cell_move below. Where the
+                    # cursor lands after a toggle cannot be re-derived
+                    # from the screen's shape, because it is not about
+                    # shape: it is main's rule, and a copy of it here
+                    # walked the grid from a cell the device had
+                    # already left when the rule changed (2026-09-18).
+                    here = _scr.mode_cells(runs[mode][1])
                     mode = (mode + 1) % len(runs)
-                    cur = min(cur, len(_scr.mode_cells(runs[mode][1])) - 1)
+                    cur = _main._same_cell(
+                        here, cur, _scr.mode_cells(runs[mode][1]))
                     out.append("c")
                 cells = _scr.mode_cells(runs[mode][1])
                 target = cells.index(ch)

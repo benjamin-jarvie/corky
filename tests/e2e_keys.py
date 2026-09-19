@@ -69,8 +69,15 @@ def grid_presses(charset, want):
     for ch in want:
         want_mode, target = _mode_of(charset, ch)
         while mode != want_mode:              # C cycles, one press each
+            # _same_cell and not a copy of it. Where the cursor lands
+            # after a toggle is the device's rule, and a script holding
+            # its own version of that rule is TESTING.md rule 11's two
+            # lists: the toggle changed on 2026-09-18 and this walked
+            # the grid from a cell the device had already left.
+            here = scr.mode_cells(runs[mode][1])
             mode = (mode + 1) % len(runs)
-            cur = min(cur, len(scr.mode_cells(runs[mode][1])) - 1)
+            cur = coresigner_main._same_cell(
+                here, cur, scr.mode_cells(runs[mode][1]))
             out.append("c")
         cells = scr.mode_cells(runs[mode][1])
         out.append(_cell_route(cells, cur, target) + "a")

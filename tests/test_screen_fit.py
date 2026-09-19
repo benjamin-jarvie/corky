@@ -681,5 +681,29 @@ elif "1 is a one" not in _HINT:
 else:
     ok("the key charset is base58, and the screen says the stroke is a 1")
 
+# 6. THE CARET SITS ON THE BORDER, in ink. A gold bar inside the box
+#    took interior height the bigger type wants, and two marks stacked
+#    in one box read as crammed (Ben, 2026-09-18).
+_INK = ImageColor.getrgb(screens.INK)
+
+
+def _row_colours(img, y):
+    return [img.getpixel((x, y)) for x in range(320)]
+
+
+_caret = screens.text_entry(320, 240, "MASTER  PRIVATE  KEY", "tprv", 0,
+                            "xprv", 0, caret=2, hint=_HINT)
+_plain = screens.text_entry(320, 240, "MASTER  PRIVATE  KEY", "tprv", 0,
+                            "xprv", 0, caret=None, hint=_HINT)
+_moved = [(x, y) for y in range(240) for x in range(320)
+          if _caret.getpixel((x, y)) != _plain.getpixel((x, y))]
+if not _moved:
+    bad("the caret is not drawn at all")
+elif any(_caret.getpixel(p) != _INK for p in _moved):
+    bad("the caret paints something other than ink over the box")
+else:
+    _ys = {y for _x, y in _moved}
+    ok(f"the caret cuts an ink notch in the border, on {len(_ys)} rows")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

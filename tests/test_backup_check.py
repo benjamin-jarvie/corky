@@ -21,7 +21,7 @@ import hal                              # noqa: E402
 import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
 import signer                           # noqa: E402
-from e2e_keys import text_keys          # noqa: E402
+from e2e_keys import commit_presses, text_keys  # noqa: E402
 
 # A real regtest master private key, the one every other suite signs with.
 KEY = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
@@ -231,6 +231,91 @@ if typed is not None:
     bad("B with nothing typed did not leave the check entry")
 else:
     ok("B with nothing typed leaves, the way B leaves everywhere else")
+
+# --- 6b. the case toggle keeps the letter you were on ------------------
+# Ben, on the board, 2026-09-18: "Should the numbers be after the
+# characters so when going to and fro the capitals and normal letters,
+# we are closer to where we were on the alphabet?" They moved, and the
+# cursor lands on the same letter rather than near it.
+
+_UP = screens.mode_cells(screens.modes("xprv")[1][1])
+for _ch in "apz":
+    _at = _CELLS.index(_ch)
+    _to = _UP[coresigner_main._same_cell(_CELLS, _at, _UP)]
+    if _to != _ch.upper():
+        bad(f"C from {_ch!r} landed on {_to!r}, not {_ch.upper()!r}")
+        break
+else:
+    ok("C carries the cursor to the same letter in the other case")
+
+for _ch in (screens.CARET_LEFT, screens.CARET_RIGHT):
+    _at = _CELLS.index(_ch)
+    if _UP[coresigner_main._same_cell(_CELLS, _at, _UP)] != _ch:
+        bad(f"C moved the cursor off the {_ch!r} key")
+        break
+else:
+    ok("and leaves the caret keys where they are, which are in both")
+
+_five = _CELLS.index("5")
+if coresigner_main._same_cell(_CELLS, _five, _UP) == 0:
+    ok("a digit has no other case, so C starts at the first capital")
+else:
+    bad("C from a digit lands somewhere with no relation to the digit")
+
+# --- 6c. Core's refusal, in words a person can act on ------------------
+# What Ben read on the board (2026-09-18), cut at sixty characters with
+# the verdict still to come:
+#   "getdescriptorinfo: error code: -5 error message: pkh(): key"
+
+CORE_SAID = ("getdescriptorinfo: error code: -5\n\nerror message:\n"
+             "pkh(): key 'tprv8ZgxMBicQKsPe5YM' is not valid")
+said = coresigner_main.Session._core_says(RuntimeError(CORE_SAID))
+if "not a valid key" in said and "pkh" not in said and len(said) < 60:
+    ok(f"a refused key reads as {said!r}")
+else:
+    bad(f"a refused key still reads as Core's own jargon: {said!r}")
+
+other = coresigner_main.Session._core_says(
+    RuntimeError("loadwallet: error code: -4\n\nerror message:\n"
+                 "Wallet file verification failed."))
+if other == "Wallet file verification failed.":
+    ok("and any other refusal keeps Core's own last line")
+else:
+    bad(f"an unrelated Core error was mangled: {other!r}")
+
+# --- 6d. a refused key reopens the grid holding what was typed ---------
+# Core refused Ben's key on the board (2026-09-18) and the screen threw
+# all 111 characters away, so one wrong character cost the whole key
+# again. The proof is that the SECOND attempt carries the same string
+# with no typing presses between the two.
+
+TRIES = []
+
+
+def _refuse_once(_rpc, text):
+    TRIES.append(text)
+    if len(TRIES) == 1:
+        raise RuntimeError("getdescriptorinfo: error code: -5\n\n"
+                           "error message:\npkh(): key 'x' is not valid")
+    return signer.WALLET
+
+
+TYPED = "tprv8ZgxMBicQ"
+_real_open = signer.open_session_xprv
+signer.open_session_xprv = _refuse_once
+try:
+    sess = session(text_keys("xprv", TYPED)      # type it, then DONE
+                   + "a"                         # dismiss FAILED
+                   + commit_presses("xprv", 0, 0))   # DONE again, as-is
+    sess._key_xprv_typed()
+finally:
+    signer.open_session_xprv = _real_open
+
+if TRIES == [TYPED, TYPED]:
+    ok("a refused key comes back typed, and DONE alone sends it again")
+else:
+    bad(f"the second attempt sent {TRIES[1:]!r}, not the key already "
+        "typed. A refusal costs all 111 characters again")
 
 # --- 7. every screen that can show a key is marked sensitive ------------
 # hal.DevDisplay blanks a frame shown with sensitive=True, which is what

@@ -119,6 +119,12 @@ def _classify_qr(payload):
 #: from 56MB to 45MB by not reading previous transactions it never used,
 #: and the headroom moved 2MB. No further work of ours raises this
 #: number; a board with more RAM does.
+#: How much of a message the parked screen shows. `result` shrinks the
+#: type to fit any length, so this is legibility and not layout: past
+#: about this much, the sentence is too small to read on either panel.
+#: Applied AFTER redaction, never before; see Session._core_says.
+MESSAGE_CHARS = 60
+
 MAX_SIGNABLE_INPUTS = 150
 
 #: The same ceiling for a QUORUM, which costs more per input: a witness
@@ -268,6 +274,27 @@ def _wrong_at(typed, want):
     """
     return {n for n, ch in enumerate(typed)
             if n >= len(want) or ch != want[n]}
+
+
+def _same_cell(cells, cur, into):
+    """Where the cursor goes when the case toggles.
+
+    Onto the SAME letter in the other case. Ben asked whether moving
+    the digits after the letters would land him "closer to where we
+    were on the alphabet" (on the board, 2026-09-18); the digits did
+    move, which is what makes the two grids read alike, and this puts
+    the cursor exactly there rather than close to it.
+
+    A digit has no other case and the capitals hold none, so a toggle
+    from one starts at the beginning instead of landing somewhere that
+    can claim no relation to where it came from. The two caret keys are
+    in both modes and map to themselves.
+    """
+    ch = cells[cur] if cur < len(cells) else ""
+    for other in (ch.swapcase(), ch):
+        if other and other in into:
+            return into.index(other)
+    return 0
 
 
 def _next_gap(typed, want, after):
@@ -428,18 +455,41 @@ class Session:
             worker.join(timeout=1)
         return halt
 
-    def _show_core_error(self, exc):
-        """Put a Core failure on screen instead of taking the app down.
+    @staticmethod
+    def _core_says(exc):
+        """Core's refusal, as the shortest true sentence about it.
 
         Core's error strings carry an "error code: -4" line and a blank
         line before the message; the last non-empty line is the part a
-        person can act on.
+        person can act on. Ten call sites put `str(exc)[:60]` on the
+        screen instead, and the typed-key path showed Ben
+        "getdescriptorinfo: error code: -5 error message: pkh(): key",
+        cut at sixty characters in the middle of Core's own jargon
+        with the verdict still to come (on the board, 2026-09-18).
+
+        The one refusal a person meets often gets words: Core says
+        `pkh(): key '<yours>' is not valid` for anything that is not a
+        key, and that is Core's verdict and not ours, so quoting it in
+        plainer words breaks no rule (PLAN A-11).
+
+        NOT TRUNCATED HERE. Cutting the line to a screenful before the
+        funnel redacts it slices a key in half, and half a key does not
+        match the redactor's pattern, so the front of one reaches the
+        panel. The property suite caught it the same day (2026-09-18).
+        Redaction first, then the funnel shortens what is left.
         """
         lines = [ln.strip() for ln in str(exc).splitlines() if ln.strip()]
-        detail = lines[-1] if lines else str(exc)
-        # The other funnel, redacted for the same reason as _hold.
-        self.display.show(screens.result(self.w, self.h, ok=False,
-                                         detail=signer.redact(detail)))
+        last = lines[-1] if lines else str(exc)
+        if "is not valid" in last and "key" in last:
+            return "that is not a valid key, check what you typed"
+        return last
+
+    def _show_core_error(self, exc):
+        """Put a Core failure on screen instead of taking the app down."""
+        # Redacted for the same reason as _hold.
+        self.display.show(screens.result(
+            self.w, self.h, ok=False,
+            detail=signer.redact(self._core_says(exc))[:MESSAGE_CHARS]))
         self.buttons.read()
 
     def state_home(self):
@@ -499,9 +549,10 @@ class Session:
         forget. screens.result would be the better seam still, but
         screens.py is Layer 3 and may not import the redactor.
         """
-        self.display.show(screens.result(self.w, self.h, ok=ok,
-                                         detail=signer.redact(detail),
-                                         label="DONE" if ok else "FAILED"))
+        self.display.show(screens.result(
+            self.w, self.h, ok=ok,
+            detail=signer.redact(detail)[:MESSAGE_CHARS],
+            label="DONE" if ok else "FAILED"))
         self.buttons.read()
 
     #: Everything a load, a review or a signature can fail with that is
@@ -1218,7 +1269,7 @@ class Session:
         except self.HANDLED as exc:
             # Hold the message: without a key wait, the Keys screen
             # repaints at once and the user sees only a flicker.
-            self._hold(str(exc)[:60])
+            self._hold(self._core_says(exc))
             return False
 
     def _key_by_scan(self):
@@ -1263,7 +1314,7 @@ class Session:
             parts = parts[1:] + ["1 is a one"]
         return "  ·  ".join(parts)
 
-    def _text_entry(self, title, charset, secret=False):  # noqa: C901 - one keypad state machine; splitting it would hide the rules
+    def _text_entry(self, title, charset, secret=False, start=""):  # noqa: C901 - one keypad state machine; splitting it would hide the rules
         """Drive the paged text grid for one alphabet.
 
         u/d/l/r move the cursor; l and r at a row edge turn the page, so
@@ -1273,7 +1324,9 @@ class Session:
         cancel, which is distinct from the empty string.
         """
         runs = screens.modes(charset)
-        text, cur, mode, sel, caret = "", 0, 0, None, 0
+        # `start` reopens the grid on what was typed before, which is how
+        # a refusal costs a correction and not the whole string.
+        text, cur, mode, sel, caret = start, 0, 0, None, len(start)
         while True:
             cells = screens.mode_cells(runs[mode][1])
             self.display.show(screens.text_entry(
@@ -1318,7 +1371,8 @@ class Session:
                     caret += 1
             elif key == "c" and len(runs) > 1:
                 mode = (mode + 1) % len(runs)       # abc / ABC, one press
-                cur = min(cur, len(screens.mode_cells(runs[mode][1])) - 1)
+                cur = _same_cell(cells, cur,
+                                 screens.mode_cells(runs[mode][1]))
             elif key == "b":
                 if not text:
                     # Nothing to delete, so B is what B is everywhere else
@@ -1465,16 +1519,31 @@ class Session:
         return text
 
     def _key_xprv_typed(self):
-        """S3: a master private key typed on the grid."""
-        text = self._text_entry("MASTER  PRIVATE  KEY", "xprv")
-        if not text:
-            return False
-        stop = self._busy("importing into Core…")
-        try:
-            self.key = signer.open_session_xprv(self.rpc, text)
-        finally:
-            stop()
-        return True
+        """S3: a master private key typed on the grid.
+
+        WHAT WAS TYPED SURVIVES A REFUSAL. Core refuses anything that is
+        not a key, and it refused Ben's on the board (2026-09-18). The
+        screen then threw all 111 characters away and sent him back to
+        the Keys menu, so one wrong character cost the whole key again.
+        The grid reopens holding what was typed, with the cursor on the
+        end of it.
+        """
+        text = ""
+        while True:
+            text = self._text_entry("MASTER  PRIVATE  KEY", "xprv",
+                                    start=text)
+            if not text:
+                return False
+            stop = self._busy("importing into Core…")
+            try:
+                self.key = signer.open_session_xprv(self.rpc, text)
+            except self.HANDLED as exc:
+                stop()          # before _hold blocks; see _tool_leak_check
+                self._hold(self._core_says(exc))
+                continue
+            finally:
+                stop()
+            return True
 
     #: The check itself is image/leak-check.sh, written once and read two
     #: ways: by a person over a terminal, and by this screen through
@@ -1733,7 +1802,8 @@ class Session:
                     caret = _next_gap(typed, want, caret)
             elif key == "c" and len(runs) > 1:
                 mode = (mode + 1) % len(runs)
-                cur = min(cur, len(screens.mode_cells(runs[mode][1])) - 1)
+                cur = _same_cell(cells, cur,
+                                 screens.mode_cells(runs[mode][1]))
             elif key == "b":
                 if not typed:
                     return None, 0

@@ -1340,7 +1340,14 @@ def keymaterial_warning(w, h, kind="descriptor", selected=1):
     return img
 
 
-BASE58 = ("123456789abcdefghijkmnopqrstuvwxyz"
+#: LETTERS FIRST, digits after them. base58's own order puts the digits
+#: first, which made the top row of the lowercase grid `1..9abcd` and
+#: the top row of the capitals `A..N`, so pressing C changed the whole
+#: shape of what you were reading. Letters first means both grids open
+#: with the same letters in the same places, and only the tail moves
+#: (Ben, on the board, 2026-09-18). Nothing here encodes or decodes
+#: base58; this string is the keyboard and its order is a layout.
+BASE58 = ("abcdefghijkmnopqrstuvwxyz123456789"
           "ABCDEFGHJKLMNPQRSTUVWXYZ")                      # 58: no 0, O, I, l
 DESCRIPTOR_CHARSET = BASE58 + "0()[]'/*#hl"                 # 70
 
@@ -1565,9 +1572,14 @@ def _box(d, x, y, group, number, w, h, secret, caret, wrong, index,
                          cx + slot / 2 - 2, y + bh // 2 - 2],
                         outline=RED, width=2)
         if caret is not None and pos == caret:
-            d.rectangle([int(cx - slot / 2) + 3, y + bh // 2 - 4,
-                         int(cx + slot / 2) - 3, y + bh // 2 - 2],
-                        fill=OCHRE)
+            # ON the border, not above it. A gold bar inside the box
+            # took interior height the bigger type now wants, and two
+            # marks stacked in one box read as crammed (Ben, on the
+            # board, 2026-09-18). Drawn in ink, it cuts a notch in the
+            # gold edge instead, and costs the characters nothing.
+            d.rectangle([int(cx - slot / 2) + 3, y + bh // 2 - 1,
+                         int(cx + slot / 2) - 3, y + bh // 2 + 1],
+                        fill=INK)
         _fit(d, (cx, y), "*" if secret and ch != " " else ch, size,
              CREAM if ch != " " else GREY, "mm", int(slot * 0.9))
 
