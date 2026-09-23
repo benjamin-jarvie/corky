@@ -69,6 +69,26 @@ audit trail rather than years of adversarial review from strangers. We
 verify Core's binaries against the release signatures, and we intend our
 own builds to be reproducible, but "intend" is the honest word today.
 
+**And there is 3MB of closed firmware underneath all of it.** On a
+Raspberry Pi the VideoCore VPU boots before the ARM cores do.
+`bootcode.bin` runs first, then `start.elf`, measured at 3,029,888 bytes
+on the dev board on 2026-09-23, and `start.elf` owns clock and power
+management. Both are Broadcom's, both are closed, and both sit on the
+card whatever operating system is beside them. `librerpi/rpi-open-firmware`
+is a real effort at replacing them and it can bring a minimal headless
+Linux up on this generation of VideoCore, but USB, DMA and video still
+have to be written, and this device needs SPI for its panel and CSI for
+its camera. So it does not reach a signer, and the ceiling is the same
+on any distribution. Changing the operating system does not move it.
+
+**That ceiling is not universal, and it is worth knowing where it ends.**
+An old x86 laptop in the Libreboot-supported class runs with no
+proprietary boot firmware and no Intel ME at all. It is the machine you
+would build the air-gapped Core laptop on, and the one recommended two
+paragraphs above. Core Signer trades that away for a device that fits in a
+pocket and turns on without a keyboard. The trade is worth naming rather
+than leaving for a reader to find.
+
 What Core Signer buys for that cost is the interface, and the interface is not
 a luxury. A signer nobody will use protects nobody. The alternative most
 people actually reach for is friendlier, custodial in a way they did not
