@@ -812,5 +812,31 @@ if lower:
 else:
     ok("every sentence the device draws starts with a capital letter")
 
+# 9. THE PAPER IS NUMBERED, 1 to 28 across its three parts. It is the
+#    only lever the device has on a pen error: a skipped character
+#    leaves a box with three in it, seen while writing rather than days
+#    later, and "box 7, character 3" becomes a glance instead of
+#    counting seven groups along your own handwriting (map correction,
+#    C7). Nothing tested it until a mutation run deleted the numbers on
+#    2026-09-23 and every suite stayed green.
+
+_KEY111 = ("tprv8ZgxMBicQKsPe5YMU9gHen4Ez3ApihUfykaqUorj9t6FDqy3nP6eoXiAo2ss"
+           "vpAjoLroQxHqr3R5nE3a5dU3DHTjTgJDd7zrbniJr6nrCzd")
+_paper_numbers = []
+for _i, _page in enumerate(screens.text_pages(_KEY111)):
+    _ctx.update(w=320, h=240, name=f"backup-{_i}", over=[], drawn=[])
+    screens.backup_page(320, 240, _page, "KEY 73C5DA0A", _i, 3)
+    _paper_numbers += [int(t) for t, _b in _ctx["drawn"] if t.isdigit()]
+
+_want_boxes = len(screens._groups(_KEY111))
+if _paper_numbers == list(range(1, _want_boxes + 1)):
+    ok(f"the paper numbers its {_want_boxes} boxes 1 to {_want_boxes}, "
+       "once each, across all three parts")
+else:
+    bad(f"the paper draws box numbers {_paper_numbers[:6]}..., not 1 to "
+        f"{_want_boxes}. A dropped character is invisible without them, "
+        "and every message the device sends about a box is addressed to "
+        "a numbering nobody can see.")
+
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)

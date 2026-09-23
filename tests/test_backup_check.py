@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import hal                              # noqa: E402
 import main as coresigner_main               # noqa: E402
 import screens                          # noqa: E402
+from PIL import ImageDraw               # noqa: E402
 import signer                           # noqa: E402
 from e2e_keys import (check_keys, commit_presses,  # noqa: E402
                       grid_presses, text_keys)
@@ -199,9 +200,17 @@ if coresigner_main._wrong_at(short, PAGES[0]):
 else:
     ok("a page still being typed carries no red marks ahead of the caret")
 
-# Typed short, then DONE. Running out of presses is the proof it did NOT
-# return: an accepted key returns the string and stops reading.
-_sess, got = run_page(check_keys(PAGES[0], short) + "a", PAGES[0])
+# Typed short, then WALK DOWN TO THE BAR and press DONE. The walk is the
+# point: `check_keys` commits with one press because a finished key moves
+# the focus itself, and a short one does not, so the old version of this
+# check typed two more characters and never reached a button at all. It
+# ran out of presses whatever DONE did, which a mutation run found on
+# 2026-09-23 by making DONE accept a short key and watching this pass.
+_short_presses, _short_mode, _short_cur = grid_presses(
+    "xprv", short[len(signer.TESTNET_PREFIX):])
+_sess, got = run_page(
+    _short_presses + commit_presses("xprv", _short_mode, _short_cur),
+    PAGES[0])
 if got != "ran out of presses":
     bad(f"a key that stops {len(PAGES[0]) - len(short)} characters early "
         f"was accepted: {got!r}")
@@ -407,34 +416,51 @@ else:
 
 KEY_BOXES = screens._groups(KEY)
 boxes_seen = set()
-_real_entry = screens.text_entry
+
+# READ OFF THE SCREEN, not recomputed. The first version of this asked
+# `text_entry` for its arguments and worked out how many boxes those
+# OUGHT to mean, which is the code's own arithmetic run twice: it agreed
+# with anything the screen did. A mutation that capped the width at 48,
+# the exact defect Ben reported three times, left every suite green
+# (2026-09-23). What the box numbers are is a question only the pixels
+# can answer, so this counts the numbers the screen actually paints.
+_real_text = ImageDraw.ImageDraw.text
 
 
-def _spy(w, h, title, text, cursor=0, charset="xprv", mode=0, secret=False,
-         actions_sel=None, caret=None, hint=None, actions=("CANCEL", "DONE"),
-         wrong=(), want_len=None, first_box=1):
-    count = -(-max(want_len or 0, len(text)) // 4)
-    boxes_seen.update(range(first_box, first_box + count))
-    return _real_entry(w, h, title, text, cursor, charset, mode, secret,
-                       actions_sel, caret, hint, actions, wrong, want_len,
-                       first_box)
+def _catch_numbers(self, xy, text, *a, **kw):
+    if str(text).isdigit():
+        boxes_seen.add(int(text))
+    return _real_text(self, xy, text, *a, **kw)
 
 
-# One capital typed in lower case, early, exactly what Ben did. Then the
-# whole rest of the key. Every box has to be reachable anyway.
+# ONE CAPITAL TYPED IN LOWER CASE, exactly what Ben did, and then the
+# whole rest of the key. In three segments, because that is three things
+# a person does: type up to the mistake and one past it, read the
+# message and dismiss it, type on. The press that raises the message is
+# spent on it.
+_PRE = len(signer.TESTNET_PREFIX)
 WRONG_AT = next(n for n, c in enumerate(KEY)
-                if c.isupper() and n >= len(signer.TESTNET_PREFIX))
+                if c.isupper() and n >= _PRE)
 MISTYPED = KEY[:WRONG_AT] + KEY[WRONG_AT].lower() + KEY[WRONG_AT + 1:]
 
-screens.text_entry = _spy
+_up_to, _m1, _c1 = grid_presses("xprv", MISTYPED[_PRE:WRONG_AT + 1])
+_trip, _m2, _c2 = grid_presses("xprv", KEY[WRONG_AT + 1], _m1, _c1)
+_on, _m3, _c3 = grid_presses("xprv", KEY[WRONG_AT + 1:], _m2, _c2)
+
+ImageDraw.ImageDraw.text = _catch_numbers
 try:
-    sess = session(check_keys(KEY, MISTYPED) + "b")
-    try:
-        sess._check_typed(LABEL, KEY)
-    except hal.ScriptExhausted:
-        pass
+    sess = session(_up_to + _trip + "a" + _on + "a")
+    typed_back, made_back = sess._check_typed(LABEL, KEY)
 finally:
-    screens.text_entry = _real_entry
+    ImageDraw.ImageDraw.text = _real_text
+
+if typed_back != KEY:
+    bad(f"the key did not come back right through a correction: "
+        f"{typed_back!r}")
+elif made_back != [(WRONG_AT // 4 + 1, WRONG_AT % 4 + 1)]:
+    bad(f"the corrections recorded are {made_back}, not the one made")
+else:
+    ok("a key with one capital in lower case is corrected and accepted")
 
 want_boxes = set(range(1, len(KEY_BOXES) + 1))
 if boxes_seen == want_boxes:
