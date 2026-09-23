@@ -82,12 +82,32 @@ Wallet** -> **Specter DIY** -> **Scan...**.
 | # | what | coordinator | read? | notes |
 |---|---|---|---|---|
 | A | device reads a PSBT QR | Core Signer's camera | **YES** | 2026-09-18: 611-char UR:CRYPTO-PSBT, SEQUENCE COMPLETE in 36.8s, 7.0 fps, hand-held off a laptop screen |
-| B1 | Native segwit | Sparrow | | |
+| B1 | Native segwit | Sparrow | **YES** | Ben, on the board: Sparrow read the exported xpub and created a wallet from it. 148 characters, one static code. Date and policy not recorded at the time; Ben to fill in. |
 | B2 | Taproot | Sparrow | | |
 | B3 | Nested segwit | Sparrow | | |
 | B4 | Native segwit | phone | | |
 | C1 | Cosigner P2WSH, 167 chars | Sparrow | | |
 | C3 | Cosigner P2WSH | phone | | |
+
+## What B1 settles, and what it does not
+
+**Density on the way out is largely answered.** A signed PSBT leaves as
+an animated UR loop of about 100 characters a frame
+(`qrchannel.MAX_FRAGMENT_LEN`), and every one of those frames is a
+sparser code than the 148-character descriptor Sparrow has already read
+off this panel.
+
+**Two things B1 does not touch, and they fail differently:**
+
+1. **C1, at 167 characters**, is denser than anything read so far and is
+   the hardest static code the device draws.
+2. **The animation.** A loop is not a still. It asks whether Sparrow
+   tracks a multi-frame sequence at our frame rate, and whether the
+   fountain parts do their job when a frame is missed. About one frame
+   in 125 is deterministically unreadable by zxing at our 4.0 pixels per
+   module, which is why the loop carries fountain parts at all
+   (`qrchannel.psbt_to_frames`). That is a timing and state-machine
+   question, not a legibility one, and a still QR cannot answer it.
 
 ## What counts as a pass
 
