@@ -54,18 +54,50 @@ apt-get update -qq
 # failed on the board.
 # libzbar0: pyzbar (in image/requirements.txt) dlopens it at import;
 # pip cannot provide it.
-REQUIRED_PKGS="python3-pil python3-rpi.gpio python3-spidev python3-picamera2 libzbar0 python3-pip"
-for pkg in $REQUIRED_PKGS; do
-    apt-get install -y -qq "$pkg" || {
-        echo "!! required package $pkg did not install. Stopping."
-        echo "!! The signer needs all of: $REQUIRED_PKGS"
+# FROM PINNED FILES, NOT FROM THE INDEX. `apt-get install` takes
+# whatever the archive is serving today, so two cards provisioned a week
+# apart carried different software and neither could be reproduced from
+# anything in this repository. The six URLs and their hashes are in
+# PINS; nothing here reaches an index.
+#
+# Measured on the board 2026-09-23: this list resolves to exactly six
+# packages, because the 958 the OS image carries satisfy every
+# dependency. If that stops being true, `dpkg -i` fails on a missing
+# dependency and says which, which is the loud failure we want.
+DEB_CACHE="$(mktemp -d)"
+trap 'rm -rf "$DEB_CACHE"' EXIT
+echo "$PINNED_DEBS" | while read -r url want size; do
+    [ -n "$url" ] || continue
+    file="$DEB_CACHE/$(basename "$url")"
+    curl -sSfL --retry 3 -o "$file" "$url" || {
+        echo "!! could not fetch $url"
+        echo "!! The Raspberry Pi archive is rolling and drops old"
+        echo "!! versions. A release carries its own copies; see PINS."
         exit 1
     }
-done
-# python3-zbar may not exist in this release. pyzbar comes from pip and
-# only needs libzbar0 above, so this is a convenience, not a requirement.
-apt-get install -y -qq python3-zbar 2>/dev/null \
-  || echo "   (python3-zbar unavailable; pyzbar from pip covers it)"
+    got_size=$(stat -c %s "$file")
+    [ "$got_size" = "$size" ] || {
+        echo "!! $(basename "$url") is $got_size bytes, pinned at $size"
+        exit 1
+    }
+    got=$(sha256sum "$file" | cut -d" " -f1)
+    [ "$got" = "$want" ] || {
+        echo "!! $(basename "$url") hashes $got"
+        echo "!! PINS says                    $want"
+        echo "!! Refusing to install it."
+        exit 1
+    }
+done || exit 1
+dpkg -i "$DEB_CACHE"/*.deb || {
+    echo "!! a pinned package did not install. Stopping."
+    echo "!! If dpkg names a missing dependency, the OS image no longer"
+    echo "!! carries it and PINS needs that package added."
+    exit 1
+}
+# python3-zbar is deliberately absent. pyzbar comes from pip and only
+# needs libzbar0, which is pinned above, so the old opportunistic
+# `apt-get install python3-zbar || true` was reaching an unpinned index
+# for something nothing uses.
 echo "== 3/5 coresigner -> /opt/coresigner"
 # VERIFY THE PAYLOAD FIRST. Bitcoin Core is checked against a sha256 and
 # eleven GPG signatures a few lines above; the signer's own code was the

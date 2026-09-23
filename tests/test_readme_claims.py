@@ -208,10 +208,15 @@ def table_cell(source_word):
 # What provision.sh really installs, against the table on this page. The
 # table named five packages and provision.sh asked for six.
 prov = (ROOT / "image" / "provision.sh").read_text()
-m = re.search(r'REQUIRED_PKGS="([^"]+)"', prov)
+# From the PINS block, not from provision.sh: since 2026-09-23 the six
+# are installed from pinned files and provision.sh names no package at
+# all. The pins are the list now, and a package added there without a
+# line on the README still fails this.
+pins_text = (ROOT / "image" / "PINS").read_text()
+m = re.search(r'PINNED_DEBS="\n(.*?)\n"', pins_text, re.S)
 apt_cell = table_cell("apt")
 if not m:
-    bad("provision.sh no longer names REQUIRED_PKGS, so this check is blind")
+    bad("image/PINS no longer defines PINNED_DEBS, so this check is blind")
 elif apt_cell is None:
     bad("the README has no apt row in the dependency table")
 else:
@@ -220,20 +225,24 @@ else:
     # page a reader audits, or deliberately excused here.
     APT_NAMES = {"python3-pil": "Pillow", "python3-rpi.gpio": "RPi.GPIO",
                  "python3-spidev": "spidev", "python3-picamera2": "picamera2",
-                 "libzbar0": "libzbar0", "python3-pip": "pip"}
-    pkgs = m.group(1).split()
+                 # libzbar0 is a transitional package; the real one on
+                 # Debian 13 is libzbar0t64, which is what apt resolves
+                 # to and therefore what is pinned.
+                 "libzbar0t64": "libzbar0", "python3-pip": "pip"}
+    pkgs = sorted({line.split("/")[-1].split("_")[0]
+                   for line in m.group(1).splitlines() if line.strip()})
     unknown = [q for q in pkgs if q not in APT_NAMES]
     absent = [APT_NAMES[q] for q in pkgs
               if q in APT_NAMES and APT_NAMES[q] not in apt_cell]
     if unknown:
-        bad(f"provision.sh installs {unknown} which this check has never "
+        bad(f"image/PINS pins {unknown} which this check has never "
             "heard of; name them in the README and add them here")
     elif absent:
-        bad(f"provision.sh installs {absent}, which the README's apt row "
+        bad(f"image/PINS pins {absent}, which the README's apt row "
             f"does not mention: {apt_cell!r}")
     else:
         ok(f"the README's apt row names all {len(pkgs)} packages "
-           "provision.sh installs")
+           "image/PINS pins")
 
 # ...and the pip row against requirements.txt, by name and by count.
 reqs = sorted(ln.split("==")[0] for ln in
