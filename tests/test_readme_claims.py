@@ -205,6 +205,22 @@ def table_cell(source_word):
     return None
 
 
+def packages_row():
+    """The dependency row that LISTS the six packages.
+
+    Found by a package name and not by the source cell, because the
+    source stopped being the word "apt" on 2026-09-23 when they moved to
+    pinned files, and a check keyed on how they arrive goes blind the
+    next time that changes. What it has to find is the row a reader
+    audits the package list on.
+    """
+    for line in README.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) == 2 and "picamera2" in cells[0]:
+            return cells[0]
+    return None
+
+
 # What provision.sh really installs, against the table on this page. The
 # table named five packages and provision.sh asked for six.
 prov = (ROOT / "image" / "provision.sh").read_text()
@@ -214,11 +230,11 @@ prov = (ROOT / "image" / "provision.sh").read_text()
 # line on the README still fails this.
 pins_text = (ROOT / "image" / "PINS").read_text()
 m = re.search(r'PINNED_DEBS="\n(.*?)\n"', pins_text, re.S)
-apt_cell = table_cell("apt")
+apt_cell = packages_row()
 if not m:
     bad("image/PINS no longer defines PINNED_DEBS, so this check is blind")
 elif apt_cell is None:
-    bad("the README has no apt row in the dependency table")
+    bad("no row in the README's dependency table lists the packages")
 else:
     # apt package name -> the word the README uses for it. A new package
     # with no entry fails, which is the point: it must be named on the

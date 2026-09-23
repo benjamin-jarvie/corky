@@ -66,8 +66,12 @@ will still be the smaller thing to check after Core Signer is finished.
 Core Signer is Core **plus** a body of new code that draws screens, reads
 buttons and moves bytes. That code is young. It has one author and an
 audit trail rather than years of adversarial review from strangers. We
-verify Core's binaries against the release signatures, and we intend our
-own builds to be reproducible, but "intend" is the honest word today.
+verify Core's binaries against the release signatures. Every input to a
+card is pinned by hash since 2026-09-23, so two people can check they
+built from the same bytes. That is not the same as a reproducible build,
+and the table further down says which pins are worth what: ours is a
+commit, Core's is eleven signatures, and the operating system under both
+is an image nobody can rebuild.
 
 **And there is 3MB of closed firmware underneath all of it.** On a
 Raspberry Pi the VideoCore VPU boots before the ARM cores do.
@@ -481,7 +485,7 @@ payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
 **Total functional code: 2,935 lines** (6,416 with blanks/comments).
-**Test code: 7,915 lines**, none of which ships.
+**Test code: 7,921 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,
@@ -591,11 +595,51 @@ as an import allowlist, so adding one means changing this section,
 
 | | source |
 |---|---|
-| Raspberry Pi OS Lite 64-bit | pinned in `image/PINS` |
+| Raspberry Pi OS Lite 64-bit, trixie | sha256 pinned in `image/PINS` |
 | Bitcoin Core 31.1 | official binary, sha256 pinned, 11 GPG signatures checked out of band |
-| Pillow, picamera2, spidev, RPi.GPIO, libzbar0, pip | apt |
+| Pillow, picamera2, spidev, RPi.GPIO, libzbar0, pip | six `.deb` files, each pinned by **url, sha256 and size** in `image/PINS`. Not apt: see below |
 | qrcode, pyzbar, and their two dependencies | pip, pinned by **sha256** in `image/requirements.txt` and installed with `--require-hashes` |
 | ST7789 driver, BC-UR codec, icon font | vendored in `hw/vendor/`, MIT/BSD/CC-BY |
+
+**Those six were installed by `apt-get install` until 2026-09-23**, which
+takes whatever the archive is serving that day. Two cards provisioned a
+week apart carried different software and neither could be rebuilt from
+anything here. Six is the whole list, measured on the board: the 958
+packages the OS image carries already satisfy every dependency, so apt
+adds exactly these and nothing else.
+
+They are pinned by url and hash rather than by version, and the reason is
+specific to this archive. `archive.raspberrypi.com/debian` is a **rolling
+index**: it carries only the newest version of a package, so apt version
+pinning cannot reach an older one, because the version is not in the
+index to pin to. There is no `snapshot.raspberrypi.com`. Debian keeps its
+pool and `snapshot.debian.org` keeps every version for good, so the four
+Debian packages stay fetchable. The two Raspberry Pi ones do not, and a
+release has to carry copies.
+
+## What is pinned, and how strongly
+
+Not every pin on this page is worth the same, and a table that did not
+say so would be telling you something untrue by omission.
+
+| | pinned by | attested by | reproducible? |
+|---|---|---|---|
+| **Bitcoin Core 31.1** | sha256 | **11 GPG signatures**, keys served by a different host to the binary | **yes**, Core's builds are Guix and bit-for-bit |
+| Core Signer's own code | git commit | nothing yet | yes, it is text |
+| the four pip wheels | sha256, `--require-hashes` | nothing | no |
+| the six `.deb` files | sha256 + size | nothing | no |
+| **Raspberry Pi OS image** | sha256 | **nothing.** The image and its hash come from the same server | **no, and not by anyone.** The Foundation cannot rebuild it either |
+| `bootcode.bin`, `start.elf` | nothing | nothing | no. Broadcom's, closed, 3MB, and they run first |
+
+Read down that last column. **The strength of the chain is Core at the
+top and Broadcom at the bottom**, and the gap between them is the honest
+size of what you are trusting when you use this rather than a command
+line. The pins prove you got what we got. Only Core's proves what that
+is.
+
+The nearest thing to a recipe for the OS image is the pi-gen commit the
+Foundation records in `/etc/rpi-issue` on every card, which
+`image/PINS` now carries as `OS_IMAGE_PIGEN_COMMIT`.
 
 Verify a device against this repository with
 [`image/verify-install.sh`](image/verify-install.sh), which compares
@@ -613,10 +657,22 @@ refuses past 150 inputs rather than dying mid-sign.
 M1 passed except the optics, and the camera now reads a real Sparrow
 frame on the board.
 
-**Not yet proven:** a coordinator's camera reading this panel, a hardened
-image with the radios actually off, and a reproducible build. The
-[beta audit](docs/wayfinder/beta-audit/map.md) records all of it, and
-[ISSUES.md](ISSUES.md) is the open list.
+**Not yet proven:** a hardened image with the radios actually off, and a
+reproducible build. The [beta audit](docs/wayfinder/beta-audit/map.md)
+records all of it, and [ISSUES.md](ISSUES.md) is the open list.
+
+A coordinator's camera reading this panel has moved: Sparrow read the
+exported public key off it and built a wallet, so the panel's density is
+answered at 148 characters, and a signed transaction leaves in frames of
+about 100. What is still untested is the **animation**, which fails
+differently: whether a scanner tracks a multi-frame loop off this panel
+and recovers when a frame drops. `docs/CAMERA-TEST.md` holds the rows.
+
+**One pin is still open.** `image/PINS` carries
+`CORESIGNER_COMMIT="HEAD"`, so the card can be checked against what it
+was built from but cannot be rebuilt from this file until a release is
+cut and that becomes a commit. `tests/test_pins.py` prints it as a todo
+on every run and will keep doing so until it is filled.
 
 | gate | question | measured on a board |
 |---|---|---|
