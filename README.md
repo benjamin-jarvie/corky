@@ -485,7 +485,7 @@ payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
 **Total functional code: 2,977 lines** (6,510 with blanks/comments).
-**Test code: 7,995 lines**, none of which ships.
+**Test code: 7,999 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,
@@ -668,11 +668,11 @@ about 100. What is still untested is the **animation**, which fails
 differently: whether a scanner tracks a multi-frame loop off this panel
 and recovers when a frame drops. `docs/CAMERA-TEST.md` holds the rows.
 
-**One pin is still open.** `image/PINS` carries
-`CORESIGNER_COMMIT="HEAD"`, so the card can be checked against what it
-was built from but cannot be rebuilt from this file until a release is
-cut and that becomes a commit. `tests/test_pins.py` prints it as a todo
-on every run and will keep doing so until it is filled.
+**Every input to a card is pinned.** `image/PINS` carries
+`CORESIGNER_COMMIT="HEAD"` as a template, and `prepare-sd.sh` stamps
+each card with the commit it was cut from plus that card's own tarball
+sha256, so a card's PINS is per-card. `tests/test_pins.py` checks the
+stamping still happens rather than checking the template.
 
 | gate | question | measured on a board |
 |---|---|---|

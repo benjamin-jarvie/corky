@@ -100,18 +100,29 @@ for script in sorted(IMAGE.glob("*.sh")):
             ok(f"{script.name}: {len(fetches)} download(s), all checked")
 
 # --- 5. the release pins are not placeholders ---------------------------
-# These are the two that say, in the file itself, that they are not
-# filled in. A release image cannot be reproduced while either stands.
-for name, placeholder in (("OS_IMAGE_SHA256", "UNPINNED_UNTIL_FIRST_FLASH"),
-                          ("CORESIGNER_COMMIT", "HEAD")):
-    found = re.search(rf'{name}="([^"]*)"', PINS)
-    if not found:
-        bad(f"image/PINS no longer defines {name}")
-    elif found.group(1) == placeholder:
-        print(f"todo {name} is still {placeholder!r}: a tester's card "
-              "cannot be reproduced from this file")
-    else:
-        ok(f"{name} is pinned")
+found = re.search(r'OS_IMAGE_SHA256="([^"]*)"', PINS)
+if not found:
+    bad("image/PINS no longer defines OS_IMAGE_SHA256")
+elif found.group(1) == "UNPINNED_UNTIL_FIRST_FLASH":
+    bad("OS_IMAGE_SHA256 is still a placeholder, so a tester's card "
+        "cannot be checked against anything")
+else:
+    ok("OS_IMAGE_SHA256 is pinned")
+
+# CORESIGNER_COMMIT is a TEMPLATE here, not a gap. prepare-sd.sh
+# substitutes the commit it is cutting the card from, and appends that
+# card's own tarball sha256, so the PINS on a card is per-card and this
+# repository's copy is the thing it is made from. Reported as a missing
+# pin on 2026-09-23 until the substitution was read (`sed -e
+# "s/^CORESIGNER_COMMIT=.*/..."` in prepare-sd.sh); a false alarm in a
+# suite about pins is worse than no suite, because it teaches the reader
+# to skip a line.
+prep = (IMAGE / "prepare-sd.sh").read_text()
+if "CORESIGNER_COMMIT=" not in prep:
+    bad("prepare-sd.sh no longer stamps the commit into a card's PINS, "
+        "so CORESIGNER_COMMIT=\"HEAD\" would reach a tester unchanged")
+else:
+    ok("prepare-sd.sh stamps each card with the commit it was cut from")
 
 print(f"\n{len(fails)} failure(s)")
 sys.exit(1 if fails else 0)
