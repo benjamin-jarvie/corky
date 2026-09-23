@@ -1716,22 +1716,46 @@ def text_pages(text):
             for i in range(0, max(len(text), 1), CHARS_PER_PAGE)]
 
 
-def splash(w, h):
+def splash(w, h, build=None, dev=()):
     """The first frame the device paints, before bitcoind is up.
 
     Two tones only (ink ground, cream text) and every string measured, so
     it survives a 1-bit render and both panel sizes. It used to stencil a
     mark from a brand PNG; it draws type only now, and the file went with
     the rest of the branding on 2026-09-07.
+
+    IT SAYS WHAT THE CARD IS. `dev` holds the reasons this one is a
+    development card, live ones read off the running system and not
+    markers a script left behind. A card with SSH and a radio up is the
+    card docs/TESTER-PACK.md warns about, and until now the only way to
+    find that out was to remember to run a script.
+
+    Coinkite's reason, for a device with a real bootloader and a signed
+    image: "Development firmware gets a warning and forced delay on
+    every boot. It cannot quietly pass as factory firmware." We have no
+    bootloader to enforce anything, so this is the weaker version: the
+    screen says so, and `splash.py` holds it there.
+
+    `build` is what provision.sh recorded the card was built from. It is
+    drawn whatever the card is, so two devices can be told apart and a
+    tester can quote it in a report.
     """
     img, d = _frame(w, h)
     cx = w // 2
-    _fit(d, (cx, int(h * 0.30)), "BITCOIN BUTLERS",
-         int(h * 0.075), OCHRE, "mm", int(w * 0.90))
-    _fit(d, (cx, int(h * 0.42)), "presents",
-         int(h * 0.05), GREY, "mm", int(w * 0.90))
-    _fit(d, (cx, int(h * 0.62)), "CORESIGNER", int(h * 0.15), CREAM, "mm",
+    _fit(d, (cx, int(h * 0.26)), "BITCOIN BUTLERS",
+         int(h * 0.070), OCHRE, "mm", int(w * 0.90))
+    _fit(d, (cx, int(h * 0.37)), "presents",
+         int(h * 0.045), GREY, "mm", int(w * 0.90))
+    _fit(d, (cx, int(h * 0.55)), "CORE SIGNER", int(h * 0.14), CREAM, "mm",
          int(w * 0.92))
+    if dev:
+        _fit(d, (cx, int(h * 0.76)), "DEVELOPMENT CARD", int(h * 0.055),
+             RED, "mm", int(w * 0.92))
+        _fit(d, (cx, int(h * 0.84)), ", ".join(dev), int(h * 0.042),
+             RED, "mm", int(w * 0.92))
+    if build:
+        _fit(d, (cx, int(h * 0.93)), build, int(h * 0.040), GREY, "mm",
+             int(w * 0.92))
     return img
 
 # ---- backup display -------------------------------------------------

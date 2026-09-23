@@ -19,10 +19,18 @@ import ast
 import subprocess
 import sys
 import tempfile
+import shutil
 from pathlib import Path
+
+from PIL import ImageColor
 
 ROOT = Path(__file__).resolve().parent.parent
 SPLASH = ROOT / "coresigner" / "splash.py"
+# For the state checks at the end. The IMPORT checks above run splash.py
+# in a child with a bare environment on purpose, so they are unaffected.
+sys.path.insert(0, str(ROOT / "coresigner"))
+import screens                                    # noqa: E402
+import splash                                     # noqa: E402
 
 fails = []
 
@@ -111,6 +119,65 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             ok("the frame is screens.splash(), pixel for pixel")
 
+
+# --- what the card is, read off the running system ----------------------
+# Ben, after reading Coinkite's note on custom firmware: "Development
+# firmware gets a warning and forced delay on every boot. It cannot
+# quietly pass as factory firmware." A Core Signer card with SSH and a
+# radio up is the card docs/TESTER-PACK.md warns about, and the only way
+# to find that out was to remember to run a script.
+#
+# LIVE STATE, not markers. A card hardened but not yet rebooted still
+# has its radio up, and that is the card in the room.
+
+fake = Path(tempfile.mkdtemp(prefix="coresigner-splash-"))
+(fake / "sys/class/net").mkdir(parents=True)
+(fake / "proc/net").mkdir(parents=True)
+
+LISTEN_22 = ("  sl  local_address rem_address   st\n"
+             "   0: 00000000:0016 00000000:0000 0A\n")
+QUIET = ("  sl  local_address rem_address   st\n"
+         "   0: 00000000:1F90 00000000:0000 0A\n")
+
+(fake / "proc/net/tcp").write_text(QUIET)
+if splash.dev_reasons(fake):
+    bad(f"a quiet card reports {splash.dev_reasons(fake)}")
+else:
+    ok("a card with no radio and no listener says nothing")
+
+(fake / "sys/class/net/wlan0").mkdir()
+(fake / "proc/net/tcp").write_text(LISTEN_22)
+why = splash.dev_reasons(fake)
+if why != ["radio up", "SSH live"]:
+    bad(f"a development card reports {why}, not both reasons")
+else:
+    ok("a card with a radio up and SSH live says both, in that order")
+
+# Port 22 and nothing else. 0x1F90 is 8080: a listener on another port
+# is not SSH, and a check that matched any listener would call every
+# card a development card for ever.
+(fake / "proc/net/tcp").write_text(QUIET)
+if splash.listening(22, fake):
+    bad("a listener on 8080 was read as SSH")
+elif not splash.listening(8080, fake):
+    bad("the listener on 8080 was not seen at all")
+else:
+    ok("the port is read exactly, not any listener")
+
+# And the screen says it. A development frame must not render the same
+# as a clean one, or the warning is a comment.
+clean = screens.splash(320, 240, build="abc 123")
+warned = screens.splash(320, 240, build="abc 123",
+                        dev=("radio up", "SSH live"))
+if clean.tobytes() == warned.tobytes():
+    bad("a development card paints the same frame as a hardened one")
+elif not any(p == ImageColor.getrgb(screens.RED) for p in warned.getdata()):
+    bad("the development warning is not drawn in the red every other "
+        "refusal on this device uses")
+else:
+    ok("a development card paints a different frame, warned in red")
+
+shutil.rmtree(fake, ignore_errors=True)
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

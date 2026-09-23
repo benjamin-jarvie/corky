@@ -106,15 +106,24 @@ real_splash = screens.splash
 try:
     sys.argv = ["splash.py", "--dev", "--frames-dir", "unused"]
     coresigner_splash.hal.DevDisplay = lambda _path: SplashDisplay()
-    screens.splash = lambda w, h: ("splash", w, h)
+    # build and dev are what the frame now says about the card
+    # (2026-09-23), and a stub that ignores them would let the
+    # entrypoint stop passing them without anything noticing.
+    screens.splash = lambda w, h, build=None, dev=(): (
+        "splash", w, h, build, tuple(dev))
     coresigner_splash.main()
 finally:
     sys.argv = real_argv
     coresigner_splash.hal.DevDisplay = real_dev_display
     screens.splash = real_splash
 
-if painted != [("splash", 320, 240)]:
+# The dev reasons come from the real filesystem this suite runs on, so
+# they are whatever the developer's machine is; the check is that the
+# entrypoint passes BOTH arguments and paints one frame.
+if len(painted) != 1 or painted[0][:3] != ("splash", 320, 240):
     bad(f"the splash entrypoint painted unexpected frames: {painted}")
+elif len(painted[0]) != 5:
+    bad("the splash entrypoint no longer says what the card is")
 else:
     ok("the splash entrypoint paints one branded frame and exits")
 

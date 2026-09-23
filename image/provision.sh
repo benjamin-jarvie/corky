@@ -136,6 +136,16 @@ echo "   pip, hash-pinned"
 python3 -m pip install --quiet --break-system-packages \
     --require-hashes -r /opt/coresigner/image/requirements.txt
 
+# WHAT THIS CARD WAS BUILT FROM, for the splash to draw and a tester to
+# quote in a report. Hashed by the OS and not by us: nothing in
+# coresigner/ may compute a digest (PLAN A-22), and the splash only
+# reads the string back.
+tree_hash="$(find /opt/coresigner/coresigner -name "*.py" -type f -print0 \
+             | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
+build_id="${CORESIGNER_COMMIT:-unknown} $tree_hash"
+printf "%s\n" "$build_id" > /opt/coresigner/BUILD
+echo "   build $build_id"
+
 echo "== 4/5 ramdisk datadir + bitcoin.conf"
 mkdir -p /run/coresigner
 grep -q "coresigner-ramdisk" /etc/fstab || \

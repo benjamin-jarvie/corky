@@ -63,6 +63,16 @@ def main():
             # is written by provisioning itself.
             if line.rstrip().endswith("/opt/coresigner/" + hit):
                 continue
+            # Nor does a redirection target: `> /opt/coresigner/BUILD`
+            # creates the file, it does not require one.
+            if re.search(r">\s*/opt/coresigner/" + re.escape(hit), line):
+                continue
+            # Nor a directory the tarball unpacks INTO. `names` lists
+            # files, so a directory never appears in it; what has to
+            # exist is a file underneath, and the archive is checked for
+            # that rather than for the directory itself.
+            if any(n.startswith(hit.rstrip("/") + "/") for n in names):
+                continue
             needed.add(hit)
     needed = sorted(needed)
     missing = [n for n in needed if n not in names]
