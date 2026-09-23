@@ -113,8 +113,16 @@ in exactly the same way.
 For single signature it barely bites, because the four paths are a
 convention every wallet already shares. For multisig it bites hard:
 nothing recovers a quorum, each cosigner's xpub, their script types and
-their paths, so a key alone is useless whichever form it is in. Core Signer is
-single signature in v1 and does not meet that problem at all.
+their paths, so a key alone is useless whichever form it is in.
+
+**Core Signer meets that problem and does not solve it.** A Core Signer key
+can be one cosigner of a quorum, and the paper backup recovers the key
+and not the arrangement. The quorum belongs to your coordinator and has
+to be backed up there, which
+[`docs/TESTER-PACK.md`](docs/TESTER-PACK.md) says in those words. The
+draft that would fix it properly is BIP138, which backs up the
+descriptor itself; Core 31.1 does not have it, checked on 2026-09-23:
+no `backupdescriptors`, no `restoredescriptors`.
 
 **The reason Core Signer takes an xprv is none of that.** Core has no BIP39
 and never has. Checked against 31.1: no `sethdseed`, no `importmnemonic`,
