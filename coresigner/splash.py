@@ -89,9 +89,9 @@ def main():
     display.show(screens.splash(display.width, display.height,
                                 build=build_id(), dev=tuple(why)))
     if why and not args.dev:
-        # The forced delay. It is not security, because nothing stops a
-        # person editing this file; it is the difference between a card
-        # that says what it is and one a tester has to interrogate.
+        # The forced delay. Nothing stops a person editing this file,
+        # so this buys no security. What it buys is a card that says
+        # what it is, instead of one a tester has to interrogate.
         time.sleep(DEV_HOLD_SECONDS)
 
 

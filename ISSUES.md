@@ -58,15 +58,6 @@ naming the third combination is Ben's call. Recorded in
 `hw/HARDWARE.md` and `CONTEXT.md` as a measurement in the meantime
 (audit A8).
 
-### The image a tester would flash is not pinned
-
-`image/PINS` carries `OS_IMAGE_SHA256="UNPINNED_UNTIL_FIRST_FLASH"`,
-`DEV_IMAGE_SHA256="RECORDED_AFTER_PROVISION"` and
-`CORESIGNER_COMMIT="HEAD"`. The README describes the OS hash honestly as
-"recorded on first flash", so this is a gap and not a false claim, but a
-tester's card cannot be reproduced from that file as it stands. Audit
-A7 owns it.
-
 ### QR is the only channel that closes a loop on the pocket build
 
 Not a defect, and worth writing down because it changes what a tester
@@ -120,6 +111,15 @@ ordinary inputs (PLAN A-21).
 - **E-6** (two of Core's four script policies). Fixed: all four are
   exported and browsable, LEFT and RIGHT walk them, and session K12
   proves each policy's own addresses reach the panel.
+- **The image a tester would flash is not pinned.** Fixed 2026-09-23.
+  `OS_IMAGE_SHA256` named a 2026-05-13 image whose URL is 404 and which
+  the board was never running; the image it IS running is pinned, its
+  524,875,608 bytes downloaded and hashed rather than the published
+  number copied. The six .deb files apt used to fetch from a rolling
+  index are pinned by url, sha256 and size, and `prepare-sd.sh` was
+  already stamping each card with its own commit and tarball hash, so
+  `CORESIGNER_COMMIT="HEAD"` is a template and never was a gap.
+  `tests/test_pins.py` keeps it that way.
 - **E-7** (the receive address screen, and hardened paths, read wrong).
   All five fixed on 2026-09-18. The title says "1st receive address" and
   counts in ordinals; the policy is drawn only where LEFT and RIGHT can

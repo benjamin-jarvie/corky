@@ -614,6 +614,9 @@ else:
 # session K9. What is under test HERE is only that its answer changes what
 # the panel says.
 real_opens = signer.opens_wallet
+# The note is part of the claim (map correction C2, two-axis review
+# 2026-09-23): 16 characters are prefilled, so boxes 1 to 4 are never
+# compared against the paper and the screen says so.
 for verdict, want_text, why in (
         (True, "Your paper opens\nkey 73C5DA0A", "agrees"),
         (False, None, "refuses")):
@@ -627,7 +630,10 @@ for verdict, want_text, why in (
         signer.opens_wallet = real_opens
     if got is not (verdict is True):
         bad(f"Core {why}, but _confirm_typed_key returned {got!r}")
-    elif verdict and not drew(sess, screens.verified(320, 240, want_text)):
+    elif verdict and not drew(sess, screens.verified(
+            320, 240, want_text,
+            note="Boxes 1 to 4 are the same on every\n"
+                 "key and were not checked.")):
         bad("Core agreed and the panel never said the paper opens the key")
     elif not verdict and not drew(sess, screens.result(
             320, 240, ok=False, detail="That key does not open this wallet")):

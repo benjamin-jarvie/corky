@@ -438,7 +438,7 @@ module imports `hashlib`, `hmac`, `secrets`, `random` or any curve
 library, if `os.urandom` appears anywhere, or if key-derivation
 vocabulary comes back.
 
-**Layer 2 sees secrets, computes nothing with them. 2709 lines.**
+**Layer 2 sees secrets, computes nothing with them. 2729 lines.**
 [`main.py`](coresigner/main.py), [`signer.py`](coresigner/signer.py),
 [`screens.py`](coresigner/screens.py), [`qrsource.py`](coresigner/qrsource.py).
 
@@ -456,10 +456,12 @@ are the whole list:
 
 What "computes nothing with them" means precisely: no line in any of
 those four derives a child key, hashes it, checks it, or turns it into
-anything. They move it and they draw it. The one place a key is
-inspected at all is a check on the first four characters to decide which
-screen to open, which is why `XPRV_PREFIXES` is one list used by both
-the redactor and the argument guard.
+anything. They move it and they draw it. A key is inspected in two
+places and both are prefix comparisons: `XPRV_PREFIXES` decides which
+screen to open, and is one list used by both the redactor and the
+argument guard; `MASTER_PREFIXES` is the 16 characters every Core master
+key on a network begins with, prefilled on the check screen so nobody
+types them. Neither derives, hashes or transforms anything.
 
 **The known exposure**, said plainly: while a key is loaded, a copy of
 it exists in Core Signer's Python memory as well as in Core's. Python strings
@@ -484,8 +486,8 @@ Core an opaque string, and the one exception is documented at the top of
 payload, which is bounded by a length cap and a charset check before any
 container code runs.
 
-**Total functional code: 2,977 lines** (6,510 with blanks/comments).
-**Test code: 7,999 lines**, none of which ships.
+**Total functional code: 2,997 lines** (6,574 with blanks/comments).
+**Test code: 8,008 lines**, none of which ships.
 **Vendored, not ours: 1,868 lines** in [`hw/vendor/`](hw/vendor/): the
 BC-UR animated-QR codec, which is Blockchain Commons' by way of
 SeedSigner and is unmodified, and SeedSigner's ST7789 display driver,

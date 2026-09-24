@@ -790,7 +790,21 @@ def _opening_text(node):
 
 lower = []
 for _f in ("coresigner/screens.py", "coresigner/main.py"):
-    for _node in ast.walk(ast.parse((ROOT / _f).read_text())):
+    _tree = ast.parse((ROOT / _f).read_text())
+    # A SENTENCE A HELPER RETURNS is copy too. `_core_says` returned
+    # "that is not a valid key, check what you typed" and `_hold` drew
+    # it, and this check saw only the literal AT the `_hold` call site,
+    # which was `self._hold(self._core_says(exc))`: nothing to judge.
+    # It shipped in the same diff that capitalised fourteen others
+    # (two-axis review, 2026-09-23). Every returned literal in these two
+    # modules is copy or nothing, so judging them all costs no false
+    # alarms; measured, not assumed.
+    for _node in ast.walk(_tree):
+        if isinstance(_node, ast.Return) and _node.value is not None:
+            _t = _opening_text(_node.value)
+            if _t and " " in _t and _t[:1].isascii() and _t[:1].islower():
+                lower.append(f"{_f}:{_node.lineno} {_t!r} (returned)")
+    for _node in ast.walk(_tree):
         if not isinstance(_node, ast.Call):
             continue
         _name = (_node.func.attr if isinstance(_node.func, ast.Attribute)

@@ -125,6 +125,12 @@ def _classify_qr(payload):
 #: Applied AFTER redaction, never before; see Session._core_says.
 MESSAGE_CHARS = 60
 
+#: How many corrections the list screen shows at once. One number, read
+#: by the screen that draws them and the loop that scrolls them, because
+#: two copies of it is how the bar came to promise rows nothing could
+#: reach.
+CORRECTIONS_SHOWN = 4
+
 MAX_SIGNABLE_INPUTS = 150
 
 #: The same ceiling for a QUORUM, which costs more per input: a witness
@@ -476,7 +482,7 @@ class Session:
         lines = [ln.strip() for ln in str(exc).splitlines() if ln.strip()]
         last = lines[-1] if lines else str(exc)
         if "is not valid" in last and "key" in last:
-            return "that is not a valid key, check what you typed"
+            return "That is not a valid key. Check what you typed."
         return last
 
     def _show_core_error(self, exc):
@@ -1681,14 +1687,20 @@ class Session:
         The last backup page offered VERIFY and then just went back, which
         is a label that lies. This is the flow it promised.
 
-        Page by page, because a page is what the writer copied and a
-        mistake should cost one page and not all 111 characters. The
-        per-character comparison is Core Signer's, because only Core Signer is holding
-        both strings; the verdict on the WHOLE key is Core's, and it is
-        put as "do the addresses this key derives match the ones this
-        wallet hands out". Both must agree before this says the paper is
-        good. (It cited `getdescriptorinfo` until 2026-09-07, which audit
-        A6 had already replaced.)
+        The whole key in one pass. It went page by page, on the argument
+        that a mistake should cost one page and not all 111 characters,
+        and a page would not let you out until every character on it
+        matched: one capital typed in lower case pinned a person on
+        boxes 1 to 12 for ever (Ben, three times, 2026-09-18 and
+        2026-09-19). A wrong character cannot pass at all now, so there
+        is no page for a mistake to cost.
+
+        The per-character comparison is Core Signer's, because only Core
+        Signer is holding both strings; the verdict on the WHOLE key is
+        Core's, and it is put as "do the addresses this key derives
+        match the ones this wallet hands out". Both must agree before
+        this says the paper is good. (It cited `getdescriptorinfo` until
+        2026-09-07, which audit A6 had already replaced.)
 
         Returns True when the paper is proven, False when the user leaves.
         """
@@ -1735,27 +1747,49 @@ class Session:
             self._hold("That key does not open this wallet")
             return False
         if not made:
+            # WHAT WAS NOT CHECKED, said on the screen that makes the
+            # claim. The first 16 characters are prefilled, so those
+            # four boxes were never compared against the paper, and
+            # "Your paper opens key X" on its own says more than the
+            # device knows (map correction C2: "Every claim on it is one
+            # the device actually verified").
             self.display.show(screens.verified(
                 self.w, self.h,
                 "Your paper opens\n"
-                f"key {(xfp or '').upper()}"))
+                f"key {(xfp or '').upper()}",
+                note="Boxes 1 to 4 are the same on every\n"
+                     "key and were not checked."))
             self.buttons.read()
             return True
         # SOMETHING WAS CORRECTED, so "your paper opens this key" is not
         # a thing the device knows any more. It knows how many and
         # where, and that the paper only opens the wallet if the person
         # went back and wrote them down (map correction, C2).
-        page = 0
+        # THE LIST SCROLLS. C4 said "the list scrolls past four, on the
+        # same bar every other paged screen uses" and this loop only
+        # ever turned between the two pages, so with seven corrections
+        # the last three could not be reached and the bar it drew could
+        # not move (two-axis review, 2026-09-23). That list is the
+        # safety net for somebody who did not write them down one at a
+        # time, which is the only person who needs it.
+        made = list(made)
+        page, first = 0, 0
         while True:
             self.display.show(screens.corrections(
-                self.w, self.h, list(made), xfp or "", page=page))
+                self.w, self.h, made, xfp or "", page=page, first=first))
             key = self.buttons.read()
-            if key == "d" and page == 0:
-                page = 1
-            elif key == "u" and page == 1:
-                page = 0
-            elif key in ("a", "p", "b", "c"):
+            if key in ("a", "p", "b", "c"):
                 return True
+            if page == 0:
+                if key == "d":
+                    page, first = 1, 0
+            elif key == "d":
+                first = min(first + 1, max(0, len(made) - CORRECTIONS_SHOWN))
+            elif key == "u":
+                if first:
+                    first -= 1
+                else:
+                    page = 0
 
     def _check_typed(self, label, want):
         """The whole key typed back and judged, with mistakes in place.
@@ -1789,9 +1823,6 @@ class Session:
         # will not be told. They are the same on every key and the value
         # is public, so a wrong one is recoverable by anyone who knows
         # what a Core key looks like; the other 24 boxes are not.
-        # From the key in hand, not from the node, so a key that does
-        # not begin with a prefix we have actually measured is typed in
-        # full rather than partly assumed.
         # From the key in hand, not from the node, so a key that does
         # not begin with a prefix we have actually measured is typed in
         # full rather than partly assumed.
@@ -1872,11 +1903,18 @@ class Session:
                     typed, caret = self._fix_one(min(wrong), typed, want,
                                                  made)
                 elif ch == screens.CARET_RIGHT:
-                    caret = min(len(want) - 1, caret + 1)
+                    caret = min(len(want), caret + 1)
                 else:
                     typed += " " * max(0, caret - len(typed))
                     typed = typed[:caret] + ch + typed[caret + 1:]
-                    caret = min(caret + 1, len(want) - 1)
+                    # ONE PAST THE END is a real caret position, the way
+                    # it is on every text field. It clamped at the last
+                    # slot, so after the final character the caret sat
+                    # ON it and B deleted the one BEFORE: want abcdefgh,
+                    # typed abcdefgx, one B gave abcdefx (two-axis
+                    # review, 2026-09-23). A fat-finger on the last
+                    # character cost the one before it.
+                    caret = min(caret + 1, len(want))
                     if len(typed) >= len(want) and typed[-1] == want[-1]:
                         # Nothing left to type and nothing red, so the
                         # bar takes the focus and DONE is one press.
@@ -1905,7 +1943,7 @@ class Session:
         self.buttons.read()
         made.append((box, char))
         return typed[:at] + want[at] + typed[at + 1:], min(at + 1,
-                                                           len(want) - 1)
+                                                           len(want))
 
     # -- PSBT load: stick first, then QR frames ---------------------------
 

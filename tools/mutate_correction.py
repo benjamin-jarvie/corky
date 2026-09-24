@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path("/Users/ai_sandbox/clawd/projects/corky")
+ROOT = Path(__file__).resolve().parent.parent
 SUITES = ["tests/test_backup_check.py", "tests/test_screen_fit.py",
           "tests/test_ui_cost.py", "tests/test_typing_uniform.py",
           "tests/test_pins.py"]
@@ -71,6 +71,25 @@ MUTATIONS = [
   "image/PINS",
   "libzbar0t64_0.23.93-8_arm64.deb 86bf2db996e828f87d2ab94509cd0b4fbc097e57e8976cb6142ee541b2638787 121644",
   "libzbar0t64_0.23.93-8_arm64.deb NOTAHASH 121644"),
+
+ # NAVIGATION. tests/e2e_keys.py computes its routes by calling
+ # _cell_move, so the round trip cannot disagree with it: a wrong rule
+ # walks the script and the device identically and every session still
+ # passes. TESTING.md rule 2 says a helper must not share the code's
+ # assumptions, and the answer here is not to re-derive the rules a
+ # third time, which is what went wrong three times; it is that
+ # test_ui_cost pins _cell_move's PROPERTIES independently. These two
+ # mutations are what make that claim checkable rather than asserted
+ # (two-axis review, 2026-09-23).
+ ("LEFT stops walking the whole grid (Ben, 2026-09-18)",
+  "coresigner/main.py",
+  '    if key == "l":\n        return (cur - 1) % len(cells)',
+  '    if key == "l":\n        return cur if cur == 0 else cur - 1'),
+
+ ("UP stops coming round to the bottom (Ben, 2026-09-18)",
+  "coresigner/main.py",
+  "        nxt = (row + (1 if key == \"d\" else -1)) % rows",
+  "        nxt = max(0, row + (1 if key == \"d\" else -1))"),
 
  ("provision.sh installs from the index again (test_pins)",
   "image/provision.sh",

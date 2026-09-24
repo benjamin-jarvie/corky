@@ -1077,6 +1077,11 @@ def _groups(text):
 #: chooser below picks.
 LINE_SPACING = 1.45
 
+#: How many corrections the list screen shows at once. `main` scrolls by
+#: this, so the bar and the loop cannot disagree about how far there is
+#: to go.
+CORRECTIONS_SHOWN = 4
+
 
 #: The QR is rendered no taller than this, so the light card and the line
 #: of identity underneath both have room on a 240-pixel panel.
@@ -1423,7 +1428,7 @@ def modes(name):
     # DEDUPED, order kept. DESCRIPTOR_CHARSET is BASE58 + "0()[]'/*#hl",
     # and base58's lowercase already holds an h, so the grid has been
     # drawing that character twice since it was written. Two cells that
-    # type the same thing is not a choice, it is a cell wasted on the one
+    # type the same thing gives no choice and wastes a cell, on the one
     # screen with none to spare.
     chars = "".join(dict.fromkeys(CHARSETS[name]))
     if len(chars) <= GRID_COLS * GRID_ROWS:
@@ -1678,27 +1683,31 @@ def corrections(w, h, made, xfp, page=0, first=0):
         lines = [f"This key, with your {n} correction{plural},",
                  f"opens {xfp.upper()}.",
                  "",
+                 "You may want to check it one more time.",
+                 "",
                  f"If you did not write {'those' if n != 1 else 'that'} "
                  f"{n} down and test",
                  "them, you may not be able to recover",
                  "this key or its funds."]
         _fit_block(d, lines,
-                   [(w // 2, int(h * (0.26 + i * 0.085))) for i in range(6)],
-                   int(h * 0.055), CREAM, "mm", int(w * 0.92))
+                   [(w // 2, int(h * (0.22 + i * 0.075)))
+                    for i in range(len(lines))],
+                   int(h * 0.050), CREAM, "mm", int(w * 0.92))
         _fit(d, (w // 2, int(h * 0.80)),
              f"DOWN for the {n} place{plural}", int(h * 0.045), OCHRE, "mm",
              int(w * 0.92))
     else:
         rows = [f"Box {b}, character {c}" for b, c in made]
-        shown = rows[first:first + 4]
+        shown = rows[first:first + CORRECTIONS_SHOWN]
         _fit_block(d, shown,
                    [(w // 2, int(h * (0.30 + i * 0.11)))
                     for i in range(len(shown))],
                    int(h * 0.06), OCHRE, "mm", int(w * 0.86))
         _fit(d, (w // 2, int(h * 0.80)), "Write these on your paper.",
              int(h * 0.045), GREY, "mm", int(w * 0.92))
-        if len(rows) > 4:
-            scrollbar(d, w, int(h * 0.24), int(h * 0.48), first, len(rows), 4)
+        if len(rows) > CORRECTIONS_SHOWN:
+            scrollbar(d, w, int(h * 0.24), int(h * 0.48), first, len(rows),
+                      CORRECTIONS_SHOWN)
     _actions(d, w, h, ["DONE"], 0)
     return img
 
@@ -1764,7 +1773,7 @@ def splash(w, h, build=None, dev=()):
 # Core's master private key, which is the pure signer's only backup.
 
 
-def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
+def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=1):
     """One screenful of the key, on its way to paper.
 
     `chunk` is already one page's worth (see text_pages). `label` names the
@@ -1812,18 +1821,35 @@ def backup_page(w, h, chunk, label, page=0, pages=1, actions_sel=0):
         _actions(d, w, h, ["ABORT" if page == 0 else "BACK", "NEXT"], 1)
     else:
         # The last page is where the writing is finished, so both ways on
-        # are real choices and the bar is live. DONE is pre-selected: a
-        # backup flow you cannot leave in one press is the flow Ben threw
-        # out on 2026-09-05. CHECK IT is one press away and says what it
-        # is, which the old VERIFY label did not, because it did nothing.
+        # are real choices and the bar is live. CHECK IT is pre-selected
+        # and DONE is one press LEFT (Ben, 2026-09-19: the safe choice
+        # belongs under the thumb, and leaving without checking is the
+        # risky one). It was the other way round, and the default here
+        # stayed at DONE for four days after the caller stopped using
+        # it: only main.py's `sel = 1` was holding the rule up (two-axis
+        # review, 2026-09-23).
         _actions(d, w, h, ["DONE", "CHECK IT"], actions_sel)
     return img
-def verified(w, h, kind="ok"):
-    """`kind` may carry newlines; each line is fitted separately."""
+def verified(w, h, kind="ok", note=None):
+    """`kind` may carry newlines; each line is fitted separately.
+
+    `note` is the small print under the verdict: what this screen did
+    NOT check. The backup check prefills the 16 characters every Core
+    master key on a network begins with, so those four boxes are never
+    compared against the paper, and "Your paper opens key X" was a
+    stronger claim than the device had earned (two-axis review,
+    2026-09-23, against map correction C2: "Every claim on it is one the
+    device actually verified").
+    """
     img, d = _frame(w, h)
     _status_circle(img, d, w, h, "VALID", OCHRE)
     for i, line in enumerate(kind.split("\n")):
-        _fit(d, (w // 2, int(h * (0.64 + i * 0.065))), line,
+        _fit(d, (w // 2, int(h * (0.62 + i * 0.065))), line,
              int(h * 0.06), CREAM, "mm", int(w * 0.92))
+    if note:
+        _fit_block(d, note.split("\n"),
+                   [(w // 2, int(h * (0.80 + i * 0.058)))
+                    for i in range(len(note.split("\n")))],
+                   int(h * 0.040), GREY, "mm", int(w * 0.92))
     _actions(d, w, h, ["DONE"], 0)
     return img
