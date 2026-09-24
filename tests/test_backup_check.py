@@ -685,8 +685,8 @@ asked = []
 _real_entry_fn = coresigner_main.Session._check_entry
 
 
-def _watch_entry(self, label, want, typed, box_numbers=None):
-    asked.append((label, want, box_numbers))
+def _watch_entry(self, label, want, typed, box_numbers=None, ask=None):
+    asked.append((label, typed, box_numbers, sorted(ask or ())))
     return want, []                      # typed back clean
 
 
@@ -700,13 +700,16 @@ finally:
     coresigner_main.Session._check_entry = _real_entry_fn
     signer.opens_wallet = real_opens
 
-# ONE screen with both boxes on it, numbered as the paper numbers them
-# (Ben, 2026-09-23), not one box at a time.
-want_asked = [("RECHECK  2  BOXES",
-               KEY[4:8] + KEY[16:20], [2, 5])]
+# ONE screen, both boxes on it numbered as the paper numbers them (Ben,
+# 2026-09-23), and only the WRONG characters blank, everything else
+# already filled and out of reach (Ben, 2026-09-24).
+_r_want = KEY[4:8] + KEY[16:20]
+_r_ask = [0, 5]                          # box 2 char 1, box 5 char 2
+_r_typed = "".join(" " if n in _r_ask else c for n, c in enumerate(_r_want))
+want_asked = [("RECHECK  2  CHARACTERS", _r_typed, [2, 5], _r_ask)]
 if asked != want_asked:
-    bad(f"RECHECK asked for {asked}, not the two corrected boxes on one "
-        f"screen: {want_asked}")
+    bad(f"RECHECK asked for {asked}, not {want_asked}: the two boxes on "
+        "one screen with only the wrong characters blank")
 elif not got:
     bad("a recheck that came back clean did not accept the paper")
 elif not drew(sess, screens.verified(
@@ -715,8 +718,53 @@ elif not drew(sess, screens.verified(
              "key so nobody types them.")):
     bad("a clean recheck did not say the paper opens the key")
 else:
-    ok("RECHECK asks for every corrected box on one screen, numbered "
-       "as the paper numbers them, and a clean pass accepts it")
+    ok("RECHECK shows every corrected box on one screen with only the "
+       "wrong characters blank, and a clean pass accepts it")
+
+# --- 6h. the recheck cannot type over a character already right --------
+# Ben, 2026-09-24: "no writing over values they already entered
+# correctly". The caret walks the asked-for slots and nothing else, so a
+# person cannot land on one of the three characters that were right all
+# along and lose it.
+
+_RW = "abcdefgh"
+_RASK = {2, 5}
+_RTYPED = "".join(" " if n in _RASK else c for n, c in enumerate(_RW))
+
+_walked, _at = [], min(_RASK)
+for _ in range(6):
+    _walked.append(_at)
+    _at = coresigner_main._step(_at, 1, sorted(_RASK), len(_RW))
+_back, _at = [], max(_RASK)
+for _ in range(6):
+    _back.append(_at)
+    _at = coresigner_main._step(_at, -1, sorted(_RASK), len(_RW))
+
+if set(_walked) | set(_back) != _RASK:
+    bad(f"the caret reached {sorted(set(_walked) | set(_back))}, not only "
+        f"the asked-for slots {sorted(_RASK)}")
+else:
+    ok("the caret walks only the slots being asked for, both ways")
+
+# B blanks the slot rather than closing the gap, because every other
+# character in the string is one this person already got right.
+sess = session("b")
+_seen = []
+_real_te2 = screens.text_entry
+screens.text_entry = lambda *a, **k: (_seen.append(a[3])
+                                      or _real_te2(*a, **k))
+try:
+    sess._check_entry(LABEL, _RW, _RW, ask={2})
+except hal.ScriptExhausted:
+    pass
+finally:
+    screens.text_entry = _real_te2
+
+if _seen[-1] != "ab defgh":
+    bad(f"B on an asked-for slot gave {_seen[-1]!r}, not 'ab defgh': it "
+        "closed the gap and moved every character after it")
+else:
+    ok("B blanks the slot it is on and leaves the rest where they are")
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")

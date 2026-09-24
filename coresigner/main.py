@@ -284,9 +284,28 @@ def _wrong_at(typed, want):
     person of eight mistakes for having typed eight characters. Whether
     a key is finished is a question about its length, and `_check_typed`
     asks it there.
+
+    A SPACE IS UNFILLED, not wrong. Base58 has no space, so one can only
+    be a slot nobody has typed yet: the padding a caret that jumped
+    ahead leaves behind, or a gap the recheck is asking to be filled.
     """
     return {n for n, ch in enumerate(typed)
-            if n >= len(want) or ch != want[n]}
+            if ch != " " and (n >= len(want) or ch != want[n])}
+
+
+def _step(caret, direction, ask, length):
+    """One caret key press, over every slot or only the asked-for ones.
+
+    With `ask` the caret must never rest on a character the person
+    already got right, so it hops between the slots still being asked
+    for and stops at the ends (Ben, 2026-09-24: "no writing over values
+    they already entered correctly").
+    """
+    if not ask:
+        return max(0, min(length, caret + direction))
+    if direction > 0:
+        return next((n for n in ask if n > caret), caret)
+    return next((n for n in reversed(ask) if n < caret), caret)
 
 
 def _same_cell(cells, cur, into):
@@ -1769,7 +1788,7 @@ class Session:
         while True:
             if self._show_corrections(made, xfp or "") == "exit":
                 return True
-            more = self._recheck(typed, sorted({b for b, _c, _ch in made}))
+            more = self._recheck(typed, made)
             if more is None:                    # abandoned the recheck
                 continue
             if not more:
@@ -1818,7 +1837,7 @@ class Session:
                 else:
                     page = 0
 
-    def _recheck(self, key_text, boxes):
+    def _recheck(self, key_text, made):
         """Type the corrected boxes again, off the paper this time.
 
         THE BOX AND NOT THE CHARACTER. Three corrections is three boxes
@@ -1836,17 +1855,29 @@ class Session:
         Returns the corrections this pass had to make, empty when the
         paper was right, or None if the person left.
         """
-        # ALL OF THEM ON ONE SCREEN, numbered as the paper numbers them.
-        # One box alone on a panel says nothing about how many are left
-        # or which one this is (Ben, 2026-09-23: "it shows just box 7
-        # and all empty chars? What should be showing there? Multiple
-        # boxes and some chars already showing?"). The ones already
-        # typed stay filled as the person works down them.
+        # ALL OF THEM ON ONE SCREEN, numbered as the paper numbers them,
+        # and only the characters that were wrong are blank. Ben,
+        # 2026-09-24: "recheck should only ask for the characters that
+        # are wrong and only show those boxes with the other chars
+        # prefilled... then to toggle to the next one, it goes to the
+        # next empty char, no writing over values they already entered
+        # correctly."
+        #
+        # The box is still the unit on screen, because that is what a
+        # person finds on their paper, and it is what catches a
+        # correction written into the WRONG box: they read box 7 off the
+        # paper, and if the fix went into box 8 then box 7 still says
+        # the old character. Three corrections is three presses.
+        boxes = sorted({b for b, _c, _ch in made})
         want = "".join(key_text[(b - 1) * 4:(b - 1) * 4 + 4] for b in boxes)
-        typed, made = self._check_entry(
-            f"RECHECK  {len(boxes)}  BOX{'ES' if len(boxes) != 1 else ''}",
-            want, "", box_numbers=boxes)
-        return None if typed is None else made
+        ask = {boxes.index(b) * 4 + (c - 1) for b, c, _ch in made}
+        typed = "".join(" " if n in ask else ch
+                        for n, ch in enumerate(want))
+        got, again = self._check_entry(
+            f"RECHECK  {len(ask)}  CHARACTER"
+            f"{'S' if len(ask) != 1 else ''}",
+            want, typed, box_numbers=boxes, ask=ask)
+        return None if got is None else again
 
     def _check_typed(self, label, want):
         """The whole key typed back and judged, with mistakes in place.
@@ -1887,7 +1918,8 @@ class Session:
                        if want.startswith(p)), "")
         return self._check_entry(label, want, want[:len(prefix)])
 
-    def _check_entry(self, label, want, typed, box_numbers=None):  # noqa: C901 - one keypad state machine, like _text_entry
+    def _check_entry(self, label, want, typed, box_numbers=None,  # noqa: C901 - one keypad state machine, like _text_entry
+                     ask=None):
         """Type the key back, one character at a time, none of them wrong.
 
         A character that does not match goes red where it sits and the
@@ -1899,12 +1931,22 @@ class Session:
 
         Returns `(typed, corrections)`, or `(None, [])` if they left.
         `corrections` is every place the device put the right character
-        in, as (box, character), counted per CHARACTER (C4).
+        in, as (box, character, what it should be), counted per
+        CHARACTER (C4).
+
+        `ask` NARROWS IT TO A FEW SLOTS. Give it the positions to be
+        filled and everything else arrives already correct and cannot be
+        reached: the caret walks the asked-for slots and nothing else,
+        so a person cannot type over a character they already got right
+        (Ben, 2026-09-24). The recheck uses it to show boxes 7, 14 and
+        22 whole, with one blank in each.
         """
         charset = "xprv"
         runs = screens.modes(charset)
         cur, mode, sel = 0, 0, None
-        caret, made = len(typed), []
+        ask = sorted(ask) if ask else None
+        caret = min(ask) if ask else len(typed)
+        made = []
         while True:
             cells = screens.mode_cells(runs[mode][1])
             wrong = _wrong_at(typed, want)
@@ -1931,13 +1973,15 @@ class Session:
                             min(wrong), typed, want, made, box_numbers)
                         sel = None
                         continue
-                    if len(typed) < len(want):
+                    if " " in typed or len(typed) < len(want):
                         # DONE on a key that is not finished puts you
                         # back where the typing stopped. Without this it
                         # returned a short string and Core refused it in
                         # Core's own words, which says nothing about the
                         # 40 characters still to type.
-                        caret, sel = len(typed), None
+                        caret = (next((n for n in ask if typed[n] == " "),
+                                      caret) if ask else len(typed))
+                        sel = None
                         continue
                     return typed, made
                 elif key == "d":
@@ -1952,7 +1996,8 @@ class Session:
             elif key in ("a", "p"):
                 ch = cells[cur]
                 if ch == screens.CARET_LEFT:
-                    caret = max(0, caret - 1)   # backwards is never blocked
+                    # backwards is never blocked
+                    caret = _step(caret, -1, ask, len(want))
                 elif wrong:
                     # FORWARD WITH ONE STILL RED. The press is spent on
                     # the message; they read it, write it on the paper,
@@ -1960,19 +2005,26 @@ class Session:
                     typed, caret = self._fix_one(min(wrong), typed, want,
                                                  made, box_numbers)
                 elif ch == screens.CARET_RIGHT:
-                    caret = min(len(want), caret + 1)
+                    caret = _step(caret, 1, ask, len(want))
                 else:
                     typed += " " * max(0, caret - len(typed))
                     typed = typed[:caret] + ch + typed[caret + 1:]
-                    # ONE PAST THE END is a real caret position, the way
-                    # it is on every text field. It clamped at the last
-                    # slot, so after the final character the caret sat
-                    # ON it and B deleted the one BEFORE: want abcdefgh,
-                    # typed abcdefgx, one B gave abcdefx (two-axis
-                    # review, 2026-09-23). A fat-finger on the last
-                    # character cost the one before it.
-                    caret = min(caret + 1, len(want))
-                    if len(typed) >= len(want) and typed[-1] == want[-1]:
+                    if ask:
+                        # The next slot still waiting, so a person never
+                        # lands on a character they already got right.
+                        caret = next((n for n in ask if typed[n] == " "),
+                                     caret)
+                    else:
+                        # ONE PAST THE END is a real caret position, the
+                        # way it is on every text field. It clamped at
+                        # the last slot, so after the final character
+                        # the caret sat ON it and B deleted the one
+                        # BEFORE: want abcdefgh, typed abcdefgx, one B
+                        # gave abcdefx (two-axis review, 2026-09-23).
+                        caret = min(caret + 1, len(want))
+                    if (typed == want if ask else
+                            len(typed) >= len(want)
+                            and typed[-1] == want[-1]):
                         # Nothing left to type and nothing red, so the
                         # bar takes the focus and DONE is one press.
                         sel = 1
@@ -1981,6 +2033,12 @@ class Session:
                 cur = _same_cell(cells, cur,
                                  screens.mode_cells(runs[mode][1]))
             elif key == "b":
+                if ask:
+                    # Blank the slot rather than close the gap. The
+                    # string is fixed length here and every other
+                    # character is one this person already got right.
+                    typed = typed[:caret] + " " + typed[caret + 1:]
+                    continue
                 if not typed:
                     return None, []
                 caret = max(0, caret - 1)

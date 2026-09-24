@@ -18,9 +18,9 @@ MUTATIONS = [
  ("red marks untyped positions again (Ben, 2026-09-19)",
   "coresigner/main.py",
   "    return {n for n, ch in enumerate(typed)\n"
-  "            if n >= len(want) or ch != want[n]}",
+  "            if ch != \" \" and (n >= len(want) or ch != want[n])}",
   "    return ({n for n, ch in enumerate(typed)\n"
-  "             if n >= len(want) or ch != want[n]}\n"
+  "             if ch != \" \" and (n >= len(want) or ch != want[n])}\n"
   "            | set(range(len(typed), len(want))))"),
 
  ("a wrong character no longer stops you moving on (C1)",
@@ -53,7 +53,7 @@ MUTATIONS = [
 
  ("DONE finishes a key that is not finished (C6)",
   "coresigner/main.py",
-  "                    if len(typed) < len(want):\n",
+  "                    if \" \" in typed or len(typed) < len(want):\n",
   "                    if False:\n"),
 
  ("CHECK IT stops being the default after a backup (Ben, 2026-09-19)",
@@ -74,6 +74,17 @@ MUTATIONS = [
   "coresigner/screens.py",
   '"Write this down. It opens the wallet"',
   '"write this down. it opens the wallet"'),
+
+ ("the recheck lets you type over a character already right",
+  "coresigner/main.py",
+  "    if not ask:\n        return max(0, min(length, caret + direction))",
+  "    if True:\n        return max(0, min(length, caret + direction))"),
+
+ ("the recheck asks for whole boxes again, not the wrong characters",
+  "coresigner/main.py",
+  '        typed = "".join(" " if n in ask else ch\n'
+  '                        for n, ch in enumerate(want))',
+  '        typed = ""'),
 
  ("a pinned package loses its hash (test_pins)",
   "image/PINS",
