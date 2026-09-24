@@ -240,14 +240,22 @@ CASES = {
     "wrong-character": lambda w, h: screens.wrong_character(w, h, 28, 4,
                                                             "W", "M"),
     "corrections-claim": lambda w, h: screens.corrections(
-        w, h, [(3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4),
-               (25, 2), (27, 4), (28, 1), (11, 2), (12, 3), (13, 4)],
+        w, h, [(b, c, "W") for b, c in
+               ((3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4),
+                (25, 2), (27, 4), (28, 1), (11, 2), (12, 3), (13, 4))],
         "73c5da0a"),
-    "corrections-one": lambda w, h: screens.corrections(w, h, [(7, 3)],
-                                                        "73c5da0a"),
+    "corrections-one": lambda w, h: screens.corrections(
+        w, h, [(7, 3, "C")], "73c5da0a"),
     "corrections-list": lambda w, h: screens.corrections(
-        w, h, [(3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4)],
+        w, h, [(b, c, "W") for b, c in
+               ((3, 1), (7, 3), (9, 2), (14, 1), (18, 4), (22, 4))],
         "73c5da0a", page=1, first=2),
+    # The recheck: boxes that do not run on, numbered as the paper
+    # numbers them, with the done ones filled (Ben, 2026-09-23).
+    "recheck-boxes": lambda w, h: screens.text_entry(
+        w, h, "RECHECK  3  BOXES  ·  5/12", "en4En", 0, "xprv", 0,
+        caret=5, want_len=12, box_numbers=(7, 14, 22),
+        actions=("ABORT", "DONE")),
     "choose-channel": lambda w, h: screens.choose_channel(
         w, h, ["stick", "card"], 1),
     "confirm-discard": lambda w, h: screens.confirm_discard(w, h, "d2b7e45c", 1),

@@ -29,14 +29,22 @@ MUTATIONS = [
 
  ("the device stops putting the right character in (C1)",
   "coresigner/main.py",
-  "        made.append((box, char))\n"
   "        return typed[:at] + want[at] + typed[at + 1:], min(at + 1,",
-  "        made.append((box, char))\n"
   "        return typed, min(at + 1,"),
 
  ("corrections are no longer recorded (C2)",
   "coresigner/main.py",
-  "        made.append((box, char))\n", "        pass\n"),
+  "        made.append((box, char, want[at]))\n", "        pass\n"),
+
+ ("the list stops saying what the character should be (Ben, 2026-09-23)",
+  "coresigner/main.py",
+  "        made.append((box, char, want[at]))",
+  "        made.append((box, char, \"?\"))"),
+
+ ("RECHECK asks for the whole key instead of the corrected boxes",
+  "coresigner/main.py",
+  '        want = "".join(key_text[(b - 1) * 4:(b - 1) * 4 + 4] for b in boxes)',
+  "        want = key_text"),
 
  ("the typing boxes stop at 12 again (the bug, 3 reports)",
   "coresigner/screens.py",
@@ -114,13 +122,16 @@ def run_suites():
     return False, "every suite passed"
 
 
-caught, survived = [], []
+caught, survived, skipped = [], [], []
 for name, rel, find, repl in MUTATIONS:
     path = ROOT / rel
     original = path.read_text()
     n = original.count(find)
     if n != 1:
-        print(f"SKIP  {name}\n      anchor matched {n} times, not 1")
+        skipped.append(name)
+        print(f"SKIP  {name}\n      anchor matched {n} times, not 1. "
+              "The code moved under this mutation and it now tests "
+              "nothing.")
         continue
     path.write_text(original.replace(find, repl, 1))
     clear_cache()
@@ -136,7 +147,12 @@ for name, rel, find, repl in MUTATIONS:
         survived.append(name)
         print(f"SURVIVED {name}\n         {why}")
 
-print(f"\n{len(caught)} caught, {len(survived)} survived")
+print(f"\n{len(caught)} caught, {len(survived)} survived, "
+      f"{len(skipped)} did not apply")
 for s in survived:
     print(f"  survivor: {s}")
-sys.exit(1 if survived else 0)
+for s in skipped:
+    print(f"  did not apply: {s}")
+# A skip is a failure. It is the same hole TESTING.md rule 12a names in
+# its other half: a run that reports success for a mutation nothing ran.
+sys.exit(1 if survived or skipped else 0)

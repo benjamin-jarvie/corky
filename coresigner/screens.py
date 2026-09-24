@@ -1479,7 +1479,8 @@ CHARS_PER_PAGE = GROUPS_PER_ROW * ROWS_PER_PAGE * 4
 
 def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
                secret=False, actions_sel=None, caret=None, hint=None,
-               actions=("CANCEL", "DONE"), wrong=(), want_len=None):
+               actions=("CANCEL", "DONE"), wrong=(), want_len=None,
+               box_numbers=None):
     """Typing, shown the way the backup is shown: numbered boxes of four.
 
     The old screen drew a flat echo line with a caret while the backup
@@ -1498,9 +1499,14 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
     characters at a time and number every screenful from 1, so 12 was
     the highest number the device ever drew and boxes 13 to 28 did not
     appear to exist: "I STILL can not enter more than the 12th box"
-    (Ben, on the board, 2026-09-19, the second of three reports). The
-    paging is gone, so there is no screenful offset to carry and a
-    parameter for one would be a knob nothing turns.
+    (Ben, on the board, 2026-09-19, the second of three reports).
+
+    `box_numbers` is what the boxes on this screenful are CALLED, and
+    they need not run on: the recheck shows boxes 7, 14 and 22 together
+    because those are the three a person has to read off their paper.
+    None means 1, 2, 3 and so on, which is every other screen. A box 7
+    drawn as box 1 sends somebody to the wrong place on their paper,
+    which is the defect this numbering exists to prevent.
 
     `mode` indexes `modes(charset)`. One mode at a time, never a paged
     alphabet: see that function for why.
@@ -1535,7 +1541,8 @@ def text_entry(w, h, title, text, cursor=0, charset="xprv", mode=0,
         x = left
         for g in range(r * ENTRY_GROUPS_PER_ROW,
                        min((r + 1) * ENTRY_GROUPS_PER_ROW, len(groups))):
-            _box(d, x + num_w, y, groups[g], g + 1, w, h, secret,
+            number = box_numbers[g] if box_numbers else g + 1
+            _box(d, x + num_w, y, groups[g], number, w, h, secret,
                  caret, wrong, g * 4, slot, g == here)
             x += pitch
         y += int(h * 0.125)
@@ -1657,12 +1664,21 @@ def wrong_character(w, h, box, char, typed, want):
     return img
 
 
-def corrections(w, h, made, xfp, page=0, first=0):
+def corrections(w, h, made, xfp, page=0, first=0, actions_sel=1):
     """What the check says when the paper and the key disagreed.
 
-    `made` is every place a character was corrected, as (box, char).
-    Counted per CHARACTER and not per box, because that is what the
-    interruption named and what the person wrote on their paper.
+    `made` is every place a character was corrected, as
+    (box, character, what it should be). Counted per CHARACTER and not
+    per box, because that is what the interruption named and what the
+    person wrote on their paper.
+
+    THE LIST SAYS WHAT TO WRITE. It named the place and not the
+    character, so the one person it exists for, somebody who did not
+    write the corrections down as they went, was told where to look and
+    not what to put there (Ben, 2026-09-23: "the 7 corrections don't
+    show what the char was and what it should be. Why? I asked for
+    that."). What they typed wrong is gone and does not matter; what it
+    should be is the whole point.
 
     TWO SCREENS. The claim and the warning need room to be read, and a
     list of corrections underneath them squeezed the warning to grey
@@ -1693,11 +1709,14 @@ def corrections(w, h, made, xfp, page=0, first=0):
                    [(w // 2, int(h * (0.22 + i * 0.075)))
                     for i in range(len(lines))],
                    int(h * 0.050), CREAM, "mm", int(w * 0.92))
-        _fit(d, (w // 2, int(h * 0.80)),
-             f"DOWN for the {n} place{plural}", int(h * 0.045), OCHRE, "mm",
-             int(w * 0.92))
+        # NO HINT LINE. "DOWN for the 3 places" was a second way of
+        # saying what the bar says, in gold, on a screen already full of
+        # warning (Ben, 2026-09-23: "just show the scroll bar if we
+        # scroll"). Every other paged screen on this device uses the
+        # bar alone, and E-1 exists because they did not.
+        scrollbar(d, w, int(h * 0.20), int(h * 0.60), 0, 2)
     else:
-        rows = [f"Box {b}, character {c}" for b, c in made]
+        rows = [f"Box {b}, character {c} is {ch}" for b, c, ch in made]
         shown = rows[first:first + CORRECTIONS_SHOWN]
         _fit_block(d, shown,
                    [(w // 2, int(h * (0.30 + i * 0.11)))
@@ -1705,10 +1724,18 @@ def corrections(w, h, made, xfp, page=0, first=0):
                    int(h * 0.06), OCHRE, "mm", int(w * 0.86))
         _fit(d, (w // 2, int(h * 0.80)), "Write these on your paper.",
              int(h * 0.045), GREY, "mm", int(w * 0.92))
-        if len(rows) > CORRECTIONS_SHOWN:
-            scrollbar(d, w, int(h * 0.24), int(h * 0.48), first, len(rows),
-                      CORRECTIONS_SHOWN)
-    _actions(d, w, h, ["DONE"], 0)
+        # The bar covers BOTH axes: which of the two screens you are on,
+        # and how far down the list. One track, because two would be two
+        # things to read on a screen whose job is to be read once.
+        rows_beyond = max(len(rows) - CORRECTIONS_SHOWN, 0)
+        scrollbar(d, w, int(h * 0.20), int(h * 0.60), 1 + first,
+                  2 + rows_beyond)
+    # BOTH WAYS ON. It offered DONE alone, which is a screen that tells
+    # you three things are broken and then gives you one button, the
+    # same shape as the VERIFY label that did nothing (Ben, 2026-09-23).
+    # RECHECK is pre-selected for the reason CHECK IT is on the backup
+    # page: the safe choice belongs under the thumb.
+    _actions(d, w, h, ["EXIT", "RECHECK"], actions_sel)
     return img
 
 

@@ -600,7 +600,7 @@ def main():
                   + "a"                          # dismiss the message
                   + rest9                        # the rest of the key
                   + "a"                          # DONE, the bar has focus
-                  + "a"                          # the corrections screen
+                  + "la"                         # corrections: LEFT to EXIT
                   + "b" + "b" + "draa")
         r = run_device(datadir, script, work / "framesK9", qr_key=key_a)
         assert r.returncode == 0, f"K9 failed:\n{r.stderr[-1500:]}"
@@ -615,8 +615,12 @@ def main():
         # paper opens key X": that is no longer a thing the device knows
         # (map correction, C2). It ends on the count, the fingerprint
         # Core confirmed, and the warning.
+        # The list carries what to WRITE and not only where to look
+        # (Ben, 2026-09-23), so the correction is (box, character, the
+        # character it should be).
         box9, char9 = wrong_at // 4 + 1, wrong_at % 4 + 1
-        assert _has(fr9, _render(scr.corrections, [(box9, char9)], xfp_a)), \
+        assert _has(fr9, _render(scr.corrections,
+                                 [(box9, char9, XPRV_A[wrong_at])], xfp_a)), \
             "K9: the corrections screen never reached the panel"
         assert not _has(fr9, _render(
             scr.verified, f"Your paper opens\nkey {xfp_a.upper()}")), \

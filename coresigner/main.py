@@ -1757,30 +1757,57 @@ class Session:
                 self.w, self.h,
                 "Your paper opens\n"
                 f"key {(xfp or '').upper()}",
-                note="Boxes 1 to 4 are the same on every\n"
-                     "key and were not checked."))
+                note="Boxes 1 to 4 start every key, so\n"
+                     "nobody types them. Check those by eye."))
             self.buttons.read()
             return True
         # SOMETHING WAS CORRECTED, so "your paper opens this key" is not
         # a thing the device knows any more. It knows how many and
         # where, and that the paper only opens the wallet if the person
         # went back and wrote them down (map correction, C2).
-        # THE LIST SCROLLS. C4 said "the list scrolls past four, on the
-        # same bar every other paged screen uses" and this loop only
-        # ever turned between the two pages, so with seven corrections
-        # the last three could not be reached and the bar it drew could
-        # not move (two-axis review, 2026-09-23). That list is the
-        # safety net for somebody who did not write them down one at a
-        # time, which is the only person who needs it.
         made = list(made)
-        page, first = 0, 0
+        while True:
+            if self._show_corrections(made, xfp or "") == "exit":
+                return True
+            more = self._recheck(typed, sorted({b for b, _c, _ch in made}))
+            if more is None:                    # abandoned the recheck
+                continue
+            if not more:
+                # The corrected boxes came back off the paper, so the
+                # paper now says what the key says. Everything else
+                # matched on the first pass.
+                self.display.show(screens.verified(
+                    self.w, self.h,
+                    "Your paper opens\n"
+                    f"key {(xfp or '').upper()}",
+                    note="Rechecked, and boxes 1 to 4 start every\n"
+                         "key so nobody types them."))
+                self.buttons.read()
+                return True
+            made = sorted(set(made) | set(more))
+
+    def _show_corrections(self, made, xfp):
+        """The summary and the list, and which way the person went.
+
+        THE LIST SCROLLS. C4 said "the list scrolls past four, on the
+        same bar every other paged screen uses" and this loop only ever
+        turned between the two pages, so with seven corrections the last
+        three could not be reached and the bar it drew could not move
+        (two-axis review, 2026-09-23).
+        """
+        page, first, sel = 0, 0, 1
         while True:
             self.display.show(screens.corrections(
-                self.w, self.h, made, xfp or "", page=page, first=first))
+                self.w, self.h, made, xfp, page=page, first=first,
+                actions_sel=sel))
             key = self.buttons.read()
-            if key in ("a", "p", "b", "c"):
-                return True
-            if page == 0:
+            if key in ("l", "r"):
+                sel = 1 - sel
+            elif key in ("a", "p"):
+                return "recheck" if sel == 1 else "exit"
+            elif key in ("b", "c"):
+                return "exit"
+            elif page == 0:
                 if key == "d":
                     page, first = 1, 0
             elif key == "d":
@@ -1790,6 +1817,36 @@ class Session:
                     first -= 1
                 else:
                     page = 0
+
+    def _recheck(self, key_text, boxes):
+        """Type the corrected boxes again, off the paper this time.
+
+        THE BOX AND NOT THE CHARACTER. Three corrections is three boxes
+        and twelve characters, against 111 for the whole key, and the
+        box is both what the message named and what a person reads off
+        their paper. A single character typed out of context is the
+        position that caused the mistake in the first place, and it
+        cannot catch a correction written into the wrong box.
+
+        Charting rejected a second pass in C2 and Ben put it back on
+        2026-09-23, having read the screen: a summary that says three
+        things are broken and offers one button is the VERIFY label
+        again.
+
+        Returns the corrections this pass had to make, empty when the
+        paper was right, or None if the person left.
+        """
+        # ALL OF THEM ON ONE SCREEN, numbered as the paper numbers them.
+        # One box alone on a panel says nothing about how many are left
+        # or which one this is (Ben, 2026-09-23: "it shows just box 7
+        # and all empty chars? What should be showing there? Multiple
+        # boxes and some chars already showing?"). The ones already
+        # typed stay filled as the person works down them.
+        want = "".join(key_text[(b - 1) * 4:(b - 1) * 4 + 4] for b in boxes)
+        typed, made = self._check_entry(
+            f"RECHECK  {len(boxes)}  BOX{'ES' if len(boxes) != 1 else ''}",
+            want, "", box_numbers=boxes)
+        return None if typed is None else made
 
     def _check_typed(self, label, want):
         """The whole key typed back and judged, with mistakes in place.
@@ -1830,7 +1887,7 @@ class Session:
                        if want.startswith(p)), "")
         return self._check_entry(label, want, want[:len(prefix)])
 
-    def _check_entry(self, label, want, typed):  # noqa: C901 - one keypad state machine, like _text_entry
+    def _check_entry(self, label, want, typed, box_numbers=None):  # noqa: C901 - one keypad state machine, like _text_entry
         """Type the key back, one character at a time, none of them wrong.
 
         A character that does not match goes red where it sits and the
@@ -1859,7 +1916,7 @@ class Session:
             self.display.show(screens.text_entry(
                 self.w, self.h, title, typed, cur, charset, mode,
                 actions_sel=sel, caret=caret, actions=("ABORT", "DONE"),
-                wrong=wrong, want_len=len(want),
+                wrong=wrong, want_len=len(want), box_numbers=box_numbers,
                 hint=self._type_hint(runs, mode, charset)),
                 sensitive=True)
             key = self.buttons.read()
@@ -1871,7 +1928,7 @@ class Session:
                         return None, []
                     if wrong:                   # DONE is forward too
                         typed, caret = self._fix_one(
-                            min(wrong), typed, want, made)
+                            min(wrong), typed, want, made, box_numbers)
                         sel = None
                         continue
                     if len(typed) < len(want):
@@ -1901,7 +1958,7 @@ class Session:
                     # the message; they read it, write it on the paper,
                     # and type the next character themselves.
                     typed, caret = self._fix_one(min(wrong), typed, want,
-                                                 made)
+                                                 made, box_numbers)
                 elif ch == screens.CARET_RIGHT:
                     caret = min(len(want), caret + 1)
                 else:
@@ -1929,7 +1986,7 @@ class Session:
                 caret = max(0, caret - 1)
                 typed = typed[:caret] + typed[caret + 1:]
 
-    def _fix_one(self, at, typed, want, made):
+    def _fix_one(self, at, typed, want, made, box_numbers=None):
         """Show what the paper should say, then put it right on screen.
 
         The typed string is scaffolding and the device owns it; the
@@ -1937,11 +1994,19 @@ class Session:
         screen says which box and character to write on (map
         correction, C1 and C2).
         """
-        box, char = at // 4 + 1, at % 4 + 1
+        # The box as the PAPER calls it. On a recheck the screen holds
+        # boxes 7, 14 and 22, so the third of them is box 22 and not
+        # box 3, and a message naming box 3 sends somebody to the wrong
+        # place on their own handwriting.
+        box = box_numbers[at // 4] if box_numbers else at // 4 + 1
+        char = at % 4 + 1
         self.display.show(screens.wrong_character(
             self.w, self.h, box, char, typed[at], want[at]), sensitive=True)
         self.buttons.read()
-        made.append((box, char))
+        # THE CHARACTER, not just the place. The list at the end told a
+        # person where to look and not what to write, which is useless
+        # to the only person who needs it (Ben, 2026-09-23).
+        made.append((box, char, want[at]))
         return typed[:at] + want[at] + typed[at + 1:], min(at + 1,
                                                            len(want))
 

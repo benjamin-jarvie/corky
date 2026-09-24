@@ -183,8 +183,8 @@ sess3 = session(_p1 + _p2 + "a" + _p3 + "a")
 got3, made3 = sess3._check_entry(LABEL, SHORT_WANT, "")
 if got3 != SHORT_WANT:
     bad(f"the key was not repaired by the correction: {got3!r}")
-elif made3 != [(1, 4)]:
-    bad(f"the corrections recorded are {made3}, not [(1, 4)]")
+elif made3 != [(1, 4, SHORT_WANT[3])]:
+    bad(f"the corrections recorded are {made3}, not [(1, 4, 'd')]")
 else:
     ok("the device puts the right character in, and records where")
 
@@ -457,7 +457,8 @@ finally:
 if typed_back != KEY:
     bad(f"the key did not come back right through a correction: "
         f"{typed_back!r}")
-elif made_back != [(WRONG_AT // 4 + 1, WRONG_AT % 4 + 1)]:
+elif made_back != [(WRONG_AT // 4 + 1, WRONG_AT % 4 + 1,
+                    KEY[WRONG_AT])]:
     bad(f"the corrections recorded are {made_back}, not the one made")
 else:
     ok("a key with one capital in lower case is corrected and accepted")
@@ -632,8 +633,8 @@ for verdict, want_text, why in (
         bad(f"Core {why}, but _confirm_typed_key returned {got!r}")
     elif verdict and not drew(sess, screens.verified(
             320, 240, want_text,
-            note="Boxes 1 to 4 are the same on every\n"
-                 "key and were not checked.")):
+            note="Boxes 1 to 4 start every key, so\n"
+                 "nobody types them. Check those by eye.")):
         bad("Core agreed and the panel never said the paper opens the key")
     elif not verdict and not drew(sess, screens.result(
             320, 240, ok=False, detail="That key does not open this wallet")):
@@ -647,10 +648,15 @@ for verdict, want_text, why in (
 # the person went back and wrote the corrections down, which nothing on
 # the device can see.
 
-MADE = [(7, 3), (14, 1), (22, 4)]
+# (box, character, what it should be). The list says what to WRITE,
+# not only where to look (Ben, 2026-09-23).
+MADE = [(7, 3, "C"), (14, 1, "8"), (22, 4, "w")]
 signer.opens_wallet = lambda *a, **k: True
 try:
-    sess = session("a")
+    # LEFT then A: EXIT. RECHECK is the pre-selected button, for the
+    # reason CHECK IT is on the backup page (Ben, 2026-09-23), so a
+    # bare A starts typing the corrected boxes back.
+    sess = session("la")
     got = sess._confirm_typed_key(KEY, "coresigner-73c5da0a", "73c5da0a",
                                   MADE)
 finally:
@@ -666,6 +672,51 @@ elif not drew(sess, screens.corrections(320, 240, MADE, "73c5da0a")):
     bad("the corrections screen was never drawn")
 else:
     ok("3 corrections replace the claim with the count and the warning")
+
+# --- 6g. RECHECK asks for the corrected BOXES, off the paper -----------
+# Ben, 2026-09-23, reading the summary: "It needs to be a recheck button
+# and exit button, not just done." And on scope: the boxes, not the whole
+# key and not the bare characters. Three corrections is three boxes and
+# twelve characters, against 111, and the box is what the message named
+# and what a person reads off their paper.
+
+RECHECK_MADE = [(2, 1, KEY[4]), (5, 2, KEY[17])]
+asked = []
+_real_entry_fn = coresigner_main.Session._check_entry
+
+
+def _watch_entry(self, label, want, typed, box_numbers=None):
+    asked.append((label, want, box_numbers))
+    return want, []                      # typed back clean
+
+
+coresigner_main.Session._check_entry = _watch_entry
+signer.opens_wallet = lambda *a, **k: True
+try:
+    sess = session("a" + "a")            # RECHECK, then dismiss the verdict
+    got = sess._confirm_typed_key(KEY, "coresigner-73c5da0a", "73c5da0a",
+                                  RECHECK_MADE)
+finally:
+    coresigner_main.Session._check_entry = _real_entry_fn
+    signer.opens_wallet = real_opens
+
+# ONE screen with both boxes on it, numbered as the paper numbers them
+# (Ben, 2026-09-23), not one box at a time.
+want_asked = [("RECHECK  2  BOXES",
+               KEY[4:8] + KEY[16:20], [2, 5])]
+if asked != want_asked:
+    bad(f"RECHECK asked for {asked}, not the two corrected boxes on one "
+        f"screen: {want_asked}")
+elif not got:
+    bad("a recheck that came back clean did not accept the paper")
+elif not drew(sess, screens.verified(
+        320, 240, "Your paper opens\nkey 73C5DA0A",
+        note="Rechecked, and boxes 1 to 4 start every\n"
+             "key so nobody types them.")):
+    bad("a clean recheck did not say the paper opens the key")
+else:
+    ok("RECHECK asks for every corrected box on one screen, numbered "
+       "as the paper numbers them, and a clean pass accepts it")
 
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
