@@ -86,6 +86,11 @@ MUTATIONS = [
   '                        for n, ch in enumerate(want))',
   '        typed = ""'),
 
+ ("typing past the end of the key appends again (Ben, 2026-09-25)",
+  "coresigner/main.py",
+  "                elif caret >= len(want):",
+  "                elif False:"),
+
  ("a pinned package loses its hash (test_pins)",
   "image/PINS",
   "libzbar0t64_0.23.93-8_arm64.deb 86bf2db996e828f87d2ab94509cd0b4fbc097e57e8976cb6142ee541b2638787 121644",

@@ -766,6 +766,49 @@ if _seen[-1] != "ab defgh":
 else:
     ok("B blanks the slot it is on and leaves the rest where they are")
 
+# --- 6i. typing past the end of the key ---------------------------------
+# Ben's note of 2026-09-25 read "1 correction Box 32, character 1" on a
+# key that is 28 boxes. The caret rests one past the end so B can delete
+# the last character (two-axis review, 2026-09-23), and a press there
+# APPENDED: `typed` grew past `want` without limit, `_wrong_at` flagged
+# the overflow, and `_fix_one` indexed `want` out of range. IndexError is
+# not in Session.HANDLED, so that took the process down, on the screen
+# where a key is loaded.
+
+_OVER = "abcdefgh"
+_over_presses, _om, _oc = grid_presses("xprv", "abcdefgx")
+_more, _om2, _oc2 = grid_presses("xprv", "zzzzzzzzzzzz", _om, _oc)
+_over_drawn = []
+_real_te3 = screens.text_entry
+screens.text_entry = lambda *a, **k: (_over_drawn.append(a[3])
+                                      or _real_te3(*a, **k))
+try:
+    sess = session(_over_presses + _more)
+    sess._check_entry(LABEL, _OVER, "")
+except hal.ScriptExhausted:
+    pass
+except IndexError as exc:
+    bad(f"typing past the end of the key crashed the device: {exc!r}. "
+        "IndexError is not in Session.HANDLED, so this ends the session "
+        "with a key loaded.")
+finally:
+    screens.text_entry = _real_te3
+
+if _over_drawn and len(_over_drawn[-1]) != len(_OVER):
+    bad(f"typing past the end grew the key to "
+        f"{len(_over_drawn[-1])} characters, so a message could name a "
+        f"box that does not exist")
+elif _over_drawn:
+    ok("typing past the end of the key is refused, not appended")
+
+# And the set of wrong positions can never point outside the key, which
+# is the trap _fix_one walked into.
+if coresigner_main._wrong_at("abcdefghZZZ", _OVER) - set(range(len(_OVER))):
+    bad("_wrong_at returns positions past the end of the key, which "
+        "_fix_one then indexes")
+else:
+    ok("_wrong_at never points past the end of the key")
+
 print()
 print("FAILED %d" % len(fails) if fails else "ALL PASS")
 sys.exit(1 if fails else 0)

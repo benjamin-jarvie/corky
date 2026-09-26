@@ -288,9 +288,14 @@ def _wrong_at(typed, want):
     A SPACE IS UNFILLED, not wrong. Base58 has no space, so one can only
     be a slot nobody has typed yet: the padding a caret that jumped
     ahead leaves behind, or a gap the recheck is asking to be filled.
+
+    BOUNDED BY `want`. A position past the end is not a character in the
+    wrong place, it is a string that should never have grown, and
+    returning one sent `_fix_one` to index `want` out of range. The loop
+    stops the growth; this stops the trap behind it.
     """
-    return {n for n, ch in enumerate(typed)
-            if ch != " " and (n >= len(want) or ch != want[n])}
+    return {n for n, ch in enumerate(typed[:len(want)])
+            if ch != " " and ch != want[n]}
 
 
 def _step(caret, direction, ask, length):
@@ -2006,6 +2011,18 @@ class Session:
                                                  made, box_numbers)
                 elif ch == screens.CARET_RIGHT:
                     caret = _step(caret, 1, ask, len(want))
+                elif caret >= len(want):
+                    # THE KEY IS FULL. The caret rests one past the end
+                    # so B can delete the last character, and a press
+                    # there used to APPEND: typed grew past want without
+                    # limit, _wrong_at flagged the overflow, and
+                    # _fix_one indexed want out of range and took the
+                    # process down with an IndexError, which is not in
+                    # HANDLED (found from Ben's note reading "Box 32" on
+                    # a 28-box key, 2026-09-25). There is nothing past
+                    # the end of a key to type, so the only way on is
+                    # the bar.
+                    sel = 1
                 else:
                     typed += " " * max(0, caret - len(typed))
                     typed = typed[:caret] + ch + typed[caret + 1:]
